@@ -135,6 +135,26 @@ mod tests {
     }
 
     #[test]
+    fn higher_rank_beats_lower_rank_regardless_of_deal_index() {
+        let low = Card::new(Rank::Eight, Suit::Clubs, 9);
+        let high = Card::new(Rank::Nine, Suit::Diamonds, 0);
+        assert_eq!(
+            low.compare(&high, DuplicateRule::FirstDealtWins),
+            Ordering::Less
+        );
+    }
+
+    #[test]
+    fn equal_rank_breaks_tie_by_suit_regardless_of_deal_index() {
+        let diamonds = Card::new(Rank::Nine, Suit::Diamonds, 9);
+        let clubs = Card::new(Rank::Nine, Suit::Clubs, 0);
+        assert_eq!(
+            diamonds.compare(&clubs, DuplicateRule::FirstDealtWins),
+            Ordering::Less
+        );
+    }
+
+    #[test]
     fn true_duplicate_last_dealt_wins() {
         let first = Card::new(Rank::Ten, Suit::Hearts, 0);
         let second = Card::new(Rank::Ten, Suit::Hearts, 1);

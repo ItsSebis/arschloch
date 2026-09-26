@@ -24,14 +24,17 @@ have no notion of threads, randomness, or CLI args.
 
 The rules from `RULES.md`, encoded as types and pure functions:
 
-- `Suit`, `Rank`, `Card` — comparable value types. `Card`'s `Ord` impl
-  encodes rank-then-suit-then-duplicate-tiebreak exactly as documented.
+- `Suit`, `Rank`, `Card` — comparable value types. `Card::compare` (not a
+  global `Ord` impl, since ordering depends on the match's
+  `DuplicateRule`) encodes rank-then-suit-then-duplicate-tiebreak exactly
+  as documented.
 - `DeckVariant` (`Single` / `Double`) and `DuplicateRule`
   (`FirstDealtWins` / `LastDealtWins`) — match configuration that affects
   card comparison.
 - `Combo` — a validated "N cards of equal rank" play, plus the legality
   check: does a candidate combo beat the current table state (same size,
-  strictly higher top rank)?
+  strictly higher top card — rank, then suit, then the duplicate-tiebreak
+  rule)?
 - `Role` and the per-player-count role table + exchange-count table from
   `RULES.md`, as data (e.g. a `const` table indexed by player count),
   not branching logic scattered through the codebase.

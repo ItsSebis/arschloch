@@ -101,6 +101,10 @@ unpaired middle role exchanges nothing):
    - Plays a combo of the **same size**, with **strictly higher** rank
      (suit, then the duplicate-tiebreak rule, break ties within equal
      rank).
+   - **Decision:** when a combo has more than one card, its **highest**
+     card (by the same rank/suit/duplicate-tiebreak order used everywhere
+     else) represents the whole combo when comparing it against another
+     combo of the same size.
 3. **Trick ends** when every other active player has passed in sequence.
    The last player to play a combo wins the trick, collects nothing (cards
    are discarded, not collected — unlike Whist-style games), and leads the
