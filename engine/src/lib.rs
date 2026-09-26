@@ -7,6 +7,7 @@ pub mod combo;
 pub mod deal;
 pub mod exchange;
 pub mod role;
+mod trick;
 
 pub use card::{Card, DeckVariant, DuplicateRule, Rank, Suit};
 pub use combo::Combo;
