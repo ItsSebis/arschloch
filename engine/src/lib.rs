@@ -5,6 +5,7 @@
 pub mod card;
 pub mod combo;
 pub mod deal;
+pub mod deck;
 pub mod exchange;
 pub mod role;
 pub mod round;
@@ -13,6 +14,7 @@ mod trick;
 pub use card::{Card, DeckVariant, DuplicateRule, Rank, Suit};
 pub use combo::Combo;
 pub use deal::{deal, lowest_card_holder};
+pub use deck::standard_deck;
 pub use exchange::{exchange, ExchangeError};
 pub use role::{assign_roles, exchange_counts_for_player_count, roles_for_player_count, Role};
 pub use round::{Move, MoveError, Round};
