@@ -132,6 +132,20 @@ impl Round {
         self.trick.leader()
     }
 
+    /// All moves currently legal for `self.seat_to_move()`. Empty if the
+    /// round is already complete.
+    #[must_use]
+    pub fn legal_moves(&self) -> Vec<Move> {
+        let Some(seat) = self.seat_to_move() else {
+            return Vec::new();
+        };
+        crate::legal_moves::legal_moves(
+            &self.hands[usize::from(seat)],
+            self.current_combo.as_ref(),
+            self.duplicate_rule,
+        )
+    }
+
     /// Submits `seat`'s move. On success, the round's state has already
     /// advanced (hand updated, trick/finishing-order progressed as
     /// needed). On failure, the round's state is unchanged.
@@ -417,6 +431,40 @@ mod tests {
             Err(MoveError::CardNotInHand(card(Rank::Seven, Suit::Clubs)))
         );
         assert_eq!(round.hand(0), original_hand.as_slice());
+    }
+
+    #[test]
+    fn legal_moves_is_empty_once_the_round_is_complete() {
+        let hands = vec![
+            vec![card(Rank::Two, Suit::Clubs)],
+            vec![card(Rank::Three, Suit::Clubs)],
+            vec![card(Rank::Four, Suit::Clubs)],
+        ];
+        let mut round = Round::new(hands, DuplicateRule::FirstDealtWins, 0).unwrap();
+        round
+            .submit_move(0, Move::Play(combo(vec![card(Rank::Two, Suit::Clubs)])))
+            .unwrap();
+        round
+            .submit_move(1, Move::Play(combo(vec![card(Rank::Three, Suit::Clubs)])))
+            .unwrap();
+        assert!(round.is_complete());
+        assert_eq!(round.legal_moves(), Vec::new());
+    }
+
+    #[test]
+    fn legal_moves_matches_the_leaders_hand_when_no_combo_is_on_the_table() {
+        let hands = vec![
+            vec![
+                card(Rank::Two, Suit::Clubs),
+                card(Rank::Two, Suit::Diamonds),
+            ],
+            vec![card(Rank::Three, Suit::Clubs)],
+            vec![card(Rank::Four, Suit::Clubs)],
+        ];
+        let round = Round::new(hands, DuplicateRule::FirstDealtWins, 0).unwrap();
+        let moves = round.legal_moves();
+        assert!(!moves.is_empty());
+        assert!(!moves.contains(&Move::Pass));
     }
 
     #[test]

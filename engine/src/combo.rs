@@ -38,8 +38,16 @@ impl Combo {
     /// The representative card used for comparison: since every card in
     /// a combo shares a rank, the highest card (by suit/duplicate
     /// tiebreak) stands in for the whole combo.
-    fn top_card(&self, duplicate_rule: DuplicateRule) -> &Card {
-        self.cards
+    ///
+    /// # Panics
+    ///
+    /// Never in practice: `Combo::new` only ever constructs a `Combo`
+    /// from a non-empty `Vec<Card>`, so there's always at least one card
+    /// to compare.
+    #[must_use]
+    pub fn top_card(&self, duplicate_rule: DuplicateRule) -> Card {
+        *self
+            .cards
             .iter()
             .max_by(|a, b| a.compare(b, duplicate_rule))
             .expect("Combo is always constructed with at least one card")
@@ -53,7 +61,7 @@ impl Combo {
         self.size() == previous.size()
             && self
                 .top_card(duplicate_rule)
-                .compare(previous.top_card(duplicate_rule), duplicate_rule)
+                .compare(&previous.top_card(duplicate_rule), duplicate_rule)
                 == Ordering::Greater
     }
 }
@@ -122,6 +130,19 @@ mod tests {
         let a = Combo::new(vec![card(Rank::Nine, Suit::Clubs)]).unwrap();
         let b = Combo::new(vec![card(Rank::Nine, Suit::Clubs)]).unwrap();
         assert!(!a.beats(&b, DuplicateRule::FirstDealtWins));
+    }
+
+    #[test]
+    fn top_card_is_public_and_returns_the_highest_card_in_the_combo() {
+        let combo = Combo::new(vec![
+            card(Rank::Seven, Suit::Diamonds),
+            card(Rank::Seven, Suit::Clubs),
+        ])
+        .unwrap();
+        assert_eq!(
+            combo.top_card(DuplicateRule::FirstDealtWins),
+            card(Rank::Seven, Suit::Clubs)
+        );
     }
 
     #[test]

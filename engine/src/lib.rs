@@ -7,6 +7,7 @@ pub mod combo;
 pub mod deal;
 pub mod deck;
 pub mod exchange;
+mod legal_moves;
 pub mod role;
 pub mod round;
 mod trick;
