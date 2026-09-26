@@ -1,6 +1,8 @@
 //! Roles and the per-player-count role/exchange-count tables from
 //! docs/RULES.md, "Roles" and "Card Exchange (\"Drücken\")".
 
+use crate::SeatId;
+
 /// A player's role at the end of a round. Variants are listed here from
 /// highest to lowest across all table sizes; which subset applies to a
 /// given table is determined by `roles_for_player_count`.
@@ -61,6 +63,34 @@ pub fn exchange_counts_for_player_count(player_count: u8) -> Option<&'static [u8
         6 => Some(&[3, 2, 1]),
         _ => None,
     }
+}
+
+/// Maps a completed round's finishing order (the seat that emptied its
+/// hand first, ..., the seat ranked last) to each seat's new `Role`, via
+/// `roles_for_player_count`. Returns `None` if `player_count` is
+/// unsupported, if `finishing_order`'s length doesn't match it, or if
+/// `finishing_order` isn't a valid permutation of every seat exactly
+/// once (e.g. a duplicate or out-of-range seat).
+#[must_use]
+pub fn assign_roles(finishing_order: &[SeatId], player_count: u8) -> Option<Vec<Role>> {
+    let roles = roles_for_player_count(player_count)?;
+    if finishing_order.len() != roles.len() {
+        return None;
+    }
+    let seat_count = usize::from(player_count);
+    let mut seen = vec![false; seat_count];
+    for &seat in finishing_order {
+        let seat = usize::from(seat);
+        if seat >= seat_count || seen[seat] {
+            return None;
+        }
+        seen[seat] = true;
+    }
+    let mut role_by_seat = vec![roles[roles.len() - 1]; seat_count];
+    for (place, &seat) in finishing_order.iter().enumerate() {
+        role_by_seat[usize::from(seat)] = roles[place];
+    }
+    Some(role_by_seat)
 }
 
 #[cfg(test)]
@@ -150,5 +180,31 @@ mod tests {
             let expected_exchange_len = roles.len() / 2 + usize::from(has_lone_middle);
             assert_eq!(exchanges.len(), expected_exchange_len);
         }
+    }
+
+    #[test]
+    fn assign_roles_maps_finishing_order_to_roles_by_seat() {
+        // Seat 2 finished first (President), seat 0 second (Dorftrottel),
+        // seat 1 last (Arschloch).
+        let role_by_seat = assign_roles(&[2, 0, 1], 3).unwrap();
+        assert_eq!(role_by_seat[2], Role::President);
+        assert_eq!(role_by_seat[0], Role::Dorftrottel);
+        assert_eq!(role_by_seat[1], Role::Arschloch);
+    }
+
+    #[test]
+    fn assign_roles_rejects_unsupported_player_count() {
+        assert_eq!(assign_roles(&[0, 1], 2), None);
+    }
+
+    #[test]
+    fn assign_roles_rejects_wrong_length_finishing_order() {
+        assert_eq!(assign_roles(&[0, 1], 3), None);
+    }
+
+    #[test]
+    fn assign_roles_rejects_duplicate_or_out_of_range_seats() {
+        assert_eq!(assign_roles(&[0, 0, 1], 3), None);
+        assert_eq!(assign_roles(&[0, 1, 5], 3), None);
     }
 }
