@@ -160,6 +160,8 @@ version = "0.1.0"
 dependencies = [
  "engine",
  "rand",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
