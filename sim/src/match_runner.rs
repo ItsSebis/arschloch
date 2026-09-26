@@ -11,6 +11,7 @@ use engine::{
 };
 use rand::seq::SliceRandom;
 use rand::SeedableRng;
+use rayon::prelude::*;
 
 use crate::match_config::MatchConfig;
 use crate::match_result::MatchResult;
@@ -106,6 +107,17 @@ pub fn run_match(config: &MatchConfig, strategies: &[Arc<dyn Strategy>]) -> Matc
         pass_count,
         voluntary_pass_count,
     }
+}
+
+/// Simulates every config in `configs` in parallel — independent
+/// matches, no shared mutable state (see docs/ARCHITECTURE.md,
+/// "Threading model").
+#[must_use]
+pub fn run_batch(configs: &[MatchConfig], strategies: &[Arc<dyn Strategy>]) -> Vec<MatchResult> {
+    configs
+        .par_iter()
+        .map(|config| run_match(config, strategies))
+        .collect()
 }
 
 #[cfg(test)]

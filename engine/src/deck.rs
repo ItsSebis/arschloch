@@ -27,7 +27,11 @@ pub fn standard_deck(variant: DeckVariant) -> Vec<Card> {
         Rank::King,
         Rank::Ace,
     ];
-    let capacity = if variant == DeckVariant::Double { 104 } else { 52 };
+    let capacity = if variant == DeckVariant::Double {
+        104
+    } else {
+        52
+    };
     let mut cards = Vec::with_capacity(capacity);
     for suit in suits {
         for rank in ranks {
