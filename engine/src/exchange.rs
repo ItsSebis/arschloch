@@ -110,11 +110,23 @@ fn validate_role_mapping(role_by_seat: &[Role], roles: &[Role]) -> Result<(), Ex
     Ok(())
 }
 
+/// Removes and returns the `count` highest cards from `hand` (by
+/// `Card::compare` under `duplicate_rule`).
+///
+/// Sorts `hand` in place (ascending) as part of finding those cards, so
+/// the cards left behind end up in ascending order afterward — this is
+/// why some tests' expected remaining-hand contents appear pre-sorted.
 fn take_highest(hand: &mut Vec<Card>, count: usize, duplicate_rule: DuplicateRule) -> Vec<Card> {
     hand.sort_by(|a, b| a.compare(b, duplicate_rule));
     hand.split_off(hand.len() - count)
 }
 
+/// Removes and returns the `count` lowest cards from `hand` (by
+/// `Card::compare` under `duplicate_rule`).
+///
+/// Sorts `hand` in place (ascending) as part of finding those cards, so
+/// the cards left behind end up in ascending order afterward — this is
+/// why some tests' expected remaining-hand contents appear pre-sorted.
 fn take_lowest(hand: &mut Vec<Card>, count: usize, duplicate_rule: DuplicateRule) -> Vec<Card> {
     hand.sort_by(|a, b| a.compare(b, duplicate_rule));
     hand.drain(0..count).collect()

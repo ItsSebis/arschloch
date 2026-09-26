@@ -38,12 +38,22 @@ The rules from `RULES.md`, encoded as types and pure functions:
 - `Role` and the per-player-count role table + exchange-count table from
   `RULES.md`, as data (e.g. a `const` table indexed by player count),
   not branching logic scattered through the codebase.
-- `Round` / `Game` state machine: deal → (exchange, if not the first
-  round) → trick loop → finishing order → role assignment.
+- `Round` — a single round's trick-taking state machine (trick loop,
+  finishing order, role assignment via `assign_roles`), plus the
+  standalone `deal` and `exchange` functions. These are composable
+  single-round primitives: `Round` does not loop multiple rounds
+  together. Looping them into a full match (deal → exchange using the
+  previous round's roles → play a round → assign new roles → repeat) is
+  `sim`'s Phase 2 match-runner responsibility, not `engine`'s.
 
 `engine` has no concept of "strategy" or "which move to pick" — it only
-knows how to validate and apply a move it's given, and what moves are
-legal from a given state. Decision-making lives in `sim`.
+knows how to validate and apply a move it's given.
+`Round::submit_move` judges a single candidate move (play or pass) a
+caller proposes against the current state, and applies it if legal; it
+does not enumerate every legal move from a state. A full legal-move
+enumerator was deliberately not built in Phase 0 or Phase 1 and is left
+as an open decision for whoever plans Phase 2 (including which crate
+should own it). Decision-making itself lives in `sim`.
 
 ### `sim`
 

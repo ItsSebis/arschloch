@@ -395,4 +395,46 @@ mod tests {
         assert_eq!(round.finishing_order(), &[0, 1, 2]);
         assert_eq!(round.seat_to_move(), None);
     }
+
+    #[test]
+    fn rejects_a_combo_that_lists_the_same_physical_card_twice() {
+        let original_hand = vec![
+            card(Rank::Seven, Suit::Clubs),
+            card(Rank::Seven, Suit::Diamonds),
+        ];
+        let hands = vec![
+            original_hand.clone(),
+            vec![card(Rank::Eight, Suit::Clubs)],
+            vec![card(Rank::Nine, Suit::Clubs)],
+        ];
+        let mut round = Round::new(hands, DuplicateRule::FirstDealtWins, 0).unwrap();
+        let play = Move::Play(combo(vec![
+            card(Rank::Seven, Suit::Clubs),
+            card(Rank::Seven, Suit::Clubs),
+        ]));
+        assert_eq!(
+            round.submit_move(0, play),
+            Err(MoveError::CardNotInHand(card(Rank::Seven, Suit::Clubs)))
+        );
+        assert_eq!(round.hand(0), original_hand.as_slice());
+    }
+
+    #[test]
+    fn accepts_a_legal_two_card_combo_of_distinct_cards() {
+        let hands = vec![
+            vec![
+                card(Rank::Seven, Suit::Clubs),
+                card(Rank::Seven, Suit::Diamonds),
+            ],
+            vec![card(Rank::Eight, Suit::Clubs)],
+            vec![card(Rank::Nine, Suit::Clubs)],
+        ];
+        let mut round = Round::new(hands, DuplicateRule::FirstDealtWins, 0).unwrap();
+        let play = Move::Play(combo(vec![
+            card(Rank::Seven, Suit::Clubs),
+            card(Rank::Seven, Suit::Diamonds),
+        ]));
+        assert_eq!(round.submit_move(0, play), Ok(()));
+        assert!(round.hand(0).is_empty());
+    }
 }
