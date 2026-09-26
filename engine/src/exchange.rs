@@ -25,6 +25,23 @@ pub enum ExchangeError {
 /// `Card::compare` under `duplicate_rule` — no strategic selection
 /// (that's a later phase). On any error, `hands` is left completely
 /// unchanged.
+///
+/// # Errors
+///
+/// - [`ExchangeError::SeatCountMismatch`] if `hands.len() !=
+///   role_by_seat.len()`.
+/// - [`ExchangeError::UnsupportedPlayerCount`] if `hands.len()` isn't a
+///   supported table size (3-6).
+/// - [`ExchangeError::InvalidRoleMapping`] if `role_by_seat` doesn't
+///   contain every role for this player count exactly once.
+/// - [`ExchangeError::NotEnoughCards`] if a seat's hand has fewer cards
+///   than its required exchange count.
+///
+/// # Panics
+///
+/// Panics if `role_by_seat` passes validation but a role it confirmed is
+/// present cannot then be found in it; this would indicate an internal
+/// invariant violation, not a normal input error.
 pub fn exchange(
     hands: &mut [Vec<Card>],
     role_by_seat: &[Role],
@@ -35,7 +52,8 @@ pub fn exchange(
     }
     let player_count =
         u8::try_from(hands.len()).map_err(|_| ExchangeError::UnsupportedPlayerCount)?;
-    let roles = roles_for_player_count(player_count).ok_or(ExchangeError::UnsupportedPlayerCount)?;
+    let roles =
+        roles_for_player_count(player_count).ok_or(ExchangeError::UnsupportedPlayerCount)?;
     let counts = exchange_counts_for_player_count(player_count)
         .ok_or(ExchangeError::UnsupportedPlayerCount)?;
     validate_role_mapping(role_by_seat, roles)?;
@@ -133,7 +151,10 @@ mod tests {
         );
         assert_eq!(
             hands[1],
-            vec![card(Rank::Five, Suit::Clubs), card(Rank::Seven, Suit::Clubs)]
+            vec![
+                card(Rank::Five, Suit::Clubs),
+                card(Rank::Seven, Suit::Clubs)
+            ]
         );
         assert_eq!(
             hands[2],

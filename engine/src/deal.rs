@@ -33,6 +33,11 @@ pub fn deal(cards: Vec<Card>, player_count: u8) -> Option<Vec<Vec<Card>>> {
 /// lead"); every later round's leader is that round's Arschloch instead.
 ///
 /// Returns `None` if `hands` is empty or every hand is empty.
+///
+/// # Panics
+///
+/// Panics if `hands.len()` exceeds `u8::MAX` (more seats than a `SeatId`
+/// can represent); table sizes are capped at 6 in practice.
 #[must_use]
 pub fn lowest_card_holder(hands: &[Vec<Card>], duplicate_rule: DuplicateRule) -> Option<SeatId> {
     hands
@@ -68,7 +73,10 @@ mod tests {
         );
         assert_eq!(
             hands[1],
-            vec![card(Rank::Three, Suit::Clubs), card(Rank::Five, Suit::Clubs)]
+            vec![
+                card(Rank::Three, Suit::Clubs),
+                card(Rank::Five, Suit::Clubs)
+            ]
         );
     }
 
@@ -112,6 +120,9 @@ mod tests {
     #[test]
     fn lowest_card_holder_returns_none_for_empty_hands() {
         let hands: Vec<Vec<Card>> = vec![vec![], vec![]];
-        assert_eq!(lowest_card_holder(&hands, DuplicateRule::FirstDealtWins), None);
+        assert_eq!(
+            lowest_card_holder(&hands, DuplicateRule::FirstDealtWins),
+            None
+        );
     }
 }

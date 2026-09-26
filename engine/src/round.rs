@@ -52,7 +52,11 @@ impl Round {
     /// is out of range, or any hand starts empty (a round can't begin
     /// with a seat already out).
     #[must_use]
-    pub fn new(hands: Vec<Vec<Card>>, duplicate_rule: DuplicateRule, first_leader: SeatId) -> Option<Self> {
+    pub fn new(
+        hands: Vec<Vec<Card>>,
+        duplicate_rule: DuplicateRule,
+        first_leader: SeatId,
+    ) -> Option<Self> {
         if !(3..=6).contains(&hands.len()) {
             return None;
         }
@@ -131,6 +135,20 @@ impl Round {
     /// Submits `seat`'s move. On success, the round's state has already
     /// advanced (hand updated, trick/finishing-order progressed as
     /// needed). On failure, the round's state is unchanged.
+    ///
+    /// # Errors
+    ///
+    /// - [`MoveError::RoundAlreadyComplete`] if the round has already
+    ///   finished.
+    /// - [`MoveError::NotYourTurn`] if it isn't `seat`'s turn.
+    /// - [`MoveError::CannotPassOnLead`] if `mv` is [`Move::Pass`] but no
+    ///   combo is currently on the table, so `seat` must lead instead.
+    /// - [`MoveError::CardNotInHand`] if `mv` is [`Move::Play`] with a
+    ///   combo containing a card `seat` doesn't hold (or holds fewer
+    ///   copies of than the combo lists).
+    /// - [`MoveError::ComboDoesNotBeat`] if `mv` is [`Move::Play`] with a
+    ///   combo that doesn't beat the current combo on the table (wrong
+    ///   size, or not strictly higher).
     pub fn submit_move(&mut self, seat: SeatId, mv: Move) -> Result<(), MoveError> {
         if self.is_complete() {
             return Err(MoveError::RoundAlreadyComplete);
@@ -283,7 +301,10 @@ mod tests {
             vec![card(Rank::Four, Suit::Clubs)],
         ];
         let mut round = Round::new(hands, DuplicateRule::FirstDealtWins, 0).unwrap();
-        assert_eq!(round.submit_move(0, Move::Pass), Err(MoveError::CannotPassOnLead));
+        assert_eq!(
+            round.submit_move(0, Move::Pass),
+            Err(MoveError::CannotPassOnLead)
+        );
     }
 
     #[test]
