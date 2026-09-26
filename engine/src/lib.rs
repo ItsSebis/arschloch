@@ -7,6 +7,7 @@ pub mod combo;
 pub mod deal;
 pub mod exchange;
 pub mod role;
+pub mod round;
 mod trick;
 
 pub use card::{Card, DeckVariant, DuplicateRule, Rank, Suit};
@@ -14,6 +15,7 @@ pub use combo::Combo;
 pub use deal::{deal, lowest_card_holder};
 pub use exchange::{exchange, ExchangeError};
 pub use role::{assign_roles, exchange_counts_for_player_count, roles_for_player_count, Role};
+pub use round::{Move, MoveError, Round};
 
 /// A seat's position at the table (0-indexed). Table sizes are 3-6, so
 /// `u8` matches `player_count`'s type used throughout this crate.
