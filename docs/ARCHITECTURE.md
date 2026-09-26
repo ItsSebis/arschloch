@@ -49,11 +49,11 @@ The rules from `RULES.md`, encoded as types and pure functions:
 `engine` has no concept of "strategy" or "which move to pick" — it only
 knows how to validate and apply a move it's given.
 `Round::submit_move` judges a single candidate move (play or pass) a
-caller proposes against the current state, and applies it if legal; it
-does not enumerate every legal move from a state. A full legal-move
-enumerator was deliberately not built in Phase 0 or Phase 1 and is left
-as an open decision for whoever plans Phase 2 (including which crate
-should own it). Decision-making itself lives in `sim`.
+caller proposes against the current state, and applies it if legal.
+`Round::legal_moves()` additionally enumerates every legal move from the
+current state (Phase 2), used by `sim`'s strategies to choose among.
+Decision-making itself still lives in `sim` — `engine` only reports what's
+legal, never which move to prefer.
 
 ### `sim`
 
@@ -75,11 +75,13 @@ should own it). Decision-making itself lives in `sim`.
   state, so a batch of simulated matches is a `par_iter` map over match
   seeds/configs, with no locks needed.
 - `MatchResult` (per-round role history, strategy tag per seat, trick/pass
-  counts) and `Statistics` (aggregated across a batch): role-by-strategy
-  win rates, outcome variance (a proxy for luck vs. skill), and
-  pass-when-beatable frequency (a proxy for strategic diversification).
-  Serialized with `serde`/`serde_json` so a later web phase can consume
-  the same output format.
+  counts) and `Statistics` (aggregated across a batch, Phase 2): role
+  counts by strategy name, and a pooled voluntary-pass rate (passes
+  submitted while a beating play was also legal, summed across every
+  seat and match — not yet broken out per strategy). Outcome variance
+  (a proxy for luck vs. skill) and a per-strategy diversification signal
+  are Phase 4's job, not built yet. Serialized with `serde`/`serde_json`
+  so a later web phase can consume the same output format.
 
 ### `cli`
 

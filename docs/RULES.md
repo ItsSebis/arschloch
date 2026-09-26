@@ -18,8 +18,11 @@ Source: https://de.wikipedia.org/wiki/Arschloch_(Kartenspiel)
     for larger groups. This introduces true duplicate cards (same rank
     *and* suit appearing twice) — see "Duplicate cards" below.
 - **Decision:** cards are dealt as evenly as possible; with a remainder,
-  the excess cards go to the earliest players in deal order (implementation
-  detail, does not affect fairness over many simulated games).
+  the excess cards go to the earliest players in deal order (an
+  implementation detail — `sim`'s batch runner rotates which strategy
+  occupies which seat across a batch specifically so this doesn't bias
+  aggregate strategy comparisons; a single match's finishing order can
+  still be affected by seat position).
 
 ## Card Ranking
 

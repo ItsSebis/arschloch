@@ -1,7 +1,7 @@
 //! Aggregating a batch of `MatchResult`s into per-strategy role counts
 //! and a diversification signal. See docs/ROADMAP.md, Phase 2 and 4.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use engine::Role;
 
@@ -10,7 +10,7 @@ use crate::match_result::MatchResult;
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct Statistics {
     pub matches_played: usize,
-    pub role_counts_by_strategy: HashMap<String, HashMap<Role, u32>>,
+    pub role_counts_by_strategy: BTreeMap<String, BTreeMap<Role, u32>>,
     /// `sum(voluntary_pass_count) / sum(pass_count)` across every match
     /// (`0.0` if no passes occurred at all).
     pub voluntary_pass_rate: f64,
@@ -22,7 +22,7 @@ pub struct Statistics {
 /// bucket).
 #[must_use]
 pub fn aggregate(results: &[MatchResult]) -> Statistics {
-    let mut role_counts_by_strategy: HashMap<String, HashMap<Role, u32>> = HashMap::new();
+    let mut role_counts_by_strategy: BTreeMap<String, BTreeMap<Role, u32>> = BTreeMap::new();
     let mut total_passes = 0u64;
     let mut total_voluntary_passes = 0u64;
 

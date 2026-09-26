@@ -69,6 +69,9 @@ pub fn run_match(config: &MatchConfig, strategies: &[Arc<dyn Strategy>]) -> Matc
 
         while !round.is_complete() {
             let seat = round.seat_to_move().expect("round is not complete");
+            if round.current_combo().is_none() {
+                trick_count += 1;
+            }
             let legal_moves = round.legal_moves();
             let chosen = strategies[usize::from(seat)].choose_play(
                 &legal_moves,
@@ -82,13 +85,9 @@ pub fn run_match(config: &MatchConfig, strategies: &[Arc<dyn Strategy>]) -> Matc
                     voluntary_pass_count += 1;
                 }
             }
-            let combo_was_on_table = round.current_combo().is_some();
             round
                 .submit_move(seat, chosen)
                 .expect("strategies only choose from the moves engine just reported as legal");
-            if combo_was_on_table && round.current_combo().is_none() {
-                trick_count += 1;
-            }
         }
 
         let finishing_order = round.finishing_order().to_vec();
@@ -111,12 +110,28 @@ pub fn run_match(config: &MatchConfig, strategies: &[Arc<dyn Strategy>]) -> Matc
 
 /// Simulates every config in `configs` in parallel — independent
 /// matches, no shared mutable state (see docs/ARCHITECTURE.md,
-/// "Threading model").
+/// "Threading model"). Rotates which physical seat each strategy
+/// occupies by each config's position in `configs` (cyclically, by
+/// `strategies.len()`), so `deal`'s documented uneven-remainder rule
+/// (docs/RULES.md, "Players & Deck") doesn't bias aggregate
+/// role-by-strategy statistics toward whichever strategies happen to sit
+/// in the earliest seats — the bias cancels out across the batch instead.
 #[must_use]
 pub fn run_batch(configs: &[MatchConfig], strategies: &[Arc<dyn Strategy>]) -> Vec<MatchResult> {
     configs
         .par_iter()
-        .map(|config| run_match(config, strategies))
+        .enumerate()
+        .map(|(index, config)| {
+            let rotation = index % strategies.len();
+            let rotated: Vec<Arc<dyn Strategy>> = strategies
+                .iter()
+                .cycle()
+                .skip(rotation)
+                .take(strategies.len())
+                .cloned()
+                .collect();
+            run_match(config, &rotated)
+        })
         .collect()
 }
 
@@ -124,6 +139,7 @@ pub fn run_batch(configs: &[MatchConfig], strategies: &[Arc<dyn Strategy>]) -> V
 mod tests {
     use super::*;
     use engine::{DeckVariant, DuplicateRule};
+    use std::sync::atomic::{AtomicU32, Ordering};
 
     fn four_lowest_legal() -> Vec<Arc<dyn Strategy>> {
         vec![
@@ -165,5 +181,91 @@ mod tests {
         assert_eq!(first.role_history, second.role_history);
         assert_eq!(first.trick_count, second.trick_count);
         assert_eq!(first.pass_count, second.pass_count);
+    }
+
+    /// Wraps `LowestLegal`, independently counting every call where
+    /// `legal_moves` has no `Pass` — which is exactly when the seat is
+    /// leading (`engine`'s legal-move enumeration only offers `Pass`
+    /// while a combo is on the table), i.e. once per trick actually
+    /// played.
+    struct LeadCounter {
+        leads: AtomicU32,
+    }
+
+    impl Strategy for LeadCounter {
+        fn name(&self) -> &'static str {
+            "LeadCounter"
+        }
+
+        fn choose_play(
+            &self,
+            legal_moves: &[Move],
+            duplicate_rule: DuplicateRule,
+            rng: &mut dyn rand::Rng,
+        ) -> Move {
+            if !legal_moves.contains(&Move::Pass) {
+                self.leads.fetch_add(1, Ordering::Relaxed);
+            }
+            crate::strategies::LowestLegal.choose_play(legal_moves, duplicate_rule, rng)
+        }
+    }
+
+    #[test]
+    fn trick_count_counts_every_trick_led_including_each_rounds_final_one() {
+        for seed in 0..20 {
+            let counter = Arc::new(LeadCounter {
+                leads: AtomicU32::new(0),
+            });
+            let strategies: Vec<Arc<dyn Strategy>> = vec![
+                counter.clone(),
+                counter.clone(),
+                counter.clone(),
+                counter.clone(),
+            ];
+            let config = MatchConfig {
+                player_count: 4,
+                deck_variant: DeckVariant::Single,
+                duplicate_rule: DuplicateRule::FirstDealtWins,
+                rounds: 3,
+                seed,
+            };
+            let result = run_match(&config, &strategies);
+            // Every round's last trick ends on a `Play` (the round ends
+            // the moment only one seat still holds cards), never on a
+            // pass-around, so counting only pass-resolved tricks would
+            // come up at least `rounds` short of the true lead count.
+            assert_eq!(
+                result.trick_count,
+                counter.leads.load(Ordering::Relaxed),
+                "seed {seed}"
+            );
+        }
+    }
+
+    #[test]
+    fn run_batch_rotates_which_seat_each_strategy_occupies() {
+        let strategies: Vec<Arc<dyn Strategy>> = vec![
+            Arc::new(crate::strategies::LowestLegal),
+            Arc::new(crate::strategies::RandomLegal),
+            Arc::new(crate::strategies::GreedyHighest),
+        ];
+        let configs: Vec<MatchConfig> = (0..4)
+            .map(|seed| MatchConfig {
+                player_count: 3,
+                deck_variant: DeckVariant::Single,
+                duplicate_rule: DuplicateRule::FirstDealtWins,
+                rounds: 1,
+                seed,
+            })
+            .collect();
+        let results = run_batch(&configs, &strategies);
+        let names: Vec<Vec<&str>> = results
+            .iter()
+            .map(|r| r.strategy_names.iter().map(String::as_str).collect())
+            .collect();
+        assert_eq!(names[0], ["LowestLegal", "RandomLegal", "GreedyHighest"]);
+        assert_eq!(names[1], ["RandomLegal", "GreedyHighest", "LowestLegal"]);
+        assert_eq!(names[2], ["GreedyHighest", "LowestLegal", "RandomLegal"]);
+        assert_eq!(names[3], names[0]);
     }
 }

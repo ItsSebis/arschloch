@@ -27,7 +27,7 @@ sitting; a phase that grows beyond that should be split.
 - Scripted integration tests that play a full round move-by-move and
   assert final roles/hands match expectations.
 
-## Phase 2 — Strategies & simulation runner (current)
+## Phase 2 — Strategies & simulation runner
 
 - `sim`: `Strategy` trait, 2-3 baseline strategies (lowest-legal,
   random-legal, greedy-highest).

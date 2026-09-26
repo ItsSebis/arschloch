@@ -5,8 +5,12 @@ use crate::SeatId;
 
 /// A player's role at the end of a round. Variants are listed here from
 /// highest to lowest across all table sizes; which subset applies to a
-/// given table is determined by `roles_for_player_count`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+/// given table is determined by `roles_for_player_count`. The derived
+/// `Ord` follows this declaration order, so a higher role compares as
+/// *less* (`President < Arschloch`).
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
 pub enum Role {
     President,
     Vize,
@@ -206,6 +210,15 @@ mod tests {
     fn assign_roles_rejects_duplicate_or_out_of_range_seats() {
         assert_eq!(assign_roles(&[0, 0, 1], 3), None);
         assert_eq!(assign_roles(&[0, 1, 5], 3), None);
+    }
+
+    #[test]
+    fn role_ordering_follows_the_highest_to_lowest_declaration_order() {
+        assert!(Role::President < Role::Arschloch);
+        for player_count in [3u8, 4, 5, 6] {
+            let roles = roles_for_player_count(player_count).unwrap();
+            assert!(roles.windows(2).all(|pair| pair[0] < pair[1]));
+        }
     }
 
     #[test]
