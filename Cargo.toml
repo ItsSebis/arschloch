@@ -1,0 +1,18 @@
+[workspace]
+resolver = "2"
+members = ["engine", "sim", "cli", "web"]
+
+[workspace.package]
+edition = "2021"
+version = "0.1.0"
+license = "MIT"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+# One primary type per module, named after the module, is this
+# project's convention (see docs/ARCHITECTURE.md) — this lint would
+# otherwise fire on every module.
+module_name_repetitions = "allow"
