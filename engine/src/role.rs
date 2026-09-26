@@ -79,7 +79,14 @@ mod tests {
     fn four_player_roles_match_rules_doc() {
         assert_eq!(
             roles_for_player_count(4),
-            Some(&[Role::President, Role::Vize, Role::ViceArschloch, Role::Arschloch][..])
+            Some(
+                &[
+                    Role::President,
+                    Role::Vize,
+                    Role::ViceArschloch,
+                    Role::Arschloch
+                ][..]
+            )
         );
     }
 
