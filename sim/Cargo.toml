@@ -8,3 +8,5 @@ license.workspace = true
 workspace = true
 
 [dependencies]
+engine = { path = "../engine" }
+rand = "0.10.3"
