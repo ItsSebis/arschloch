@@ -3,5 +3,7 @@
 //! workspace.
 
 pub mod card;
+pub mod role;
 
 pub use card::{Card, DeckVariant, DuplicateRule, Rank, Suit};
+pub use role::{exchange_counts_for_player_count, roles_for_player_count, Role};
