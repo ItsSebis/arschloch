@@ -57,9 +57,18 @@ should own it). Decision-making itself lives in `sim`.
 
 ### `sim`
 
-- `Strategy` trait: `choose_play(&self, hand, legal_moves) -> Move` and
-  `choose_exchange_cards(&self, hand, count) -> Vec<Card>`. Multiple
-  strategy implementations can play in the same simulated match.
+- `Strategy` trait: `choose_play(&self, legal_moves, duplicate_rule,
+  rng) -> Move`. `legal_moves` (from `engine::Round::legal_moves`) already
+  encodes every card a candidate move would use, so no separate `hand`
+  parameter is needed; `rng` is threaded through explicitly per call
+  (rather than owned by the strategy) so a single `Arc<dyn Strategy>` can
+  be shared read-only across parallel matches while staying fully
+  deterministic per match seed. Three baseline implementations this
+  phase: `LowestLegal`, `RandomLegal`, `GreedyHighest`.
+  `choose_exchange_cards` doesn't exist yet — `exchange()`'s naive
+  top/bottom-N tie-break (Phase 1) is applied directly by the match
+  runner; strategy-aware exchange selection is Phase 5's job
+  ("smart exchange"), not introduced early as speculative generality.
 - A match runner that drives `engine`'s state machine to completion using
   each seat's `Strategy`.
 - Multi-threading via `rayon`: independent matches have no shared mutable

@@ -4,7 +4,7 @@ Each phase should leave the workspace building, tested, and documented
 before the next one starts. Phases are scoped to be reviewable in a single
 sitting; a phase that grows beyond that should be split.
 
-## Phase 0 — Foundations (current)
+## Phase 0 — Foundations
 
 - Cargo workspace scaffold: `engine`, `sim`, `cli`, `web` (placeholder)
   crates, workspace-level lint/format config.
@@ -27,7 +27,7 @@ sitting; a phase that grows beyond that should be split.
 - Scripted integration tests that play a full round move-by-move and
   assert final roles/hands match expectations.
 
-## Phase 2 — Strategies & simulation runner
+## Phase 2 — Strategies & simulation runner (current)
 
 - `sim`: `Strategy` trait, 2-3 baseline strategies (lowest-legal,
   random-legal, greedy-highest).
