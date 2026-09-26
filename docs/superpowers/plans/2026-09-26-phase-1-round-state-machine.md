@@ -125,7 +125,7 @@ Add this test to the existing `#[cfg(test)] mod tests` block:
 - [ ] **Step 3: Run the tests**
 
 Run: `cargo test -p engine`
-Expected: all 21 tests pass (20 existing + 1 new).
+Expected: all 23 tests pass (22 existing + 1 new).
 
 - [ ] **Step 4: Commit**
 
@@ -297,7 +297,7 @@ pub type SeatId = u8;
 - [ ] **Step 3: Run the tests**
 
 Run: `cargo test -p engine`
-Expected: all 27 tests pass (21 from Task 1 + 6 new).
+Expected: all 29 tests pass (23 from Task 1 + 6 new).
 
 - [ ] **Step 4: Commit**
 
@@ -389,7 +389,7 @@ Add these tests to the existing `#[cfg(test)] mod tests` block, after
 - [ ] **Step 2: Run the tests**
 
 Run: `cargo test -p engine`
-Expected: all 31 tests pass (27 from Task 2 + 4 new).
+Expected: all 33 tests pass (29 from Task 2 + 4 new).
 
 - [ ] **Step 3: Commit**
 
@@ -669,7 +669,7 @@ pub type SeatId = u8;
 - [ ] **Step 3: Run the tests**
 
 Run: `cargo test -p engine`
-Expected: all 38 tests pass (31 from Task 3 + 7 new).
+Expected: all 40 tests pass (33 from Task 3 + 7 new).
 
 - [ ] **Step 4: Commit**
 
@@ -889,7 +889,7 @@ pub type SeatId = u8;
 - [ ] **Step 3: Run the tests**
 
 Run: `cargo test -p engine`
-Expected: all 43 tests pass (38 from Task 4 + 5 new). (Clippy note for
+Expected: all 45 tests pass (40 from Task 4 + 5 new). (Clippy note for
 later: `unreachable!`/`expect` inside `pub(crate)` items don't require
 `# Panics` docs — that lint targets the crate's public API surface,
 which `trick` isn't part of.)
@@ -1339,7 +1339,7 @@ pub type SeatId = u8;
 - [ ] **Step 3: Run the tests**
 
 Run: `cargo test -p engine`
-Expected: all 52 tests pass (43 from Task 5 + 9 new).
+Expected: all 54 tests pass (45 from Task 5 + 9 new).
 
 - [ ] **Step 4: Commit**
 
@@ -1499,7 +1499,7 @@ fn four_player_round_deal_through_exchange() {
 - [ ] **Step 2: Run the tests**
 
 Run: `cargo test -p engine`
-Expected: all 53 tests pass (52 unit tests from Task 6 + 1 new
+Expected: all 55 tests pass (54 unit tests from Task 6 + 1 new
 integration test — `cargo test` reports the integration test as a
 separate binary, e.g. `Running tests/full_round.rs`).
 
@@ -1535,7 +1535,7 @@ one-line reason comment if the lint genuinely doesn't apply.
 - [ ] **Step 3: Run the full test suite**
 
 Run: `cargo test --workspace`
-Expected: 53 tests pass, 0 failed (across `engine`; `sim`/`cli`/`web`
+Expected: 55 tests pass, 0 failed (across `engine`; `sim`/`cli`/`web`
 have none yet).
 
 - [ ] **Step 4: Commit any fixes from Steps 1-3**
