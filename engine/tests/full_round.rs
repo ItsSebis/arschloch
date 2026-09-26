@@ -4,7 +4,7 @@
 
 use engine::{
     assign_roles, deal, exchange, lowest_card_holder, Card, Combo, DuplicateRule, Move, Rank, Role,
-    Round, Suit,
+    Round, SeatId, Suit,
 };
 
 fn clubs(rank: Rank) -> Card {
@@ -20,10 +20,6 @@ fn single(card: Card) -> Combo {
 }
 
 #[test]
-// One scripted scenario walking a single round end-to-end; splitting it
-// into smaller functions would break the narrative and force threading
-// shared state (hands, round) across function boundaries for no benefit.
-#[allow(clippy::too_many_lines)]
 fn four_player_round_deal_through_exchange() {
     // --- Deal ---
     let deck = vec![
@@ -112,9 +108,14 @@ fn four_player_round_deal_through_exchange() {
     assert_eq!(round.finishing_order(), &[3, 0, 1, 2]);
     assert_eq!(round.seat_to_move(), None);
 
+    // --- Role assignment and exchange for the next round ---
+    assert_role_assignment_and_exchange(round.finishing_order());
+}
+
+fn assert_role_assignment_and_exchange(finishing_order: &[SeatId]) {
     // --- Role assignment ---
     let role_by_seat =
-        assign_roles(round.finishing_order(), 4).expect("a complete 4-player finishing order");
+        assign_roles(finishing_order, 4).expect("a complete 4-player finishing order");
     assert_eq!(role_by_seat[3], Role::President);
     assert_eq!(role_by_seat[0], Role::Vize);
     assert_eq!(role_by_seat[1], Role::ViceArschloch);
