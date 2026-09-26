@@ -12,7 +12,7 @@ use clap::Parser;
 #[command(about = "Simulate Arschloch matches and report role/statistics output")]
 pub struct Args {
     /// Table size (3-6 seats).
-    #[arg(long, value_parser = 3..=6)]
+    #[arg(long, value_parser = clap::value_parser!(u8).range(3..=6))]
     pub player_count: u8,
 
     #[arg(long, value_enum, default_value_t = DeckVariantArg::Single)]
@@ -22,11 +22,15 @@ pub struct Args {
     pub duplicate_rule: DuplicateRuleArg,
 
     /// How many independent matches to simulate.
-    #[arg(long, value_parser = 1..)]
+    #[arg(long, value_parser = clap::builder::RangedI64ValueParser::<usize>::new().range(1..))]
     pub matches: usize,
 
     /// How many rounds each match plays (role carry-over between rounds).
-    #[arg(long, default_value_t = 1, value_parser = 1..)]
+    #[arg(
+        long,
+        default_value_t = 1,
+        value_parser = clap::builder::RangedI64ValueParser::<usize>::new().range(1..)
+    )]
     pub rounds: usize,
 
     /// One per seat, in seat order. Repeat the flag once per seat, e.g.
@@ -169,5 +173,98 @@ mod tests {
             engine::DuplicateRule::from(DuplicateRuleArg::LastDealtWins),
             engine::DuplicateRule::LastDealtWins
         );
+    }
+
+    // The tests above all construct `Args` via a struct literal, so none of
+    // them exercise clap's actual parsing pipeline (attribute macros,
+    // `value_parser`s, required-arg checks). The tests below drive
+    // `Args::try_parse_from` with real argv to close that gap — in
+    // particular, to catch a `value_parser` that is mistyped relative to its
+    // field (e.g. an `i64`-typed range parser attached to a `u8`/`usize`
+    // field), which previously caused a runtime panic on every parse rather
+    // than a compile error.
+
+    #[test]
+    fn try_parse_from_accepts_player_count_at_range_boundaries() {
+        for player_count in ["3", "6"] {
+            let argv = [
+                "arschloch",
+                "--player-count",
+                player_count,
+                "--matches",
+                "1",
+                "--strategy",
+                "lowest-legal",
+            ];
+            let parsed = Args::try_parse_from(argv);
+            assert!(
+                parsed.is_ok(),
+                "player_count={player_count} should be accepted, got {parsed:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn try_parse_from_rejects_player_count_outside_range() {
+        for player_count in ["2", "7"] {
+            let argv = [
+                "arschloch",
+                "--player-count",
+                player_count,
+                "--matches",
+                "1",
+                "--strategy",
+                "lowest-legal",
+            ];
+            assert!(
+                Args::try_parse_from(argv).is_err(),
+                "player_count={player_count} should be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn try_parse_from_accepts_minimum_matches_and_rounds() {
+        let argv = [
+            "arschloch",
+            "--player-count",
+            "4",
+            "--matches",
+            "1",
+            "--rounds",
+            "1",
+            "--strategy",
+            "lowest-legal",
+        ];
+        let parsed = Args::try_parse_from(argv).expect("minimum matches/rounds should parse");
+        assert_eq!(parsed.matches, 1);
+        assert_eq!(parsed.rounds, 1);
+    }
+
+    #[test]
+    fn try_parse_from_rejects_zero_matches_and_zero_rounds() {
+        let zero_matches = [
+            "arschloch",
+            "--player-count",
+            "4",
+            "--matches",
+            "0",
+            "--strategy",
+            "lowest-legal",
+        ];
+        assert!(Args::try_parse_from(zero_matches).is_err());
+
+        let zero_rounds = [
+            "arschloch",
+            "--player-count",
+            "4",
+            "--matches",
+            "1",
+            "--rounds",
+            "0",
+            "--strategy",
+            "lowest-legal",
+        ];
+        assert!(Args::try_parse_from(zero_rounds).is_err());
     }
 }
