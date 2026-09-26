@@ -6,7 +6,7 @@ use crate::SeatId;
 /// A player's role at the end of a round. Variants are listed here from
 /// highest to lowest across all table sizes; which subset applies to a
 /// given table is determined by `roles_for_player_count`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum Role {
     President,
     Vize,
@@ -206,5 +206,12 @@ mod tests {
     fn assign_roles_rejects_duplicate_or_out_of_range_seats() {
         assert_eq!(assign_roles(&[0, 0, 1], 3), None);
         assert_eq!(assign_roles(&[0, 1, 5], 3), None);
+    }
+
+    #[test]
+    fn role_round_trips_through_json() {
+        let json = serde_json::to_string(&Role::President).unwrap();
+        let role: Role = serde_json::from_str(&json).unwrap();
+        assert_eq!(role, Role::President);
     }
 }
