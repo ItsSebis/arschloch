@@ -29,6 +29,12 @@ impl Combo {
         self.cards.len()
     }
 
+    /// The cards making up this combo, in the order given to `Combo::new`.
+    #[must_use]
+    pub fn cards(&self) -> &[Card] {
+        &self.cards
+    }
+
     /// The representative card used for comparison: since every card in
     /// a combo shares a rank, the highest card (by suit/duplicate
     /// tiebreak) stands in for the whole combo.
@@ -116,5 +122,15 @@ mod tests {
         let a = Combo::new(vec![card(Rank::Nine, Suit::Clubs)]).unwrap();
         let b = Combo::new(vec![card(Rank::Nine, Suit::Clubs)]).unwrap();
         assert!(!a.beats(&b, DuplicateRule::FirstDealtWins));
+    }
+
+    #[test]
+    fn cards_returns_the_cards_the_combo_was_built_from() {
+        let cards = vec![
+            card(Rank::Seven, Suit::Clubs),
+            card(Rank::Seven, Suit::Diamonds),
+        ];
+        let combo = Combo::new(cards.clone()).unwrap();
+        assert_eq!(combo.cards(), &cards[..]);
     }
 }
