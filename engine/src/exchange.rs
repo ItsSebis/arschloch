@@ -15,16 +15,25 @@ pub enum ExchangeError {
     InvalidRoleMapping,
     /// A seat's hand had fewer cards than its required exchange count.
     NotEnoughCards,
+    /// A `choose_cards_to_give` callback (see `exchange_with_selection`)
+    /// returned something other than exactly `count` distinct cards
+    /// drawn from the hand it was given.
+    InvalidSelection,
 }
 
-/// Applies the mandatory "Drücken" exchange to freshly dealt hands for
-/// the round about to start, using the role each seat held at the end
-/// of the *previous* round (`role_by_seat[i]` = seat `i`'s previous
-/// role). Naive tie-break: the lower role's highest N cards move to the
-/// higher role, whose lowest N cards move back, both ordered by
-/// `Card::compare` under `duplicate_rule` — no strategic selection
-/// (that's a later phase). On any error, `hands` is left completely
-/// unchanged.
+/// Like `exchange`, but the lower role's mandatory best-`count` cards
+/// are chosen by `choose_cards_to_give` instead of a naive highest-N
+/// sort (`docs/ROADMAP.md`, Phase 5, "Smart exchange"). The higher
+/// role's worst-`count` cards it gives back are still chosen naively —
+/// Phase 5 only makes the giving-away-your-best-cards side
+/// strategy-aware.
+///
+/// Validated before anything is mutated (same failure atomicity as
+/// `exchange`): `choose_cards_to_give(seat, hand, count,
+/// duplicate_rule)` is called once per exchanging low seat with that
+/// seat's untouched hand, and must return exactly `count` distinct
+/// cards each present in `hand` — anything else is
+/// `ExchangeError::InvalidSelection` and no hand is changed.
 ///
 /// # Errors
 ///
@@ -36,16 +45,20 @@ pub enum ExchangeError {
 ///   contain every role for this player count exactly once.
 /// - [`ExchangeError::NotEnoughCards`] if a seat's hand has fewer cards
 ///   than its required exchange count.
+/// - [`ExchangeError::InvalidSelection`] if `choose_cards_to_give`
+///   returns something other than exactly `count` distinct cards from
+///   the given hand.
 ///
 /// # Panics
 ///
 /// Panics if `role_by_seat` passes validation but a role it confirmed is
 /// present cannot then be found in it; this would indicate an internal
 /// invariant violation, not a normal input error.
-pub fn exchange(
+pub fn exchange_with_selection(
     hands: &mut [Vec<Card>],
     role_by_seat: &[Role],
     duplicate_rule: DuplicateRule,
+    mut choose_cards_to_give: impl FnMut(usize, &[Card], usize, DuplicateRule) -> Vec<Card>,
 ) -> Result<(), ExchangeError> {
     if hands.len() != role_by_seat.len() {
         return Err(ExchangeError::SeatCountMismatch);
@@ -65,8 +78,6 @@ pub fn exchange(
             .expect("validate_role_mapping already confirmed every role is present exactly once")
     };
 
-    // Validate every pair has enough cards on both sides before mutating
-    // anything, so a failed exchange leaves hands untouched.
     for (i, &count) in counts.iter().enumerate() {
         if count == 0 {
             continue;
@@ -79,6 +90,26 @@ pub fn exchange(
         }
     }
 
+    // Plan pass: ask each low seat what it's giving and validate the
+    // answer against its still-untouched hand, before mutating
+    // anything.
+    let mut planned_gives: Vec<Option<Vec<Card>>> = vec![None; hands.len()];
+    for (i, &count) in counts.iter().enumerate() {
+        if count == 0 {
+            continue;
+        }
+        let count = usize::from(count);
+        let low_seat = seat_of(roles[roles.len() - 1 - i]);
+        let selected = choose_cards_to_give(low_seat, &hands[low_seat], count, duplicate_rule);
+        if selected.len() != count || !is_sub_multiset(&selected, &hands[low_seat]) {
+            return Err(ExchangeError::InvalidSelection);
+        }
+        planned_gives[low_seat] = Some(selected);
+    }
+
+    // Apply pass: identical shape to the old `exchange`, except the low
+    // seat's outgoing cards come from `planned_gives` instead of
+    // `take_highest`.
     let mut incoming: Vec<Vec<Card>> = vec![Vec::new(); hands.len()];
     for (i, &count) in counts.iter().enumerate() {
         if count == 0 {
@@ -88,7 +119,10 @@ pub fn exchange(
         let high_seat = seat_of(roles[i]);
         let low_seat = seat_of(roles[roles.len() - 1 - i]);
 
-        let from_low = take_highest(&mut hands[low_seat], count, duplicate_rule);
+        let selected = planned_gives[low_seat]
+            .take()
+            .expect("every exchanging low seat was planned above");
+        let from_low = remove_selected(&mut hands[low_seat], &selected);
         let from_high = take_lowest(&mut hands[high_seat], count, duplicate_rule);
 
         incoming[high_seat].extend(from_low);
@@ -101,6 +135,36 @@ pub fn exchange(
     Ok(())
 }
 
+/// The naive top/bottom-N exchange from Phase 1, now implemented as
+/// `exchange_with_selection` with a selection callback that reproduces
+/// the old `take_highest` behavior exactly. See `exchange_with_selection`
+/// for errors and panics.
+///
+/// # Errors
+///
+/// See [`exchange_with_selection`] for error cases; `exchange` delegates
+/// to it.
+///
+/// # Panics
+///
+/// See [`exchange_with_selection`] for panic conditions.
+pub fn exchange(
+    hands: &mut [Vec<Card>],
+    role_by_seat: &[Role],
+    duplicate_rule: DuplicateRule,
+) -> Result<(), ExchangeError> {
+    exchange_with_selection(
+        hands,
+        role_by_seat,
+        duplicate_rule,
+        |_seat, hand, count, duplicate_rule| {
+            let mut sorted = hand.to_vec();
+            sorted.sort_by(|a, b| a.compare(b, duplicate_rule));
+            sorted.split_off(sorted.len() - count)
+        },
+    )
+}
+
 fn validate_role_mapping(role_by_seat: &[Role], roles: &[Role]) -> Result<(), ExchangeError> {
     for &role in roles {
         if role_by_seat.iter().filter(|&&r| r == role).count() != 1 {
@@ -108,17 +172,6 @@ fn validate_role_mapping(role_by_seat: &[Role], roles: &[Role]) -> Result<(), Ex
         }
     }
     Ok(())
-}
-
-/// Removes and returns the `count` highest cards from `hand` (by
-/// `Card::compare` under `duplicate_rule`).
-///
-/// Sorts `hand` in place (ascending) as part of finding those cards, so
-/// the cards left behind end up in ascending order afterward — this is
-/// why some tests' expected remaining-hand contents appear pre-sorted.
-fn take_highest(hand: &mut Vec<Card>, count: usize, duplicate_rule: DuplicateRule) -> Vec<Card> {
-    hand.sort_by(|a, b| a.compare(b, duplicate_rule));
-    hand.split_off(hand.len() - count)
 }
 
 /// Removes and returns the `count` lowest cards from `hand` (by
@@ -130,6 +183,32 @@ fn take_highest(hand: &mut Vec<Card>, count: usize, duplicate_rule: DuplicateRul
 fn take_lowest(hand: &mut Vec<Card>, count: usize, duplicate_rule: DuplicateRule) -> Vec<Card> {
     hand.sort_by(|a, b| a.compare(b, duplicate_rule));
     hand.drain(0..count).collect()
+}
+
+fn is_sub_multiset(selected: &[Card], hand: &[Card]) -> bool {
+    let mut remaining = hand.to_vec();
+    for card in selected {
+        match remaining.iter().position(|c| c == card) {
+            Some(pos) => {
+                remaining.remove(pos);
+            }
+            None => return false,
+        }
+    }
+    true
+}
+
+fn remove_selected(hand: &mut Vec<Card>, selected: &[Card]) -> Vec<Card> {
+    selected
+        .iter()
+        .map(|card| {
+            let pos = hand
+                .iter()
+                .position(|c| c == card)
+                .expect("is_sub_multiset already validated this selection");
+            hand.remove(pos)
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -247,5 +326,171 @@ mod tests {
         let role_by_seat = vec![Role::President, Role::Dorftrottel, Role::Arschloch];
         assert!(exchange(&mut hands, &role_by_seat, DuplicateRule::FirstDealtWins).is_err());
         assert_eq!(hands, original);
+    }
+
+    #[test]
+    fn exchange_with_selection_uses_the_provided_cards() {
+        // For 4 players, exchange_counts_for_player_count(4) == [2, 1]: the
+        // outer pair (President/Arschloch) exchanges 2 cards, the inner pair
+        // (Vize/ViceArschloch) exchanges 1. Seat 3's hand has exactly 2
+        // cards and the outer pair's count is 2, so its whole hand moves
+        // regardless of selection order — that pair can't distinguish naive
+        // from custom. Assert on the inner pair instead, where count (1) is
+        // smaller than the low seat's hand size (2), so which card is chosen
+        // actually matters.
+        let role_by_seat = vec![
+            Role::President,
+            Role::Vize,
+            Role::ViceArschloch,
+            Role::Arschloch,
+        ];
+        let mut hands = vec![
+            vec![card(Rank::Two, Suit::Clubs), card(Rank::Three, Suit::Clubs)],
+            vec![card(Rank::Four, Suit::Clubs), card(Rank::Five, Suit::Clubs)],
+            vec![card(Rank::Six, Suit::Clubs), card(Rank::Seven, Suit::Clubs)],
+            vec![card(Rank::King, Suit::Clubs), card(Rank::Ace, Suit::Clubs)],
+        ];
+
+        // Opposite of naive: always give the LOWEST `count` cards instead
+        // of the highest.
+        exchange_with_selection(
+            &mut hands,
+            &role_by_seat,
+            DuplicateRule::FirstDealtWins,
+            |_seat, hand, count, duplicate_rule| {
+                let mut sorted = hand.to_vec();
+                sorted.sort_by(|a, b| a.compare(b, duplicate_rule));
+                sorted.truncate(count);
+                sorted
+            },
+        )
+        .unwrap();
+
+        // Seat 2 (ViceArschloch, giving 1 card up to seat 1/Vize) gave its
+        // LOWEST card (Six) instead of the naive highest (Seven).
+        assert!(hands[1].contains(&card(Rank::Six, Suit::Clubs)));
+        assert!(!hands[1].contains(&card(Rank::Seven, Suit::Clubs)));
+    }
+
+    #[test]
+    fn exchange_with_selection_rejects_wrong_count() {
+        let role_by_seat = vec![Role::President, Role::Dorftrottel, Role::Arschloch];
+        let mut hands = vec![
+            vec![card(Rank::Two, Suit::Clubs)],
+            vec![card(Rank::Five, Suit::Clubs)],
+            vec![card(Rank::King, Suit::Clubs)],
+        ];
+        let result = exchange_with_selection(
+            &mut hands,
+            &role_by_seat,
+            DuplicateRule::FirstDealtWins,
+            |_seat, _hand, _count, _duplicate_rule| Vec::new(),
+        );
+        assert_eq!(result, Err(ExchangeError::InvalidSelection));
+    }
+
+    #[test]
+    fn exchange_with_selection_rejects_card_not_in_hand() {
+        let role_by_seat = vec![Role::President, Role::Dorftrottel, Role::Arschloch];
+        let mut hands = vec![
+            vec![card(Rank::Two, Suit::Clubs)],
+            vec![card(Rank::Five, Suit::Clubs)],
+            vec![card(Rank::King, Suit::Clubs)],
+        ];
+        let result = exchange_with_selection(
+            &mut hands,
+            &role_by_seat,
+            DuplicateRule::FirstDealtWins,
+            |_seat, _hand, _count, _duplicate_rule| vec![card(Rank::Nine, Suit::Diamonds)],
+        );
+        assert_eq!(result, Err(ExchangeError::InvalidSelection));
+    }
+
+    #[test]
+    fn exchange_with_selection_rejects_duplicate_selection() {
+        let role_by_seat = vec![
+            Role::President,
+            Role::Vize,
+            Role::ViceArschloch,
+            Role::Arschloch,
+        ];
+        let mut hands = vec![
+            vec![card(Rank::Two, Suit::Clubs), card(Rank::Three, Suit::Clubs)],
+            vec![card(Rank::Four, Suit::Clubs), card(Rank::Five, Suit::Clubs)],
+            vec![card(Rank::Six, Suit::Clubs), card(Rank::Seven, Suit::Clubs)],
+            vec![card(Rank::King, Suit::Clubs), card(Rank::Ace, Suit::Clubs)],
+        ];
+        let result = exchange_with_selection(
+            &mut hands,
+            &role_by_seat,
+            DuplicateRule::FirstDealtWins,
+            |_seat, hand, count, _duplicate_rule| {
+                // Return the same card `count` times instead of `count`
+                // distinct cards.
+                vec![hand[0]; count]
+            },
+        );
+        assert_eq!(result, Err(ExchangeError::InvalidSelection));
+    }
+
+    #[test]
+    fn exchange_with_selection_leaves_hands_untouched_when_selection_invalid() {
+        // 6 players -> 3 exchanging pairs. Seat order matches
+        // roles_for_player_count(6): President, Vize, Offizier, Dummkopf,
+        // ViceArschloch, Arschloch.
+        let role_by_seat = vec![
+            Role::President,
+            Role::Vize,
+            Role::Offizier,
+            Role::Dummkopf,
+            Role::ViceArschloch,
+            Role::Arschloch,
+        ];
+        let original_hands = vec![
+            vec![
+                card(Rank::Two, Suit::Clubs),
+                card(Rank::Three, Suit::Clubs),
+                card(Rank::Four, Suit::Clubs),
+            ],
+            vec![card(Rank::Five, Suit::Clubs), card(Rank::Six, Suit::Clubs)],
+            vec![
+                card(Rank::Seven, Suit::Clubs),
+                card(Rank::Eight, Suit::Clubs),
+            ],
+            vec![card(Rank::Nine, Suit::Clubs), card(Rank::Ten, Suit::Clubs)],
+            vec![
+                card(Rank::Jack, Suit::Clubs),
+                card(Rank::Queen, Suit::Clubs),
+            ],
+            vec![
+                card(Rank::King, Suit::Clubs),
+                card(Rank::Ace, Suit::Clubs),
+                card(Rank::Two, Suit::Hearts),
+            ],
+        ];
+        let mut hands = original_hands.clone();
+
+        // Valid for the first (outermost) pair's low seat (seat 5,
+        // Arschloch, giving 3 cards to President), invalid for the second
+        // pair's low seat (seat 4, ViceArschloch, giving to Vize) — proves
+        // an earlier valid selection doesn't get applied before a later
+        // one is found invalid.
+        let result = exchange_with_selection(
+            &mut hands,
+            &role_by_seat,
+            DuplicateRule::FirstDealtWins,
+            |seat, hand, count, duplicate_rule| {
+                if seat == 4 {
+                    Vec::new() // wrong count -> InvalidSelection
+                } else {
+                    let mut sorted = hand.to_vec();
+                    sorted.sort_by(|a, b| a.compare(b, duplicate_rule));
+                    sorted.split_off(sorted.len() - count)
+                }
+            },
+        );
+
+        assert_eq!(result, Err(ExchangeError::InvalidSelection));
+        assert_eq!(hands, original_hands);
     }
 }

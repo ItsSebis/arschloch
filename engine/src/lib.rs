@@ -12,7 +12,7 @@ pub mod role;
 pub mod round;
 mod trick;
 
-pub use card::{Card, DeckVariant, DuplicateRule, Rank, Suit};
+pub use card::{rank_groups, Card, DeckVariant, DuplicateRule, Rank, Suit};
 pub use combo::Combo;
 pub use deal::{deal, lowest_card_holder};
 pub use deck::standard_deck;

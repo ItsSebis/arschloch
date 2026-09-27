@@ -83,6 +83,23 @@ impl Card {
     }
 }
 
+/// Groups `hand` by rank, in ascending rank order. Each inner `Vec` is
+/// every card of one rank (a "reserve" a strategy might want to keep
+/// together rather than split up — see `docs/ROADMAP.md`, Phase 5).
+#[must_use]
+pub fn rank_groups(hand: &[Card]) -> Vec<Vec<Card>> {
+    let mut sorted = hand.to_vec();
+    sorted.sort_by_key(|card| card.rank);
+    let mut groups: Vec<Vec<Card>> = Vec::new();
+    for card in sorted {
+        match groups.last_mut() {
+            Some(group) if group[0].rank == card.rank => group.push(card),
+            _ => groups.push(vec![card]),
+        }
+    }
+    groups
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -166,5 +183,28 @@ mod tests {
             second.compare(&first, DuplicateRule::LastDealtWins),
             Ordering::Greater
         );
+    }
+
+    #[test]
+    fn rank_groups_empty_hand_has_no_groups() {
+        assert_eq!(rank_groups(&[]), Vec::<Vec<Card>>::new());
+    }
+
+    #[test]
+    fn rank_groups_groups_same_rank_cards_together_in_ascending_rank_order() {
+        let low_a = Card::new(Rank::Two, Suit::Clubs, 0);
+        let low_b = Card::new(Rank::Two, Suit::Hearts, 1);
+        let mid = Card::new(Rank::Five, Suit::Clubs, 2);
+        let high = Card::new(Rank::King, Suit::Clubs, 3);
+        let hand = vec![high, low_a, mid, low_b];
+
+        let groups = rank_groups(&hand);
+
+        assert_eq!(groups.len(), 3);
+        assert_eq!(groups[0].len(), 2);
+        assert!(groups[0].contains(&low_a));
+        assert!(groups[0].contains(&low_b));
+        assert_eq!(groups[1], vec![mid]);
+        assert_eq!(groups[2], vec![high]);
     }
 }

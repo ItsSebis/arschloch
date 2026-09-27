@@ -12,7 +12,7 @@
 //! strongest" combo of a given size, so this is enough without solving a
 //! combinatorial optimization problem the roadmap doesn't call for.
 
-use crate::card::{Card, DuplicateRule};
+use crate::card::{rank_groups, Card, DuplicateRule};
 use crate::combo::Combo;
 use crate::round::Move;
 
@@ -46,20 +46,6 @@ pub(crate) fn legal_moves(
         }
     }
     moves
-}
-
-/// Groups `hand` by rank.
-fn rank_groups(hand: &[Card]) -> Vec<Vec<Card>> {
-    let mut sorted = hand.to_vec();
-    sorted.sort_by_key(|card| card.rank);
-    let mut groups: Vec<Vec<Card>> = Vec::new();
-    for card in sorted {
-        match groups.last_mut() {
-            Some(group) if group[0].rank == card.rank => group.push(card),
-            _ => groups.push(vec![card]),
-        }
-    }
-    groups
 }
 
 /// The lowest-top-card and highest-top-card `size`-subsets of `group`
