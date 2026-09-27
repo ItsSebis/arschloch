@@ -19,9 +19,40 @@ cargo clippy --workspace --all-targets -- -D warnings
 All four are the phase-done gate from `docs/CODING_GUIDELINES.md` and
 should be clean before any phase is considered finished.
 
-The `cli` crate is a binary; once it does something (Phase 3 onward),
-`cargo run -p cli -- <args>` runs it, and `cargo build --release -p cli`
-produces `target/release/cli` (or `cli.exe` on Windows, natively).
+The `cli` crate is a binary: `cargo run -p cli -- <args>` runs it, and
+`cargo build --release -p cli` produces `target/release/cli` (or
+`cli.exe` on Windows, natively).
+
+## Running the simulator
+
+```bash
+cargo run -p cli -- \
+  --player-count 4 \
+  --deck-variant single \
+  --duplicate-rule first-dealt-wins \
+  --matches 1000 \
+  --rounds 10 \
+  --strategy lowest-legal \
+  --strategy greedy-highest \
+  --strategy random-legal \
+  --strategy lowest-legal \
+  --threads 4 \
+  --seed 1 \
+  --output results.json
+```
+
+- `--strategy` is repeated once per seat, in seat order, and must be
+  repeated exactly `--player-count` times. Valid values:
+  `lowest-legal`, `greedy-highest`, `random-legal`.
+- `--deck-variant` is `single` or `double`; `--duplicate-rule` is
+  `first-dealt-wins` or `last-dealt-wins` (only matters for `double`).
+- `--threads 0` (the default) lets `rayon` pick its own thread count;
+  `--seed` is the base seed each match's own seed derives from, so a
+  full run is reproducible byte-for-byte given the same flags.
+- Two things happen: `results.json` (the `--output` path) gets every
+  match's raw `MatchResult` plus the aggregated `Statistics`, and a
+  human-readable summary table (role counts by strategy, and the pooled
+  voluntary-pass rate) prints to stdout.
 
 ## Cross-compiling a Windows executable (from Linux or macOS)
 

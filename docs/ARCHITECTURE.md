@@ -86,9 +86,12 @@ legal, never which move to prefer.
 ### `cli`
 
 Parses run configuration (player count, deck variant, duplicate rule,
-number of matches, which strategies occupy which seats, thread count) via
-`clap`, calls into `sim`, and writes both a JSON results file and a
-human-readable summary table to stdout.
+number of matches, rounds per match, which strategies occupy which
+seats, thread count, and a base seed each match's seed derives from) via
+`clap`, calls into `sim::run_batch`/`sim::aggregate`, and writes both a
+JSON results file (every `MatchResult` plus the aggregated `Statistics`,
+`sim`'s existing types with no new schema) and a human-readable summary
+table to stdout.
 
 ### `web` (future phase)
 
