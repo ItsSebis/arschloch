@@ -1,29 +1,106 @@
+//! Configuration surface for `Adaptive` (a later task in this module),
+//! a single configurable strategy whose base behavior is `LowestLegal`
+//! with three independently-toggleable modifiers layered on top:
+//! card-counting, endgame denial (optionally sharpened by pass-based
+//! hand-reading), and deception (docs/ROADMAP.md, Phase 7). Each
+//! modifier can be switched on or off (and, for denial, chosen between
+//! two strengths) without writing a new strategy struct, so batch runs
+//! can isolate which modifier combination actually beats plain
+//! `LowestLegal`.
+//!
+//! This module only defines the configuration type and its `Display`/
+//! `FromStr` grammar (for the CLI's per-seat strategy spec, added in a
+//! later task) — the modifiers' actual algorithms live in their own
+//! files/tasks and are untouched here.
+
 use std::fmt;
 use std::str::FromStr;
 
+/// The `close` threshold `Adaptive` uses when denial is enabled and no
+/// explicit `close=<n>` override is given. Matches
+/// `EndgameDenial::CLOSE_TO_FINISHING` (`sim/src/strategies/
+/// endgame_denial.rs`): 2 cards is deep into the final stretch at every
+/// supported table size and deck variant (see that constant's own doc
+/// comment for the full per-player-count rationale), so reusing it here
+/// keeps `Adaptive(denial)`'s default trigger point consistent with the
+/// standalone `EndgameDenial` strategy it's meant to generalize.
 pub const DEFAULT_CLOSE: usize = 2; // matches EndgameDenial::CLOSE_TO_FINISHING
 
+/// How the endgame-denial modifier is configured.
+///
+/// Denial switches this seat from conserving (`LowestLegal`-like) play
+/// to control-retaining play once an opponent is judged close to
+/// finishing. The two "on" variants differ only in *how* "close" is
+/// judged; both share the same `close` threshold semantics as
+/// `EndgameDenial::CLOSE_TO_FINISHING` (see `DEFAULT_CLOSE`).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum DenialMode {
+    /// Denial is disabled; this modifier never changes `Adaptive`'s
+    /// play relative to its other modifiers.
     Off,
-    HandSize { close: usize },
-    HandReading { close: usize },
+    /// Judges "close to finishing" purely by hand size, exactly like
+    /// the standalone `EndgameDenial` strategy: any active opponent at
+    /// or below `close` cards triggers denial mode. Kept as a distinct
+    /// variant (rather than always using hand-reading) so batch runs
+    /// can compare the cheaper hand-size-only trigger against the
+    /// pass-ceiling-aware one below.
+    HandSize {
+        /// Hand-size threshold at or below which an opponent counts as
+        /// close to finishing.
+        close: usize,
+    },
+    /// Sharpens the hand-size trigger with pass-based hand-reading: an
+    /// opponent's pass history narrows the ceiling on what they can
+    /// still beat, so this variant can judge an opponent "close" (or
+    /// rule one out) using more than raw card count. The `close` field
+    /// plays the same role as in `HandSize`.
+    HandReading {
+        /// Threshold applied on top of the pass-ceiling-derived signal;
+        /// see `HandSize::close`.
+        close: usize,
+    },
 }
 
+/// Which independently-toggleable modifiers `Adaptive` layers on top of
+/// its `LowestLegal` base behavior, and how each is tuned.
+///
+/// `AdaptiveConfig::NONE` (or `denial: DenialMode::Off` with
+/// `counting: false` and `deception_rate: 0.0`) makes `Adaptive`'s
+/// output byte-identical to plain `LowestLegal` for the same seed — no
+/// modifier draws from the RNG unless it's enabled.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct AdaptiveConfig {
+    /// Enables the card-counting modifier: hold back a "precious"
+    /// combo (one no unseen card can beat) instead of spending it
+    /// immediately, the same signal `CardCounter` uses on its own.
     pub counting: bool,
+    /// Enables (and tunes) the endgame-denial modifier: switch to
+    /// aggressive, control-retaining play once an opponent is judged
+    /// close to finishing. See `DenialMode` for the two ways
+    /// "close" can be judged.
     pub denial: DenialMode,
+    /// Probability in `[0.0, 1.0]` that this seat deceptively passes
+    /// on a turn where it could legally beat the table, to make its
+    /// hand harder for opponents to read. `0.0` disables deception
+    /// entirely.
     pub deception_rate: f64,
 }
 
 impl AdaptiveConfig {
+    /// All three modifiers disabled — `Adaptive::new(AdaptiveConfig::NONE)`
+    /// behaves identically to plain `LowestLegal`.
     pub const NONE: Self = Self {
         counting: false,
         denial: DenialMode::Off,
         deception_rate: 0.0,
     };
 
+    /// Whether this configuration's fields are all in-range, in
+    /// particular `deception_rate` being a finite value in `[0, 1]`.
+    /// `Adaptive::new` asserts this holds; the CLI's parser only ever
+    /// produces valid configurations via `FromStr`, so this is mainly a
+    /// defensive check against configs built directly as struct
+    /// literals.
     #[must_use]
     pub fn is_valid(&self) -> bool {
         self.deception_rate.is_finite() && (0.0..=1.0).contains(&self.deception_rate)
@@ -71,6 +148,11 @@ impl fmt::Display for AdaptiveConfig {
     }
 }
 
+/// A human-readable reason `str::parse::<AdaptiveConfig>()` failed —
+/// e.g. an unknown option key, a duplicate key, a value out of range,
+/// or `close` given without `denial`/`reading`. Carries just a message
+/// (no structured variants) since the only consumer is the CLI, which
+/// surfaces it as an error string to the user.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AdaptiveConfigError(String);
 
