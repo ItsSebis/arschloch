@@ -47,7 +47,7 @@ cargo run -p cli -- \
   a seat-position bias in how cards are dealt (see `docs/RULES.md`,
   "Players & Deck"). Must be repeated exactly `--player-count` times.
   Valid values: `lowest-legal`, `greedy-highest`, `random-legal`,
-  `hold-back-pairs`.
+  `hold-back-pairs`, `card-counter`, `endgame-denial`.
 - `--deck-variant` is `single` or `double`; `--duplicate-rule` is
   `first-dealt-wins` or `last-dealt-wins` (only matters for `double`).
 - `--threads 0` (the default) lets `rayon` pick its own thread count;

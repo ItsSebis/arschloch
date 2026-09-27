@@ -1,30 +1,45 @@
 //! Sweeps every table size (3-6) and both deck variants, alternating the
 //! duplicate-tiebreak rule, through full multi-round matches with the
-//! four baseline strategies. Every round of every match must end in a
+//! six baseline strategies. Every round of every match must end in a
 //! role assignment that is exactly the table's role set, each role once.
 
 use std::sync::Arc;
 
 use engine::{roles_for_player_count, DeckVariant, DuplicateRule};
 use sim::{
-    run_batch, GreedyHighest, HoldBackPairs, LowestLegal, MatchConfig, RandomLegal, Strategy,
+    run_batch, CardCounter, EndgameDenial, GreedyHighest, HoldBackPairs, LowestLegal, MatchConfig,
+    RandomLegal, Strategy,
 };
 
 fn baseline_strategies(player_count: u8) -> Vec<Arc<dyn Strategy>> {
-    let pool: [Arc<dyn Strategy>; 4] = [
+    let pool: [Arc<dyn Strategy>; 6] = [
         Arc::new(LowestLegal),
         Arc::new(RandomLegal),
         Arc::new(GreedyHighest),
         Arc::new(HoldBackPairs),
+        Arc::new(CardCounter),
+        Arc::new(EndgameDenial),
     ];
     // Start each table size at a different offset into the (cyclic) pool
-    // so every strategy — including HoldBackPairs at index 3 — gets
-    // exercised somewhere in the sweep, not just at tables large enough
-    // to wrap around from index 0.
+    // so every strategy near the tail — HoldBackPairs, CardCounter, and
+    // EndgameDenial — gets exercised at *every* table size (3-6), not
+    // just somewhere in the sweep.
+    //
+    // Walking the offset backward from the pool's end (rather than
+    // forward from its start, i.e. `player_count % pool.len()`) is
+    // required here, not just a style choice: with a 6-entry pool and
+    // table sizes 3-6, a forward offset of `player_count % pool.len()`
+    // gives player_count=5 a window of indices [5,0,1,2,3], which skips
+    // index 4 (CardCounter) entirely — the same class of coverage bug
+    // Phase 4 already hit once in this exact pool. Walking backward
+    // instead gives windows [3,4,5], [2,3,4,5], [1,2,3,4,5], and the
+    // full pool, so indices 3-5 are covered at every table size.
+    let player_count = usize::from(player_count);
+    let offset = (pool.len() - player_count % pool.len()) % pool.len();
     pool.iter()
         .cycle()
-        .skip(usize::from(player_count) % pool.len())
-        .take(usize::from(player_count))
+        .skip(offset)
+        .take(player_count)
         .cloned()
         .collect()
 }

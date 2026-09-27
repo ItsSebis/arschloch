@@ -61,7 +61,26 @@ sitting; a phase that grows beyond that should be split.
   isolated high card over one that's part of a pair/triple the strategy
   would rather keep, when multiple cards tie for "the Nth highest".
 
-## Phase 6 — Web interface
+## Phase 6 — Strategic context, card counting, and endgame denial
+
+- `engine`: `Round` gains a play-history accessor (every combo played so
+  far this round, tagged with the seat that played it) and a per-seat
+  hand-size accessor — the one piece of information about *other* seats
+  this genre treats as public.
+- `sim`: `Strategy::choose_play` gains a `TurnContext` parameter built
+  fresh each turn: this seat's own hand, every opponent's hand size (and
+  whether it's still active), and the exact multiset of unseen cards —
+  deterministic, since this is a closed-deck game with no draw pile.
+- Two new strategies built on `TurnContext`: `CardCounter`, which holds
+  back a legal combo while some unseen card could still beat it, and
+  spends it once no unseen card can; and `EndgameDenial`, which switches
+  to aggressive, control-retaining play whenever an active opponent's
+  hand size is low enough to be close to finishing, to deny them an easy
+  trick. Kept as two separate strategies rather than merged into one so
+  Phase 4's existing statistics can show which technique — counting or
+  denial — actually helps.
+
+## Phase 7 — Web interface
 
 - A small web frontend (technology choice deferred to when this phase
   starts) to view running simulations and the Phase 4 statistics as an

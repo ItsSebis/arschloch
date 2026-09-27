@@ -44,7 +44,12 @@ The rules from `RULES.md`, encoded as types and pure functions:
   single-round primitives: `Round` does not loop multiple rounds
   together. Looping them into a full match (deal → exchange using the
   previous round's roles → play a round → assign new roles → repeat) is
-  `sim`'s Phase 2 match-runner responsibility, not `engine`'s.
+  `sim`'s Phase 2 match-runner responsibility, not `engine`'s. `Round`
+  also exposes `play_history` (every combo played so far this round,
+  tagged with the seat that played it; passes are omitted, since a pass
+  never removes a card from a hand) and `hand_size` (a seat's hand size
+  without exposing its contents) — Phase 6's strategic-context
+  primitives, used to build `sim::TurnContext`.
 
 `engine` has no concept of "strategy" or "which move to pick" — it only
 knows how to validate and apply a move it's given.
@@ -58,19 +63,30 @@ legal, never which move to prefer.
 ### `sim`
 
 - `Strategy` trait: `choose_play(&self, legal_moves, duplicate_rule,
-  rng) -> Move`. `legal_moves` (from `engine::Round::legal_moves`) already
-  encodes every card a candidate move would use, so no separate `hand`
-  parameter is needed; `rng` is threaded through explicitly per call
-  (rather than owned by the strategy) so a single `Arc<dyn Strategy>` can
-  be shared read-only across parallel matches while staying fully
-  deterministic per match seed. Three baseline implementations from
-  Phase 2: `LowestLegal`, `RandomLegal`, `GreedyHighest`. A fourth,
-  `HoldBackPairs` (Phase 4), plays identically while leading but
-  deliberately passes rather than split up a same-rank reserve while
-  following, as a diversification comparison point against the three
-  always-play baselines. `Strategy::choose_exchange_cards` (Phase 5,
-  "smart exchange") now exists and is implemented by all four
-  strategies; `engine::exchange`'s naive top-N tie-break has been
+  context, rng) -> Move`. `legal_moves` (from `engine::Round::legal_moves`)
+  already encodes every card a candidate move would use, so no separate
+  `hand` parameter is needed; `rng` is threaded through explicitly per
+  call (rather than owned by the strategy) so a single `Arc<dyn
+  Strategy>` can be shared read-only across parallel matches while
+  staying fully deterministic per match seed. `context` is a
+  `TurnContext` (Phase 6, "strategic context"), built fresh each turn by
+  the match runner: this seat's own hand, every opponent's hand size
+  (and whether it's still active), and the exact multiset of unseen
+  cards — deterministic, since this is a closed-deck game with no draw
+  pile. Three baseline implementations from Phase 2: `LowestLegal`,
+  `RandomLegal`, `GreedyHighest`. A fourth, `HoldBackPairs` (Phase 4),
+  plays identically while leading but deliberately passes rather than
+  split up a same-rank reserve while following, as a diversification
+  comparison point against the three always-play baselines. Two more
+  strategies (Phase 6) use `TurnContext` directly: `CardCounter` holds
+  back a legal combo while some unseen card could still beat it, and
+  spends it once no unseen card can; `EndgameDenial` switches to
+  aggressive, control-retaining play whenever an active opponent's hand
+  size is low enough to be close to finishing, to deny them an easy
+  trick — otherwise it conserves like `LowestLegal`.
+  `Strategy::choose_exchange_cards` (Phase 5,
+  "smart exchange") now exists and is implemented by all strategies;
+  `engine::exchange`'s naive top-N tie-break has been
   replaced by `engine::exchange_with_selection`, which lets each low
   seat's strategy choose which cards it gives up, validated by
   `engine` rather than merely tie-broken. `HoldBackPairs` avoids

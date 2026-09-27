@@ -41,7 +41,8 @@ pub struct Args {
     /// `deal`'s documented uneven-remainder seat bias — see
     /// docs/RULES.md, "Players & Deck"). Must supply exactly
     /// `player_count`. Valid values: `lowest-legal`, `greedy-highest`,
-    /// `random-legal`, `hold-back-pairs`.
+    /// `random-legal`, `hold-back-pairs`, `card-counter`,
+    /// `endgame-denial`.
     #[arg(long = "strategy", value_enum, required = true)]
     pub strategies: Vec<StrategyArg>,
 
@@ -94,6 +95,8 @@ pub enum StrategyArg {
     GreedyHighest,
     RandomLegal,
     HoldBackPairs,
+    CardCounter,
+    EndgameDenial,
 }
 
 impl StrategyArg {
@@ -105,6 +108,8 @@ impl StrategyArg {
             StrategyArg::GreedyHighest => Arc::new(sim::GreedyHighest),
             StrategyArg::RandomLegal => Arc::new(sim::RandomLegal),
             StrategyArg::HoldBackPairs => Arc::new(sim::HoldBackPairs),
+            StrategyArg::CardCounter => Arc::new(sim::CardCounter),
+            StrategyArg::EndgameDenial => Arc::new(sim::EndgameDenial),
         }
     }
 }
@@ -159,6 +164,8 @@ mod tests {
         assert_eq!(StrategyArg::GreedyHighest.build().name(), "GreedyHighest");
         assert_eq!(StrategyArg::RandomLegal.build().name(), "RandomLegal");
         assert_eq!(StrategyArg::HoldBackPairs.build().name(), "HoldBackPairs");
+        assert_eq!(StrategyArg::CardCounter.build().name(), "CardCounter");
+        assert_eq!(StrategyArg::EndgameDenial.build().name(), "EndgameDenial");
     }
 
     #[test]
