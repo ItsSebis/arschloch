@@ -7,17 +7,19 @@
 //! such combo contains a size-`s` sub-combo with the same top card), so
 //! a seat's ceiling at size `s` is the lowest top card it has passed
 //! against at any size `<= s`. Ceilings are `Card`s, not `Rank`s:
-//! passing on 9♦ says nothing about 9♣ — the same lesson `CardCounter`
+//! passing on 9♣ says nothing about 9♦ — the same lesson `CardCounter`
 //! learned the hard way (see its own doc comment).
 //!
 //! **Refutation.** Not every pass is honest — `HoldBackPairs` passes on
 //! a single when every beating play would split a pair, `RandomLegal`
 //! passes at random, and `Adaptive`'s deception modifier passes on
-//! purpose. A pass is dropped (never recorded, or overwritten) once the
-//! same seat later plays a combo of the same or larger size topped
-//! above the passed-on card — proof it held a beater at the time. An
-//! honest pass can never be refuted, since hands only shrink; this only
-//! ever removes false information, never true information.
+//! purpose. A pass is never recorded (the reverse sweep checks
+//! refutation before ever writing a ceiling, so a refuted pass is
+//! simply skipped) if the same seat later plays a combo of the same or
+//! larger size topped above the passed-on card — proof it held a
+//! beater at the time. An honest pass can never be refuted, since hands
+//! only shrink; this only ever removes false information, never true
+//! information.
 
 use std::cmp::Ordering;
 
@@ -52,22 +54,25 @@ impl PassCeilings {
     /// Whether this seat is known unable to beat a size-`size` combo
     /// topped by `top`.
     ///
-    /// A strictly higher *rank* is always covered, regardless of suit
-    /// (rank dominates suit in `Card::compare`, so a lower-rank ceiling
-    /// bounds every higher rank). Within the *same* rank, only an exact
-    /// suit match counts: `Card::compare`'s suit tiebreak gives every
-    /// pair of same-rank cards a definite order (e.g. King-of-Clubs >
-    /// King-of-Hearts), but that order reflects an arbitrary house rule
-    /// for resolving legality, not a real difference in how hard the
-    /// two cards are to beat — a seat that passed on the King of Hearts
-    /// has told us nothing about the King of Clubs (see the module
-    /// doc's 9♦-vs-9♣ example). Deal index (double-deck duplicates) is
-    /// likewise ignored here: two copies of the same rank/suit are the
-    /// same card for this purpose.
+    /// A pass against ceiling `c` means the seat held nothing that beats
+    /// `c`. For any `top` with `top >= c` under `Card::compare` (a real
+    /// transitive total order over rank, then suit, then the
+    /// duplicate-deal tiebreak), if the seat held something beating
+    /// `top` it would also beat `c` by transitivity — contradicting the
+    /// pass. So "cannot beat `c`" soundly extends to every `top >= c`,
+    /// including same-rank higher-suit cards: `Card::compare`'s suit
+    /// tiebreak (this game's `Suit` order is Diamonds < Hearts < Spades
+    /// < Clubs) is a real difference in how hard two same-rank cards are
+    /// to beat, not an arbitrary one — `Combo::beats` uses it to decide
+    /// legality, so a King of Clubs genuinely is harder to beat than a
+    /// King of Hearts (only an Ace beats it). A pass on the King of
+    /// Hearts therefore also covers the King of Clubs, but says nothing
+    /// about the King of Diamonds (see the module doc's 9♣-vs-9♦
+    /// example).
     #[must_use]
     pub fn cannot_beat(&self, size: usize, top: Card, duplicate_rule: DuplicateRule) -> bool {
         self.ceiling(size, duplicate_rule)
-            .is_some_and(|c| top.rank > c.rank || (top.rank == c.rank && top.suit == c.suit))
+            .is_some_and(|c| top.compare(&c, duplicate_rule) != Ordering::Less)
     }
 }
 
@@ -158,17 +163,25 @@ mod tests {
     }
 
     #[test]
-    fn suit_precision_a_pass_against_one_suit_does_not_cover_a_higher_suit_same_rank() {
+    fn suit_precision_a_pass_covers_higher_suits_but_not_lower_suits_at_the_same_rank() {
         // engine's Suit order: Diamonds < Hearts < Spades < Clubs.
         let pass_history = vec![(0u8, combo(vec![card(Rank::King, Suit::Hearts)]), 0)];
         let ceilings = read_pass_ceilings(2, &[], &pass_history, DuplicateRule::FirstDealtWins);
         let king_hearts = card(Rank::King, Suit::Hearts);
         let king_clubs = card(Rank::King, Suit::Clubs);
-        assert!(ceilings[0].cannot_beat(1, king_hearts, DuplicateRule::FirstDealtWins));
+        let king_diamonds = card(Rank::King, Suit::Diamonds);
         assert!(
-            !ceilings[0].cannot_beat(1, king_clubs, DuplicateRule::FirstDealtWins),
-            "a same-rank higher-suit card must NOT be considered covered by this pass \
-             (a Rank-keyed ceiling would wrongly say it is)"
+            ceilings[0].cannot_beat(1, king_hearts, DuplicateRule::FirstDealtWins),
+            "a pass covers itself"
+        );
+        assert!(
+            ceilings[0].cannot_beat(1, king_clubs, DuplicateRule::FirstDealtWins),
+            "Clubs is the higher suit, so King-of-Clubs >= King-of-Hearts and is covered"
+        );
+        assert!(
+            !ceilings[0].cannot_beat(1, king_diamonds, DuplicateRule::FirstDealtWins),
+            "Diamonds is the LOWER suit, so this must NOT be covered \
+             (a Rank-keyed-only ceiling would wrongly say it is)"
         );
     }
 
@@ -207,6 +220,66 @@ mod tests {
             ceilings[0].ceiling(1, DuplicateRule::FirstDealtWins),
             Some(card(Rank::Nine, Suit::Diamonds)),
             "the King was played BEFORE this pass, so it doesn't refute it"
+        );
+    }
+
+    #[test]
+    fn a_later_play_at_a_smaller_size_does_not_refute_a_larger_pass() {
+        let pair = combo(vec![
+            card(Rank::Seven, Suit::Clubs),
+            card(Rank::Seven, Suit::Diamonds),
+        ]);
+        let king_single = combo(vec![card(Rank::King, Suit::Clubs)]);
+        let pass_history = vec![(0u8, pair.clone(), 0)]; // pass at size 2, plays_before: 0
+        let play_history = vec![(0u8, king_single)]; // size-1 play, index 0, happened after
+        let ceilings = read_pass_ceilings(
+            2,
+            &play_history,
+            &pass_history,
+            DuplicateRule::FirstDealtWins,
+        );
+        assert_eq!(
+            ceilings[0].ceiling(2, DuplicateRule::FirstDealtWins),
+            Some(pair.top_card(DuplicateRule::FirstDealtWins)),
+            "a size-1 play, even above the passed rank, cannot refute a size-2 pass"
+        );
+    }
+
+    #[test]
+    fn a_later_play_by_a_different_seat_does_not_refute_this_seats_pass() {
+        let nine = combo(vec![card(Rank::Nine, Suit::Diamonds)]);
+        let king = combo(vec![card(Rank::King, Suit::Clubs)]);
+        let pass_history = vec![(0u8, nine, 0)];
+        let play_history = vec![(1u8, king)]; // seat 1 plays, not seat 0
+        let ceilings = read_pass_ceilings(
+            2,
+            &play_history,
+            &pass_history,
+            DuplicateRule::FirstDealtWins,
+        );
+        assert_eq!(
+            ceilings[0].ceiling(1, DuplicateRule::FirstDealtWins),
+            Some(card(Rank::Nine, Suit::Diamonds)),
+            "seat 1's play cannot refute seat 0's pass"
+        );
+    }
+
+    #[test]
+    fn a_later_play_lower_than_the_passed_card_does_not_refute_the_pass() {
+        let king = combo(vec![card(Rank::King, Suit::Clubs)]);
+        let nine = combo(vec![card(Rank::Nine, Suit::Diamonds)]);
+        let pass_history = vec![(0u8, king, 0)];
+        let play_history = vec![(0u8, nine)]; // lower than the passed King, happened after
+        let ceilings = read_pass_ceilings(
+            2,
+            &play_history,
+            &pass_history,
+            DuplicateRule::FirstDealtWins,
+        );
+        assert_eq!(
+            ceilings[0].ceiling(1, DuplicateRule::FirstDealtWins),
+            Some(card(Rank::King, Suit::Clubs)),
+            "a later play lower than the passed card cannot refute the pass"
         );
     }
 
