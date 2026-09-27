@@ -1,3 +1,4 @@
+mod adaptive;
 mod card_counter;
 mod endgame_denial;
 mod greedy_highest;
@@ -7,6 +8,7 @@ mod random_legal;
 
 use engine::{Card, DuplicateRule};
 
+pub use adaptive::{AdaptiveConfig, DenialMode};
 pub use card_counter::CardCounter;
 pub use endgame_denial::EndgameDenial;
 pub use greedy_highest::GreedyHighest;
