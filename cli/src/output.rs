@@ -4,6 +4,7 @@
 //! "web") sees exactly `sim::MatchResult`/`sim::Statistics` as-is.
 
 use std::fs::File;
+use std::io::{BufWriter, Write};
 use std::path::Path;
 
 use anyhow::Context;
@@ -14,30 +15,45 @@ struct RunOutput<'a> {
     statistics: &'a sim::Statistics,
 }
 
-/// Writes `matches` and `statistics` to `path` as pretty-printed JSON.
+/// Creates (or truncates) the file at `path`, failing fast before any
+/// batch simulation runs rather than after — a bad `--output` path
+/// should not cost the caller a completed run's worth of computed
+/// results.
 ///
 /// # Errors
 ///
-/// Returns an error if `path` can't be created or the results can't be
-/// serialized (serialization failure is not expected in practice — every
-/// field of `MatchResult`/`Statistics` is a plain serializable type — but
-/// `serde_json::to_writer_pretty` returns a `Result`, so this surfaces it
-/// rather than unwrapping).
+/// Returns an error if `path` can't be created (e.g. its parent
+/// directory doesn't exist, or permissions are denied).
+pub fn create_output_file(path: &Path) -> anyhow::Result<File> {
+    File::create(path).with_context(|| format!("failed to create {}", path.display()))
+}
+
+/// Writes `matches` and `statistics` to `file` as pretty-printed JSON,
+/// buffering writes and flushing explicitly so a late I/O error isn't
+/// silently lost when the writer drops.
+///
+/// # Errors
+///
+/// Returns an error if the results can't be serialized (not expected in
+/// practice — every field of `MatchResult`/`Statistics` is a plain
+/// serializable type — but `serde_json::to_writer_pretty` returns a
+/// `Result`, so this surfaces it rather than unwrapping) or if the final
+/// flush fails.
 pub fn write_json_output(
-    path: &Path,
+    file: File,
     matches: &[sim::MatchResult],
     statistics: &sim::Statistics,
 ) -> anyhow::Result<()> {
-    let file =
-        File::create(path).with_context(|| format!("failed to create {}", path.display()))?;
+    let mut writer = BufWriter::new(file);
     serde_json::to_writer_pretty(
-        file,
+        &mut writer,
         &RunOutput {
             matches,
             statistics,
         },
     )
     .context("failed to serialize results")?;
+    writer.flush().context("failed to flush results file")?;
     Ok(())
 }
 
@@ -78,7 +94,8 @@ mod tests {
         let matches = vec![sample_result()];
         let statistics = sample_statistics();
 
-        write_json_output(&path, &matches, &statistics).unwrap();
+        let file = create_output_file(&path).unwrap();
+        write_json_output(file, &matches, &statistics).unwrap();
 
         let contents = std::fs::read_to_string(&path).unwrap();
         let value: serde_json::Value = serde_json::from_str(&contents).unwrap();

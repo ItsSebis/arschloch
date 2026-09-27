@@ -41,9 +41,12 @@ cargo run -p cli -- \
   --output results.json
 ```
 
-- `--strategy` is repeated once per seat, in seat order, and must be
-  repeated exactly `--player-count` times. Valid values:
-  `lowest-legal`, `greedy-highest`, `random-legal`.
+- `--strategy` is repeated once per seat, in seat order — this sets the
+  seating for the batch's first match only; `sim` then rotates which
+  seat each strategy occupies for every subsequent match, to cancel out
+  a seat-position bias in how cards are dealt (see `docs/RULES.md`,
+  "Players & Deck"). Must be repeated exactly `--player-count` times.
+  Valid values: `lowest-legal`, `greedy-highest`, `random-legal`.
 - `--deck-variant` is `single` or `double`; `--duplicate-rule` is
   `first-dealt-wins` or `last-dealt-wins` (only matters for `double`).
 - `--threads 0` (the default) lets `rayon` pick its own thread count;

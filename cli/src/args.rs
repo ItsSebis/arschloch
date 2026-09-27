@@ -33,8 +33,14 @@ pub struct Args {
     )]
     pub rounds: usize,
 
-    /// One per seat, in seat order. Repeat the flag once per seat, e.g.
-    /// `--strategy lowest-legal --strategy greedy-highest`.
+    /// One per seat, setting the seating for the batch's first match,
+    /// in seat order (e.g. `--strategy lowest-legal --strategy
+    /// greedy-highest`). `sim::run_batch` then rotates this seating by
+    /// one position for each subsequent match, so which physical seat
+    /// each strategy occupies varies across the batch (this cancels
+    /// `deal`'s documented uneven-remainder seat bias — see
+    /// docs/RULES.md, "Players & Deck"). Must supply exactly
+    /// `player_count`.
     #[arg(long = "strategy", value_enum, required = true)]
     pub strategies: Vec<StrategyArg>,
 

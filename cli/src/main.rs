@@ -15,6 +15,8 @@ fn main() -> anyhow::Result<()> {
     let args = args::Args::parse();
     args::validate(&args)?;
 
+    let output_file = output::create_output_file(&args.output)?;
+
     if args.threads > 0 {
         rayon::ThreadPoolBuilder::new()
             .num_threads(args.threads)
@@ -40,8 +42,7 @@ fn main() -> anyhow::Result<()> {
     let results = sim::run_batch(&configs, &strategies);
     let statistics = sim::aggregate(&results);
 
-    output::write_json_output(&args.output, &results, &statistics)
-        .with_context(|| format!("failed to write results to {}", args.output.display()))?;
+    output::write_json_output(output_file, &results, &statistics)?;
 
     println!("{}", summary::render_summary(&args, &statistics));
     Ok(())
