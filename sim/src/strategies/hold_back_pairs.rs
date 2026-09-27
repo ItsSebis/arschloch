@@ -117,6 +117,8 @@ mod tests {
             hand: &[],
             opponents: Vec::new(),
             unseen_cards: Vec::new(),
+            own_pass_ceilings: crate::hand_reading::PassCeilings::default(),
+            current_combo: None,
         }
     }
 

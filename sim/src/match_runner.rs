@@ -7,8 +7,8 @@
 use std::sync::Arc;
 
 use engine::{
-    assign_roles, deal, exchange_with_selection, lowest_card_holder, standard_deck, Card, Move,
-    Round, SeatId,
+    assign_roles, deal, exchange_with_selection, lowest_card_holder, standard_deck, Card,
+    DuplicateRule, Move, Round, SeatId,
 };
 use rand::seq::SliceRandom;
 use rand::SeedableRng;
@@ -19,23 +19,33 @@ use crate::match_result::MatchResult;
 use crate::strategy::{OpponentHand, Strategy, TurnContext};
 
 /// Builds the `TurnContext` for `seat`'s upcoming `choose_play` call:
-/// every other seat's current hand size/activity, and the exact
-/// multiset of cards neither in `seat`'s hand nor played by anyone yet
-/// this round. `round_deck` is the full set of cards dealt this round
-/// (see `run_match`'s `round_deck`), used as the starting point before
-/// subtracting what's now visible.
+/// every other seat's current hand size/activity/pass ceilings, the
+/// exact multiset of cards neither in `seat`'s hand nor played by
+/// anyone yet this round, this seat's own pass ceilings, and the
+/// combo currently on the table (if any). `round_deck` is the full set
+/// of cards dealt this round (see `run_match`'s `round_deck`), used as
+/// the starting point before subtracting what's now visible.
 fn turn_context_for<'a>(
     round: &'a Round,
     seat: SeatId,
     player_count: u8,
     round_deck: &[Card],
+    duplicate_rule: DuplicateRule,
 ) -> TurnContext<'a> {
+    let all_ceilings = crate::hand_reading::read_pass_ceilings(
+        usize::from(player_count),
+        round.play_history(),
+        round.pass_history(),
+        duplicate_rule,
+    );
+
     let opponents: Vec<OpponentHand> = (0..player_count)
         .filter(|&s| s != seat)
         .map(|s| OpponentHand {
             seat: s,
             hand_size: round.hand_size(s),
             active: round.is_active(s),
+            pass_ceilings: all_ceilings[usize::from(s)],
         })
         .collect();
 
@@ -56,6 +66,8 @@ fn turn_context_for<'a>(
         hand: round.hand(seat),
         opponents,
         unseen_cards,
+        own_pass_ceilings: all_ceilings[usize::from(seat)],
+        current_combo: round.current_combo(),
     }
 }
 
@@ -128,7 +140,13 @@ pub fn run_match(config: &MatchConfig, strategies: &[Arc<dyn Strategy>]) -> Matc
             }
             let legal_moves = round.legal_moves();
 
-            let context = turn_context_for(&round, seat, config.player_count, &round_deck);
+            let context = turn_context_for(
+                &round,
+                seat,
+                config.player_count,
+                &round_deck,
+                config.duplicate_rule,
+            );
 
             let chosen = strategies[usize::from(seat)].choose_play(
                 &legal_moves,
@@ -196,8 +214,10 @@ pub fn run_batch(configs: &[MatchConfig], strategies: &[Arc<dyn Strategy>]) -> V
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::hand_reading::PassCeilings;
     use engine::{Card, DeckVariant, DuplicateRule};
     use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+    use std::sync::Mutex;
 
     fn four_lowest_legal() -> Vec<Arc<dyn Strategy>> {
         vec![
@@ -458,5 +478,89 @@ mod tests {
             .collect();
         let _ = run_match(&config, &strategies);
         assert!(!violation.load(Ordering::Relaxed));
+    }
+
+    /// Wraps `LowestLegal`, recording every `OpponentHand.pass_ceilings`
+    /// it's ever shown in `TurnContext.opponents` — used to confirm
+    /// `turn_context_for` actually wires the real
+    /// `hand_reading::read_pass_ceilings` output into each turn's
+    /// `TurnContext`, not just that the field exists on the type
+    /// (regression guard for the *wiring*, per Phase 6's final review).
+    struct PassCeilingRecorder {
+        recorded: Mutex<Vec<PassCeilings>>,
+    }
+
+    impl Strategy for PassCeilingRecorder {
+        fn name(&self) -> &'static str {
+            "PassCeilingRecorder"
+        }
+
+        fn choose_play(
+            &self,
+            legal_moves: &[Move],
+            duplicate_rule: DuplicateRule,
+            context: &TurnContext<'_>,
+            rng: &mut dyn rand::Rng,
+        ) -> Move {
+            self.recorded
+                .lock()
+                .expect("test-only mutex is never poisoned")
+                .extend(context.opponents.iter().map(|o| o.pass_ceilings));
+            crate::strategies::LowestLegal.choose_play(legal_moves, duplicate_rule, context, rng)
+        }
+
+        fn choose_exchange_cards(
+            &self,
+            hand: &[Card],
+            count: usize,
+            duplicate_rule: DuplicateRule,
+            rng: &mut dyn rand::Rng,
+        ) -> Vec<Card> {
+            crate::strategies::LowestLegal.choose_exchange_cards(hand, count, duplicate_rule, rng)
+        }
+    }
+
+    #[test]
+    fn turn_context_wires_real_pass_ceilings_into_opponent_hands() {
+        // Seat 0 (`RandomLegal`) sometimes voluntarily passes on a
+        // combo it could have beaten; once it does, a later turn's
+        // `TurnContext` (built by the production `turn_context_for`,
+        // not a stub) must expose a non-default `PassCeilings` for seat
+        // 0 to whichever other seat is acting. Scanning several seeds
+        // keeps this deterministic without depending on exactly which
+        // seed happens to produce an unrefuted pass.
+        let mut saw_non_default = false;
+        for seed in 0..30 {
+            let recorder = Arc::new(PassCeilingRecorder {
+                recorded: Mutex::new(Vec::new()),
+            });
+            let strategies: Vec<Arc<dyn Strategy>> = vec![
+                Arc::new(crate::strategies::RandomLegal),
+                recorder.clone(),
+                recorder.clone(),
+                recorder.clone(),
+            ];
+            let config = MatchConfig {
+                player_count: 4,
+                deck_variant: DeckVariant::Single,
+                duplicate_rule: DuplicateRule::FirstDealtWins,
+                rounds: 3,
+                seed,
+            };
+            let _ = run_match(&config, &strategies);
+            let seen_ceilings = recorder
+                .recorded
+                .lock()
+                .expect("test-only mutex is never poisoned");
+            if seen_ceilings.iter().any(|c| *c != PassCeilings::default()) {
+                saw_non_default = true;
+                break;
+            }
+        }
+        assert!(
+            saw_non_default,
+            "expected at least one seed's match to produce a non-default \
+             PassCeilings somewhere in the recorded OpponentHand.pass_ceilings"
+        );
     }
 }

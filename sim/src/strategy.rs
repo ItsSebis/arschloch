@@ -1,6 +1,8 @@
 //! The `Strategy` trait: how a simulated seat picks among legal moves.
 
-use engine::{Card, DuplicateRule, Move, SeatId};
+use engine::{Card, Combo, DuplicateRule, Move, SeatId};
+
+use crate::hand_reading::PassCeilings;
 
 /// A seat other than the one currently acting, and what's publicly
 /// known about it: its current hand size and whether it's still in
@@ -11,6 +13,7 @@ pub struct OpponentHand {
     pub seat: SeatId,
     pub hand_size: usize,
     pub active: bool,
+    pub pass_ceilings: PassCeilings,
 }
 
 /// Everything beyond `legal_moves` a `Strategy` needs for card
@@ -30,6 +33,13 @@ pub struct TurnContext<'a> {
     /// seat currently holds. Deterministic: this is a closed-deck game
     /// with no draw pile.
     pub unseen_cards: Vec<Card>,
+    /// This seat's own pass ceilings, as read by anyone else — needed
+    /// by `Adaptive`'s deception modifier (a later task) to avoid a
+    /// redundant bluff.
+    pub own_pass_ceilings: PassCeilings,
+    /// The combo currently on the table, or `None` if this seat must
+    /// lead (mirrors `engine::Round::current_combo`).
+    pub current_combo: Option<&'a Combo>,
 }
 
 /// Chooses a move from the moves `engine` reports as legal. Implementors
@@ -40,8 +50,10 @@ pub struct TurnContext<'a> {
 /// scheduling.
 pub trait Strategy: Send + Sync {
     /// A short, stable name used to group results by strategy (see
-    /// `crate::statistics::aggregate`).
-    fn name(&self) -> &'static str;
+    /// `crate::statistics::aggregate`). Owned content, not necessarily
+    /// `'static` — a configurable strategy's name reflects its actual
+    /// configuration.
+    fn name(&self) -> &str;
 
     /// Picks one entry from `legal_moves` (never empty when a seat is
     /// actually to move — see `engine::Round::legal_moves`).
