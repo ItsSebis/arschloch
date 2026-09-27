@@ -25,7 +25,19 @@ pub fn render_summary(args: &Args, statistics: &sim::Statistics) -> String {
     let roles = engine::roles_for_player_count(args.player_count)
         .expect("clap already validated player_count is 3-6");
 
-    let _ = write!(out, "{:<16}", "Strategy");
+    // The strategy-name column must fit the longest actual name (e.g. an
+    // `Adaptive(...)` spec can far exceed a fixed strategy's name), so
+    // its width is computed from the data rather than hardcoded.
+    let name_width = statistics
+        .role_counts_by_strategy
+        .keys()
+        .map(String::len)
+        .max()
+        .unwrap_or(0)
+        .max("Strategy".len())
+        + 2;
+
+    let _ = write!(out, "{:<name_width$}", "Strategy");
     for role in roles {
         let role_label = format!("{role:?}");
         let _ = write!(out, "{role_label:<16}");
@@ -33,7 +45,7 @@ pub fn render_summary(args: &Args, statistics: &sim::Statistics) -> String {
     let _ = writeln!(out);
 
     for (strategy_name, counts_by_role) in &statistics.role_counts_by_strategy {
-        let _ = write!(out, "{strategy_name:<16}");
+        let _ = write!(out, "{strategy_name:<name_width$}");
         for role in roles {
             let count = counts_by_role.get(role).copied().unwrap_or(0);
             let _ = write!(out, "{count:<16}");
@@ -53,10 +65,10 @@ pub fn render_summary(args: &Args, statistics: &sim::Statistics) -> String {
             .get(strategy_name)
         {
             Some(rate) => {
-                let _ = writeln!(out, "  {strategy_name:<16}{:.2}%", rate * 100.0);
+                let _ = writeln!(out, "  {strategy_name:<name_width$}{:.2}%", rate * 100.0);
             }
             None => {
-                let _ = writeln!(out, "  {strategy_name:<16}(not enough data)");
+                let _ = writeln!(out, "  {strategy_name:<name_width$}(not enough data)");
             }
         }
     }
@@ -76,12 +88,12 @@ pub fn render_summary(args: &Args, statistics: &sim::Statistics) -> String {
                 let rate = f64::from(r.retained_next_round) / f64::from(r.held) * 100.0;
                 let _ = writeln!(
                     out,
-                    "  {strategy_name:<16}{rate:.2}% ({}/{})",
+                    "  {strategy_name:<name_width$}{rate:.2}% ({}/{})",
                     r.retained_next_round, r.held
                 );
             }
             _ => {
-                let _ = writeln!(out, "  {strategy_name:<16}(not enough data)");
+                let _ = writeln!(out, "  {strategy_name:<name_width$}(not enough data)");
             }
         }
     }
@@ -99,10 +111,10 @@ pub fn render_summary(args: &Args, statistics: &sim::Statistics) -> String {
             .flatten();
         match variance {
             Some(v) => {
-                let _ = writeln!(out, "  {strategy_name:<16}{v:.2}");
+                let _ = writeln!(out, "  {strategy_name:<name_width$}{v:.2}");
             }
             None => {
-                let _ = writeln!(out, "  {strategy_name:<16}(not enough data)");
+                let _ = writeln!(out, "  {strategy_name:<name_width$}(not enough data)");
             }
         }
     }
@@ -113,7 +125,7 @@ pub fn render_summary(args: &Args, statistics: &sim::Statistics) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::args::{DeckVariantArg, DuplicateRuleArg, StrategyArg};
+    use crate::args::{DeckVariantArg, DuplicateRuleArg, FixedStrategy, StrategyArg};
     use engine::Role;
     use std::collections::BTreeMap;
     use std::path::PathBuf;
@@ -126,9 +138,9 @@ mod tests {
             matches: 10,
             rounds: 2,
             strategies: vec![
-                StrategyArg::LowestLegal,
-                StrategyArg::GreedyHighest,
-                StrategyArg::RandomLegal,
+                StrategyArg::Fixed(FixedStrategy::LowestLegal),
+                StrategyArg::Fixed(FixedStrategy::GreedyHighest),
+                StrategyArg::Fixed(FixedStrategy::RandomLegal),
             ],
             threads: 0,
             seed: 42,

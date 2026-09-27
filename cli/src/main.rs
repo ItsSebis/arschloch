@@ -24,8 +24,12 @@ fn main() -> anyhow::Result<()> {
             .context("failed to configure thread pool")?;
     }
 
-    let strategies: Vec<Arc<dyn sim::Strategy>> =
-        args.strategies.iter().map(|s| s.build()).collect();
+    let strategies: Vec<Arc<dyn sim::Strategy>> = args
+        .strategies
+        .iter()
+        .cloned()
+        .map(args::StrategyArg::build)
+        .collect();
 
     let configs: Vec<sim::MatchConfig> = (0..args.matches)
         .map(|i| sim::MatchConfig {

@@ -40,10 +40,19 @@ pub struct Args {
     /// each strategy occupies varies across the batch (this cancels
     /// `deal`'s documented uneven-remainder seat bias — see
     /// docs/RULES.md, "Players & Deck"). Must supply exactly
-    /// `player_count`. Valid values: `lowest-legal`, `greedy-highest`,
-    /// `random-legal`, `hold-back-pairs`, `card-counter`,
-    /// `endgame-denial`.
-    #[arg(long = "strategy", value_enum, required = true)]
+    /// `player_count`.
+    ///
+    /// Each value is a spec, `SPEC := FIXED | "adaptive" | "adaptive:"
+    /// OPTIONS`: either one of the six fixed strategy names
+    /// (`lowest-legal`, `greedy-highest`, `random-legal`,
+    /// `hold-back-pairs`, `card-counter`, `endgame-denial`), or
+    /// `adaptive` (defaults — see `sim::AdaptiveConfig::default`), or
+    /// `adaptive:OPTIONS` where `OPTIONS` is a comma-separated modifier
+    /// list parsed by `sim::AdaptiveConfig`'s `FromStr` (e.g.
+    /// `counting`, `reading,deception=0.2`, `none`). For example, a
+    /// three-seat table: `--strategy lowest-legal --strategy
+    /// adaptive:counting --strategy adaptive:reading,deception=0.2`.
+    #[arg(long = "strategy", required = true, value_name = "SPEC")]
     pub strategies: Vec<StrategyArg>,
 
     /// Rayon thread-pool size. 0 lets rayon pick its own default.
@@ -89,8 +98,10 @@ impl From<DuplicateRuleArg> for engine::DuplicateRule {
     }
 }
 
+/// The six fixed (non-configurable) strategies, named as `clap`
+/// possible values (kebab-case).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
-pub enum StrategyArg {
+pub enum FixedStrategy {
     LowestLegal,
     GreedyHighest,
     RandomLegal,
@@ -99,17 +110,71 @@ pub enum StrategyArg {
     EndgameDenial,
 }
 
+/// One `--strategy` spec: either a fixed strategy name, or a
+/// configurable `sim::Adaptive` spec (`adaptive` or
+/// `adaptive:OPTIONS`). See `Args::strategies`'s doc comment for the
+/// full grammar.
+#[derive(Clone, Debug, PartialEq)]
+pub enum StrategyArg {
+    Fixed(FixedStrategy),
+    Adaptive(sim::AdaptiveConfig),
+}
+
+impl std::str::FromStr for StrategyArg {
+    type Err = String;
+
+    fn from_str(spec: &str) -> Result<Self, String> {
+        let spec = spec.trim();
+        let (head, options) = match spec.split_once(':') {
+            Some((h, o)) => (h.trim(), Some(o)),
+            None => (spec, None),
+        };
+        if head == "adaptive" {
+            return match options {
+                None => Ok(Self::Adaptive(sim::AdaptiveConfig::default())),
+                Some(o) => o.parse().map(Self::Adaptive).map_err(|e| e.to_string()),
+            };
+        }
+        if options.is_some() {
+            return Err(format!(
+                "strategy `{head}` takes no options (only `adaptive:` does)"
+            ));
+        }
+        <FixedStrategy as clap::ValueEnum>::from_str(head, false)
+            .map(Self::Fixed)
+            .map_err(|_| {
+                format!(
+                    "unknown strategy `{head}`; expected one of: {}, adaptive[:OPTIONS]",
+                    fixed_strategy_names(),
+                )
+            })
+    }
+}
+
+/// The `clap`-possible-value names of every `FixedStrategy` variant,
+/// comma-joined, for use in `StrategyArg::from_str`'s error message.
+fn fixed_strategy_names() -> String {
+    use clap::ValueEnum;
+    FixedStrategy::value_variants()
+        .iter()
+        .filter_map(clap::ValueEnum::to_possible_value)
+        .map(|p| p.get_name().to_owned())
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
 impl StrategyArg {
-    /// Builds the concrete strategy instance this variant names.
+    /// Builds the concrete strategy instance this spec names.
     #[must_use]
     pub fn build(self) -> Arc<dyn sim::Strategy> {
         match self {
-            StrategyArg::LowestLegal => Arc::new(sim::LowestLegal),
-            StrategyArg::GreedyHighest => Arc::new(sim::GreedyHighest),
-            StrategyArg::RandomLegal => Arc::new(sim::RandomLegal),
-            StrategyArg::HoldBackPairs => Arc::new(sim::HoldBackPairs),
-            StrategyArg::CardCounter => Arc::new(sim::CardCounter),
-            StrategyArg::EndgameDenial => Arc::new(sim::EndgameDenial),
+            Self::Fixed(FixedStrategy::LowestLegal) => Arc::new(sim::LowestLegal),
+            Self::Fixed(FixedStrategy::GreedyHighest) => Arc::new(sim::GreedyHighest),
+            Self::Fixed(FixedStrategy::RandomLegal) => Arc::new(sim::RandomLegal),
+            Self::Fixed(FixedStrategy::HoldBackPairs) => Arc::new(sim::HoldBackPairs),
+            Self::Fixed(FixedStrategy::CardCounter) => Arc::new(sim::CardCounter),
+            Self::Fixed(FixedStrategy::EndgameDenial) => Arc::new(sim::EndgameDenial),
+            Self::Adaptive(config) => Arc::new(sim::Adaptive::new(config)),
         }
     }
 }
@@ -141,7 +206,7 @@ mod tests {
             duplicate_rule: DuplicateRuleArg::FirstDealtWins,
             matches: 1,
             rounds: 1,
-            strategies: vec![StrategyArg::LowestLegal; strategy_count],
+            strategies: vec![StrategyArg::Fixed(FixedStrategy::LowestLegal); strategy_count],
             threads: 0,
             seed: 0,
             output: PathBuf::from("results.json"),
@@ -160,12 +225,92 @@ mod tests {
 
     #[test]
     fn strategy_arg_builds_matching_strategy_names() {
-        assert_eq!(StrategyArg::LowestLegal.build().name(), "LowestLegal");
-        assert_eq!(StrategyArg::GreedyHighest.build().name(), "GreedyHighest");
-        assert_eq!(StrategyArg::RandomLegal.build().name(), "RandomLegal");
-        assert_eq!(StrategyArg::HoldBackPairs.build().name(), "HoldBackPairs");
-        assert_eq!(StrategyArg::CardCounter.build().name(), "CardCounter");
-        assert_eq!(StrategyArg::EndgameDenial.build().name(), "EndgameDenial");
+        assert_eq!(
+            StrategyArg::Fixed(FixedStrategy::LowestLegal)
+                .build()
+                .name(),
+            "LowestLegal"
+        );
+        assert_eq!(
+            StrategyArg::Fixed(FixedStrategy::GreedyHighest)
+                .build()
+                .name(),
+            "GreedyHighest"
+        );
+        assert_eq!(
+            StrategyArg::Fixed(FixedStrategy::RandomLegal)
+                .build()
+                .name(),
+            "RandomLegal"
+        );
+        assert_eq!(
+            StrategyArg::Fixed(FixedStrategy::HoldBackPairs)
+                .build()
+                .name(),
+            "HoldBackPairs"
+        );
+        assert_eq!(
+            StrategyArg::Fixed(FixedStrategy::CardCounter)
+                .build()
+                .name(),
+            "CardCounter"
+        );
+        assert_eq!(
+            StrategyArg::Fixed(FixedStrategy::EndgameDenial)
+                .build()
+                .name(),
+            "EndgameDenial"
+        );
+    }
+
+    #[test]
+    fn parses_fixed_strategy_names_unchanged() {
+        assert_eq!(
+            "lowest-legal".parse::<StrategyArg>().unwrap(),
+            StrategyArg::Fixed(FixedStrategy::LowestLegal)
+        );
+        assert_eq!(
+            "card-counter".parse::<StrategyArg>().unwrap(),
+            StrategyArg::Fixed(FixedStrategy::CardCounter)
+        );
+    }
+
+    #[test]
+    fn parses_bare_adaptive_to_defaults() {
+        assert_eq!(
+            "adaptive".parse::<StrategyArg>().unwrap(),
+            StrategyArg::Adaptive(sim::AdaptiveConfig::default())
+        );
+    }
+
+    #[test]
+    fn parses_configured_adaptive() {
+        let parsed = "adaptive:counting".parse::<StrategyArg>().unwrap();
+        assert_eq!(
+            parsed,
+            StrategyArg::Adaptive(sim::AdaptiveConfig {
+                counting: true,
+                denial: sim::DenialMode::Off,
+                deception_rate: 0.0,
+            })
+        );
+    }
+
+    #[test]
+    fn rejects_options_on_a_fixed_strategy() {
+        assert!("lowest-legal:counting".parse::<StrategyArg>().is_err());
+    }
+
+    #[test]
+    fn rejects_unknown_strategy_name() {
+        assert!("nonexistent".parse::<StrategyArg>().is_err());
+    }
+
+    #[test]
+    fn build_produces_an_adaptive_strategy_instance() {
+        let arg: StrategyArg = "adaptive:reading,deception=0.2".parse().unwrap();
+        let strategy = arg.build();
+        assert!(strategy.name().starts_with("Adaptive("));
     }
 
     #[test]
