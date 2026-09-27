@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use engine::{rank_groups, Card, DuplicateRule, Move, Rank};
 
 use crate::strategies::LowestLegal;
-use crate::strategy::Strategy;
+use crate::strategy::{Strategy, TurnContext};
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct HoldBackPairs;
@@ -23,12 +23,13 @@ impl Strategy for HoldBackPairs {
         &self,
         legal_moves: &[Move],
         duplicate_rule: DuplicateRule,
+        context: &TurnContext<'_>,
         rng: &mut dyn rand::Rng,
     ) -> Move {
         if !legal_moves.contains(&Move::Pass) {
             // Leading never offers Pass (engine::Round::legal_moves), so
             // there's no split-vs-preserve choice to make here.
-            return LowestLegal.choose_play(legal_moves, duplicate_rule, rng);
+            return LowestLegal.choose_play(legal_moves, duplicate_rule, context, rng);
         }
 
         // Following: every candidate combo already shares the current
@@ -110,6 +111,15 @@ mod tests {
         rand::rngs::StdRng::seed_from_u64(0)
     }
 
+    fn empty_context() -> TurnContext<'static> {
+        TurnContext {
+            seat: 0,
+            hand: &[],
+            opponents: Vec::new(),
+            unseen_cards: Vec::new(),
+        }
+    }
+
     fn single(rank: Rank, suit: Suit) -> Move {
         Move::Play(Combo::new(vec![Card::new(rank, suit, 0)]).unwrap())
     }
@@ -130,8 +140,12 @@ mod tests {
             single(Rank::Nine, Suit::Clubs),
             single(Rank::Six, Suit::Diamonds),
         ];
-        let chosen =
-            HoldBackPairs.choose_play(&legal, DuplicateRule::FirstDealtWins, &mut test_rng());
+        let chosen = HoldBackPairs.choose_play(
+            &legal,
+            DuplicateRule::FirstDealtWins,
+            &empty_context(),
+            &mut test_rng(),
+        );
         assert_eq!(chosen, single(Rank::Six, Suit::Diamonds));
     }
 
@@ -146,8 +160,12 @@ mod tests {
             single(Rank::Six, Suit::Spades),
             single(Rank::Nine, Suit::Clubs),
         ];
-        let chosen =
-            HoldBackPairs.choose_play(&legal, DuplicateRule::FirstDealtWins, &mut test_rng());
+        let chosen = HoldBackPairs.choose_play(
+            &legal,
+            DuplicateRule::FirstDealtWins,
+            &empty_context(),
+            &mut test_rng(),
+        );
         assert_eq!(chosen, single(Rank::Nine, Suit::Clubs));
     }
 
@@ -158,8 +176,12 @@ mod tests {
             single(Rank::Six, Suit::Diamonds),
             single(Rank::Six, Suit::Spades),
         ];
-        let chosen =
-            HoldBackPairs.choose_play(&legal, DuplicateRule::FirstDealtWins, &mut test_rng());
+        let chosen = HoldBackPairs.choose_play(
+            &legal,
+            DuplicateRule::FirstDealtWins,
+            &empty_context(),
+            &mut test_rng(),
+        );
         assert_eq!(chosen, Move::Pass);
     }
 
@@ -170,16 +192,24 @@ mod tests {
             single(Rank::Nine, Suit::Clubs),
             single(Rank::Six, Suit::Diamonds),
         ];
-        let chosen =
-            HoldBackPairs.choose_play(&legal, DuplicateRule::FirstDealtWins, &mut test_rng());
+        let chosen = HoldBackPairs.choose_play(
+            &legal,
+            DuplicateRule::FirstDealtWins,
+            &empty_context(),
+            &mut test_rng(),
+        );
         assert_eq!(chosen, single(Rank::Six, Suit::Diamonds));
     }
 
     #[test]
     fn following_with_no_legal_play_at_all_passes() {
         let legal = vec![Move::Pass];
-        let chosen =
-            HoldBackPairs.choose_play(&legal, DuplicateRule::FirstDealtWins, &mut test_rng());
+        let chosen = HoldBackPairs.choose_play(
+            &legal,
+            DuplicateRule::FirstDealtWins,
+            &empty_context(),
+            &mut test_rng(),
+        );
         assert_eq!(chosen, Move::Pass);
     }
 
@@ -195,8 +225,12 @@ mod tests {
             pair(Rank::Six, [Suit::Spades, Suit::Clubs]),
             pair(Rank::Nine, [Suit::Diamonds, Suit::Hearts]),
         ];
-        let chosen =
-            HoldBackPairs.choose_play(&legal, DuplicateRule::FirstDealtWins, &mut test_rng());
+        let chosen = HoldBackPairs.choose_play(
+            &legal,
+            DuplicateRule::FirstDealtWins,
+            &empty_context(),
+            &mut test_rng(),
+        );
         assert_eq!(chosen, pair(Rank::Nine, [Suit::Diamonds, Suit::Hearts]));
     }
 

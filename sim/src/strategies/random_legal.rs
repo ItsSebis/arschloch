@@ -5,7 +5,7 @@
 use engine::{Card, DuplicateRule, Move};
 use rand::seq::{IndexedRandom, SliceRandom};
 
-use crate::strategy::Strategy;
+use crate::strategy::{Strategy, TurnContext};
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct RandomLegal;
@@ -19,6 +19,7 @@ impl Strategy for RandomLegal {
         &self,
         legal_moves: &[Move],
         _duplicate_rule: DuplicateRule,
+        _context: &TurnContext<'_>,
         rng: &mut dyn rand::Rng,
     ) -> Move {
         legal_moves
@@ -51,6 +52,15 @@ mod tests {
         rand::rngs::StdRng::seed_from_u64(seed)
     }
 
+    fn empty_context() -> TurnContext<'static> {
+        TurnContext {
+            seat: 0,
+            hand: &[],
+            opponents: Vec::new(),
+            unseen_cards: Vec::new(),
+        }
+    }
+
     #[test]
     fn always_returns_one_of_the_legal_moves() {
         let legal = vec![
@@ -59,8 +69,12 @@ mod tests {
         ];
         let strategy = RandomLegal;
         for seed in 0..20 {
-            let chosen =
-                strategy.choose_play(&legal, DuplicateRule::FirstDealtWins, &mut test_rng(seed));
+            let chosen = strategy.choose_play(
+                &legal,
+                DuplicateRule::FirstDealtWins,
+                &empty_context(),
+                &mut test_rng(seed),
+            );
             assert!(legal.contains(&chosen));
         }
     }
@@ -75,7 +89,12 @@ mod tests {
         let mut saw_pass = false;
         let mut saw_play = false;
         for seed in 0..50 {
-            match strategy.choose_play(&legal, DuplicateRule::FirstDealtWins, &mut test_rng(seed)) {
+            match strategy.choose_play(
+                &legal,
+                DuplicateRule::FirstDealtWins,
+                &empty_context(),
+                &mut test_rng(seed),
+            ) {
                 Move::Pass => saw_pass = true,
                 Move::Play(_) => saw_play = true,
             }

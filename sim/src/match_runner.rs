@@ -7,8 +7,8 @@
 use std::sync::Arc;
 
 use engine::{
-    assign_roles, deal, exchange_with_selection, lowest_card_holder, standard_deck, Move, Round,
-    SeatId,
+    assign_roles, deal, exchange_with_selection, lowest_card_holder, standard_deck, Card, Move,
+    Round, SeatId,
 };
 use rand::seq::SliceRandom;
 use rand::SeedableRng;
@@ -16,7 +16,48 @@ use rayon::prelude::*;
 
 use crate::match_config::MatchConfig;
 use crate::match_result::MatchResult;
-use crate::strategy::Strategy;
+use crate::strategy::{OpponentHand, Strategy, TurnContext};
+
+/// Builds the `TurnContext` for `seat`'s upcoming `choose_play` call:
+/// every other seat's current hand size/activity, and the exact
+/// multiset of cards neither in `seat`'s hand nor played by anyone yet
+/// this round. `round_deck` is the full set of cards dealt this round
+/// (see `run_match`'s `round_deck`), used as the starting point before
+/// subtracting what's now visible.
+fn turn_context_for<'a>(
+    round: &'a Round,
+    seat: SeatId,
+    player_count: u8,
+    round_deck: &[Card],
+) -> TurnContext<'a> {
+    let opponents: Vec<OpponentHand> = (0..player_count)
+        .filter(|&s| s != seat)
+        .map(|s| OpponentHand {
+            seat: s,
+            hand_size: round.hand_size(s),
+            active: round.is_active(s),
+        })
+        .collect();
+
+    let mut unseen_cards = round_deck.to_vec();
+    for card in round.hand(seat).iter().chain(
+        round
+            .play_history()
+            .iter()
+            .flat_map(|(_, combo)| combo.cards()),
+    ) {
+        if let Some(pos) = unseen_cards.iter().position(|c| c == card) {
+            unseen_cards.remove(pos);
+        }
+    }
+
+    TurnContext {
+        seat,
+        hand: round.hand(seat),
+        opponents,
+        unseen_cards,
+    }
+}
 
 /// Simulates one full match (`config.rounds` rounds, role carry-over
 /// between them) using `strategies` (one per seat).
@@ -75,6 +116,8 @@ pub fn run_match(config: &MatchConfig, strategies: &[Arc<dyn Strategy>]) -> Matc
                 .expect("a freshly dealt hand set is never empty"),
         };
 
+        let round_deck: Vec<Card> = hands.iter().flatten().copied().collect();
+
         let mut round = Round::new(hands, config.duplicate_rule, leader)
             .expect("player_count/leader are always valid for a supported table size");
 
@@ -84,9 +127,13 @@ pub fn run_match(config: &MatchConfig, strategies: &[Arc<dyn Strategy>]) -> Matc
                 trick_count += 1;
             }
             let legal_moves = round.legal_moves();
+
+            let context = turn_context_for(&round, seat, config.player_count, &round_deck);
+
             let chosen = strategies[usize::from(seat)].choose_play(
                 &legal_moves,
                 config.duplicate_rule,
+                &context,
                 &mut rng,
             );
 
@@ -150,7 +197,7 @@ pub fn run_batch(configs: &[MatchConfig], strategies: &[Arc<dyn Strategy>]) -> V
 mod tests {
     use super::*;
     use engine::{Card, DeckVariant, DuplicateRule};
-    use std::sync::atomic::{AtomicU32, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
     fn four_lowest_legal() -> Vec<Arc<dyn Strategy>> {
         vec![
@@ -212,12 +259,13 @@ mod tests {
             &self,
             legal_moves: &[Move],
             duplicate_rule: DuplicateRule,
+            context: &TurnContext<'_>,
             rng: &mut dyn rand::Rng,
         ) -> Move {
             if !legal_moves.contains(&Move::Pass) {
                 self.leads.fetch_add(1, Ordering::Relaxed);
             }
-            crate::strategies::LowestLegal.choose_play(legal_moves, duplicate_rule, rng)
+            crate::strategies::LowestLegal.choose_play(legal_moves, duplicate_rule, context, rng)
         }
 
         fn choose_exchange_cards(
@@ -280,9 +328,10 @@ mod tests {
             &self,
             legal_moves: &[Move],
             duplicate_rule: DuplicateRule,
+            context: &TurnContext<'_>,
             rng: &mut dyn rand::Rng,
         ) -> Move {
-            crate::strategies::LowestLegal.choose_play(legal_moves, duplicate_rule, rng)
+            crate::strategies::LowestLegal.choose_play(legal_moves, duplicate_rule, context, rng)
         }
 
         fn choose_exchange_cards(
@@ -348,5 +397,66 @@ mod tests {
         assert_eq!(names[1], ["RandomLegal", "GreedyHighest", "LowestLegal"]);
         assert_eq!(names[2], ["GreedyHighest", "LowestLegal", "RandomLegal"]);
         assert_eq!(names[3], names[0]);
+    }
+
+    /// Records whether any seat's `TurnContext.opponents` ever included
+    /// that seat itself, or had the wrong length — checked once after the
+    /// match completes (docs/ROADMAP.md, Phase 6, Review Focus).
+    struct TurnContextChecker {
+        player_count: u8,
+        violation: Arc<AtomicBool>,
+    }
+
+    impl Strategy for TurnContextChecker {
+        fn name(&self) -> &'static str {
+            "TurnContextChecker"
+        }
+
+        fn choose_play(
+            &self,
+            legal_moves: &[Move],
+            duplicate_rule: DuplicateRule,
+            context: &TurnContext<'_>,
+            rng: &mut dyn rand::Rng,
+        ) -> Move {
+            let wrong_length = context.opponents.len() != usize::from(self.player_count) - 1;
+            let includes_self = context.opponents.iter().any(|o| o.seat == context.seat);
+            if wrong_length || includes_self {
+                self.violation.store(true, Ordering::Relaxed);
+            }
+            crate::strategies::LowestLegal.choose_play(legal_moves, duplicate_rule, context, rng)
+        }
+
+        fn choose_exchange_cards(
+            &self,
+            hand: &[Card],
+            count: usize,
+            duplicate_rule: DuplicateRule,
+            rng: &mut dyn rand::Rng,
+        ) -> Vec<Card> {
+            crate::strategies::LowestLegal.choose_exchange_cards(hand, count, duplicate_rule, rng)
+        }
+    }
+
+    #[test]
+    fn turn_context_excludes_the_acting_seat_from_opponents() {
+        let config = MatchConfig {
+            player_count: 4,
+            deck_variant: DeckVariant::Single,
+            duplicate_rule: DuplicateRule::FirstDealtWins,
+            rounds: 3,
+            seed: 7,
+        };
+        let violation = Arc::new(AtomicBool::new(false));
+        let strategies: Vec<Arc<dyn Strategy>> = (0..4)
+            .map(|_| {
+                Arc::new(TurnContextChecker {
+                    player_count: config.player_count,
+                    violation: violation.clone(),
+                }) as Arc<dyn Strategy>
+            })
+            .collect();
+        let _ = run_match(&config, &strategies);
+        assert!(!violation.load(Ordering::Relaxed));
     }
 }

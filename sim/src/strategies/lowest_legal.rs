@@ -3,7 +3,7 @@
 
 use engine::{Card, DuplicateRule, Move};
 
-use crate::strategy::Strategy;
+use crate::strategy::{Strategy, TurnContext};
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct LowestLegal;
@@ -17,6 +17,7 @@ impl Strategy for LowestLegal {
         &self,
         legal_moves: &[Move],
         duplicate_rule: DuplicateRule,
+        _context: &TurnContext<'_>,
         _rng: &mut dyn rand::Rng,
     ) -> Move {
         legal_moves
@@ -53,6 +54,15 @@ mod tests {
         rand::rngs::StdRng::seed_from_u64(0)
     }
 
+    fn empty_context() -> TurnContext<'static> {
+        TurnContext {
+            seat: 0,
+            hand: &[],
+            opponents: Vec::new(),
+            unseen_cards: Vec::new(),
+        }
+    }
+
     fn single(rank: Rank, suit: Suit) -> Move {
         Move::Play(Combo::new(vec![Card::new(rank, suit, 0)]).unwrap())
     }
@@ -68,7 +78,12 @@ mod tests {
         );
         let legal = vec![pair, single(Rank::Nine, Suit::Clubs)];
         let strategy = LowestLegal;
-        let chosen = strategy.choose_play(&legal, DuplicateRule::FirstDealtWins, &mut test_rng());
+        let chosen = strategy.choose_play(
+            &legal,
+            DuplicateRule::FirstDealtWins,
+            &empty_context(),
+            &mut test_rng(),
+        );
         assert_eq!(chosen, single(Rank::Nine, Suit::Clubs));
     }
 
@@ -79,7 +94,12 @@ mod tests {
             single(Rank::Six, Suit::Diamonds),
         ];
         let strategy = LowestLegal;
-        let chosen = strategy.choose_play(&legal, DuplicateRule::FirstDealtWins, &mut test_rng());
+        let chosen = strategy.choose_play(
+            &legal,
+            DuplicateRule::FirstDealtWins,
+            &empty_context(),
+            &mut test_rng(),
+        );
         assert_eq!(chosen, single(Rank::Six, Suit::Diamonds));
     }
 
@@ -87,7 +107,12 @@ mod tests {
     fn passes_when_no_play_is_legal() {
         let legal = vec![Move::Pass];
         let strategy = LowestLegal;
-        let chosen = strategy.choose_play(&legal, DuplicateRule::FirstDealtWins, &mut test_rng());
+        let chosen = strategy.choose_play(
+            &legal,
+            DuplicateRule::FirstDealtWins,
+            &empty_context(),
+            &mut test_rng(),
+        );
         assert_eq!(chosen, Move::Pass);
     }
 

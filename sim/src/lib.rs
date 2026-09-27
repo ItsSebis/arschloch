@@ -14,4 +14,4 @@ pub use match_result::MatchResult;
 pub use match_runner::{run_batch, run_match};
 pub use statistics::{aggregate, RoleRetention, Statistics};
 pub use strategies::{GreedyHighest, HoldBackPairs, LowestLegal, RandomLegal};
-pub use strategy::Strategy;
+pub use strategy::{OpponentHand, Strategy, TurnContext};
