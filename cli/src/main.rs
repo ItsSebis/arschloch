@@ -3,6 +3,7 @@
 
 mod args;
 mod output;
+mod summary;
 
 fn main() {
     println!("arschloch CLI: args parsing wired up, batch runner not yet (Phase 3 in progress)");
