@@ -46,7 +46,8 @@ cargo run -p cli -- \
   seat each strategy occupies for every subsequent match, to cancel out
   a seat-position bias in how cards are dealt (see `docs/RULES.md`,
   "Players & Deck"). Must be repeated exactly `--player-count` times.
-  Valid values: `lowest-legal`, `greedy-highest`, `random-legal`.
+  Valid values: `lowest-legal`, `greedy-highest`, `random-legal`,
+  `hold-back-pairs`.
 - `--deck-variant` is `single` or `double`; `--duplicate-rule` is
   `first-dealt-wins` or `last-dealt-wins` (only matters for `double`).
 - `--threads 0` (the default) lets `rayon` pick its own thread count;
@@ -56,6 +57,13 @@ cargo run -p cli -- \
   match's raw `MatchResult` plus the aggregated `Statistics`, and a
   human-readable summary table (role counts by strategy, and the pooled
   voluntary-pass rate) prints to stdout.
+- The aggregated statistics include a first-round placement variance per
+  strategy (`docs/ROADMAP.md`, Phase 4, "Luck-vs-skill signal"), which
+  reports `null` until the batch repeats at least one exact seating (the
+  same strategies in the same seats) twice. `sim::run_batch` cycles
+  seatings every `--strategy`-flag-count matches, so pick `--matches` at
+  least `2 * (number of --strategy flags)` if you want this number
+  populated.
 
 ## Cross-compiling a Windows executable (from Linux or macOS)
 

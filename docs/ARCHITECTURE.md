@@ -63,25 +63,31 @@ legal, never which move to prefer.
   parameter is needed; `rng` is threaded through explicitly per call
   (rather than owned by the strategy) so a single `Arc<dyn Strategy>` can
   be shared read-only across parallel matches while staying fully
-  deterministic per match seed. Three baseline implementations this
-  phase: `LowestLegal`, `RandomLegal`, `GreedyHighest`.
-  `choose_exchange_cards` doesn't exist yet — `exchange()`'s naive
-  top/bottom-N tie-break (Phase 1) is applied directly by the match
-  runner; strategy-aware exchange selection is Phase 5's job
-  ("smart exchange"), not introduced early as speculative generality.
+  deterministic per match seed. Three baseline implementations from
+  Phase 2: `LowestLegal`, `RandomLegal`, `GreedyHighest`. A fourth,
+  `HoldBackPairs` (Phase 4), plays identically while leading but
+  deliberately passes rather than split up a same-rank reserve while
+  following, as a diversification comparison point against the three
+  always-play baselines. `choose_exchange_cards` doesn't exist yet —
+  `exchange()`'s naive top/bottom-N tie-break (Phase 1) is applied
+  directly by the match runner; strategy-aware exchange selection is
+  Phase 5's job ("smart exchange"), not introduced early as speculative
+  generality.
 - A match runner that drives `engine`'s state machine to completion using
   each seat's `Strategy`.
 - Multi-threading via `rayon`: independent matches have no shared mutable
   state, so a batch of simulated matches is a `par_iter` map over match
   seeds/configs, with no locks needed.
-- `MatchResult` (per-round role history, strategy tag per seat, trick/pass
-  counts) and `Statistics` (aggregated across a batch, Phase 2): role
-  counts by strategy name, and a pooled voluntary-pass rate (passes
-  submitted while a beating play was also legal, summed across every
-  seat and match — not yet broken out per strategy). Outcome variance
-  (a proxy for luck vs. skill) and a per-strategy diversification signal
-  are Phase 4's job, not built yet. Serialized with `serde`/`serde_json`
-  so a later web phase can consume the same output format.
+- `MatchResult` (per-round role history, strategy tag per seat, per-seat
+  pass counts) and `Statistics` (aggregated across a batch): role counts
+  by strategy name, a pooled and per-strategy voluntary-pass rate (passes
+  submitted while a beating play was also legal — Phase 4, "strategy
+  diversification"), per-strategy role-sustainment counts (how often a
+  role is still held the very next round — Phase 4, "role-sustainment
+  tracking"), and a per-strategy first-round placement variance across
+  matches with an identical seating but a different shuffle (Phase 4,
+  "luck-vs-skill signal"). Serialized with `serde`/`serde_json` so a
+  later web phase can consume the same output format.
 
 ### `cli`
 
