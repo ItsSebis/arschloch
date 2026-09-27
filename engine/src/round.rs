@@ -42,6 +42,7 @@ pub struct Round {
     finishing_order: Vec<SeatId>,
     current_combo: Option<Combo>,
     trick: Trick,
+    play_history: Vec<(SeatId, Combo)>,
 }
 
 impl Round {
@@ -72,6 +73,7 @@ impl Round {
             finishing_order: Vec::new(),
             current_combo: None,
             trick: Trick::new(first_leader),
+            play_history: Vec::new(),
         })
     }
 
@@ -106,6 +108,18 @@ impl Round {
         !self.hands[usize::from(seat)].is_empty()
     }
 
+    /// `seat`'s current hand size only (not contents) — the one piece of
+    /// information about *other* seats this genre treats as public.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `seat` is not a valid seat for this round (same
+    /// unchecked-indexing convention as `hand`).
+    #[must_use]
+    pub fn hand_size(&self, seat: SeatId) -> usize {
+        self.hands[usize::from(seat)].len()
+    }
+
     /// Whether every seat but one has emptied its hand.
     #[must_use]
     pub fn is_complete(&self) -> bool {
@@ -130,6 +144,15 @@ impl Round {
     #[must_use]
     pub fn current_trick_leader(&self) -> SeatId {
         self.trick.leader()
+    }
+
+    /// Every combo played so far this round, in play order, tagged with
+    /// the seat that played it. Passes are omitted — a pass never removes
+    /// a card from any hand, so it carries nothing a card-counting
+    /// strategy needs (docs/ROADMAP.md, Phase 6).
+    #[must_use]
+    pub fn play_history(&self) -> &[(SeatId, Combo)] {
+        &self.play_history
     }
 
     /// All moves currently legal for `self.seat_to_move()`. Empty if the
@@ -216,6 +239,7 @@ impl Round {
             hand.remove(position);
         }
         let just_emptied = hand.is_empty();
+        self.play_history.push((seat, combo.clone()));
         self.current_combo = Some(combo);
 
         if just_emptied {
@@ -484,5 +508,52 @@ mod tests {
         ]));
         assert_eq!(round.submit_move(0, play), Ok(()));
         assert!(round.hand(0).is_empty());
+    }
+
+    #[test]
+    fn play_history_records_plays_in_order_and_omits_passes() {
+        let hands = vec![
+            vec![card(Rank::Eight, Suit::Clubs), card(Rank::Ten, Suit::Clubs)],
+            vec![card(Rank::Seven, Suit::Clubs), card(Rank::Six, Suit::Clubs)],
+            vec![card(Rank::Nine, Suit::Clubs), card(Rank::Five, Suit::Clubs)],
+        ];
+        let mut round = Round::new(hands, DuplicateRule::FirstDealtWins, 0).unwrap();
+        assert_eq!(round.play_history(), &[]);
+
+        let first_play = combo(vec![card(Rank::Eight, Suit::Clubs)]);
+        round
+            .submit_move(0, Move::Play(first_play.clone()))
+            .unwrap();
+        assert_eq!(round.play_history(), &[(0, first_play.clone())]);
+
+        round.submit_move(1, Move::Pass).unwrap();
+        assert_eq!(
+            round.play_history(),
+            &[(0, first_play.clone())],
+            "a pass must not appear in play_history"
+        );
+
+        let second_play = combo(vec![card(Rank::Nine, Suit::Clubs)]);
+        round
+            .submit_move(2, Move::Play(second_play.clone()))
+            .unwrap();
+        assert_eq!(round.play_history(), &[(0, first_play), (2, second_play)]);
+    }
+
+    #[test]
+    fn hand_size_matches_hand_len_and_decreases_after_a_play() {
+        let hands = vec![
+            vec![card(Rank::Eight, Suit::Clubs), card(Rank::Ten, Suit::Clubs)],
+            vec![card(Rank::Seven, Suit::Clubs)],
+            vec![card(Rank::Nine, Suit::Clubs)],
+        ];
+        let mut round = Round::new(hands, DuplicateRule::FirstDealtWins, 0).unwrap();
+        assert_eq!(round.hand_size(0), 2);
+        assert_eq!(round.hand_size(0), round.hand(0).len());
+
+        round
+            .submit_move(0, Move::Play(combo(vec![card(Rank::Eight, Suit::Clubs)])))
+            .unwrap();
+        assert_eq!(round.hand_size(0), 1);
     }
 }
