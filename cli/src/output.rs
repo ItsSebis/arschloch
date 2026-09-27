@@ -65,12 +65,16 @@ mod tests {
 
     fn sample_result() -> sim::MatchResult {
         sim::MatchResult {
-            player_count: 2,
-            strategy_names: vec!["LowestLegal".to_string(), "GreedyHighest".to_string()],
-            role_history: vec![vec![Role::President, Role::Arschloch]],
+            player_count: 3,
+            strategy_names: vec![
+                "LowestLegal".to_string(),
+                "GreedyHighest".to_string(),
+                "RandomLegal".to_string(),
+            ],
+            role_history: vec![vec![Role::President, Role::Dorftrottel, Role::Arschloch]],
             trick_count: 3,
-            pass_count: 1,
-            voluntary_pass_count: 0,
+            pass_counts: vec![1, 0, 0],
+            voluntary_pass_counts: vec![0, 0, 0],
         }
     }
 
@@ -84,6 +88,9 @@ mod tests {
             matches_played: 1,
             role_counts_by_strategy: role_counts,
             voluntary_pass_rate: 0.0,
+            voluntary_pass_rate_by_strategy: BTreeMap::new(),
+            role_retention_by_strategy: BTreeMap::new(),
+            first_round_placement_variance_by_strategy: BTreeMap::new(),
         }
     }
 

@@ -40,7 +40,8 @@ pub struct Args {
     /// each strategy occupies varies across the batch (this cancels
     /// `deal`'s documented uneven-remainder seat bias — see
     /// docs/RULES.md, "Players & Deck"). Must supply exactly
-    /// `player_count`.
+    /// `player_count`. Valid values: `lowest-legal`, `greedy-highest`,
+    /// `random-legal`, `hold-back-pairs`.
     #[arg(long = "strategy", value_enum, required = true)]
     pub strategies: Vec<StrategyArg>,
 
@@ -92,6 +93,7 @@ pub enum StrategyArg {
     LowestLegal,
     GreedyHighest,
     RandomLegal,
+    HoldBackPairs,
 }
 
 impl StrategyArg {
@@ -102,6 +104,7 @@ impl StrategyArg {
             StrategyArg::LowestLegal => Arc::new(sim::LowestLegal),
             StrategyArg::GreedyHighest => Arc::new(sim::GreedyHighest),
             StrategyArg::RandomLegal => Arc::new(sim::RandomLegal),
+            StrategyArg::HoldBackPairs => Arc::new(sim::HoldBackPairs),
         }
     }
 }
@@ -155,6 +158,7 @@ mod tests {
         assert_eq!(StrategyArg::LowestLegal.build().name(), "LowestLegal");
         assert_eq!(StrategyArg::GreedyHighest.build().name(), "GreedyHighest");
         assert_eq!(StrategyArg::RandomLegal.build().name(), "RandomLegal");
+        assert_eq!(StrategyArg::HoldBackPairs.build().name(), "HoldBackPairs");
     }
 
     #[test]

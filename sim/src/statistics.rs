@@ -50,6 +50,14 @@ pub struct Statistics {
 /// contributes one role count per seat, credited to that seat's
 /// strategy (by name — seats using the same strategy type share a
 /// bucket, for every field below, not just `role_counts_by_strategy`).
+///
+/// # Panics
+///
+/// Panics if any `MatchResult` in `results` has a `player_count` outside
+/// the range 3-6 (all `MatchResult` instances must come from the `cli`
+/// which validates `--player-count` at the boundary), or if a role
+/// assigned by `assign_roles` is not in the list returned by
+/// `engine::roles_for_player_count` (an internal invariant violation).
 #[must_use]
 pub fn aggregate(results: &[MatchResult]) -> Statistics {
     let mut role_counts_by_strategy: BTreeMap<String, BTreeMap<Role, u32>> = BTreeMap::new();

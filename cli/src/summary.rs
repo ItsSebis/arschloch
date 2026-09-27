@@ -1,5 +1,6 @@
 //! A human-readable summary table for stdout: run configuration, one row
-//! per strategy of role counts, and the pooled voluntary-pass rate.
+//! per strategy of role counts, and diversification/role-sustainment/
+//! luck-vs-skill signals broken out per strategy.
 
 use std::fmt::Write as _;
 
@@ -44,6 +45,68 @@ pub fn render_summary(args: &Args, statistics: &sim::Statistics) -> String {
     let pass_rate_percent = statistics.voluntary_pass_rate * 100.0;
     let _ = writeln!(out, "Voluntary pass rate: {pass_rate_percent:.2}%");
 
+    let _ = writeln!(out);
+    let _ = writeln!(out, "Voluntary pass rate by strategy:");
+    for strategy_name in statistics.role_counts_by_strategy.keys() {
+        match statistics
+            .voluntary_pass_rate_by_strategy
+            .get(strategy_name)
+        {
+            Some(rate) => {
+                let _ = writeln!(out, "  {strategy_name:<16}{:.2}%", rate * 100.0);
+            }
+            None => {
+                let _ = writeln!(out, "  {strategy_name:<16}(not enough data)");
+            }
+        }
+    }
+
+    let _ = writeln!(out);
+    let _ = writeln!(
+        out,
+        "President retention (stayed President the very next round):"
+    );
+    for strategy_name in statistics.role_counts_by_strategy.keys() {
+        let retention = statistics
+            .role_retention_by_strategy
+            .get(strategy_name)
+            .and_then(|by_role| by_role.get(&engine::Role::President));
+        match retention {
+            Some(r) if r.held > 0 => {
+                let rate = f64::from(r.retained_next_round) / f64::from(r.held) * 100.0;
+                let _ = writeln!(
+                    out,
+                    "  {strategy_name:<16}{rate:.2}% ({}/{})",
+                    r.retained_next_round, r.held
+                );
+            }
+            _ => {
+                let _ = writeln!(out, "  {strategy_name:<16}(not enough data)");
+            }
+        }
+    }
+
+    let _ = writeln!(out);
+    let _ = writeln!(
+        out,
+        "First-round placement variance (lower = more skill-driven, higher = more luck-driven):"
+    );
+    for strategy_name in statistics.role_counts_by_strategy.keys() {
+        let variance = statistics
+            .first_round_placement_variance_by_strategy
+            .get(strategy_name)
+            .copied()
+            .flatten();
+        match variance {
+            Some(v) => {
+                let _ = writeln!(out, "  {strategy_name:<16}{v:.2}");
+            }
+            None => {
+                let _ = writeln!(out, "  {strategy_name:<16}(not enough data)");
+            }
+        }
+    }
+
     out
 }
 
@@ -84,6 +147,21 @@ mod tests {
             matches_played: 10,
             role_counts_by_strategy: role_counts,
             voluntary_pass_rate: 0.125,
+            voluntary_pass_rate_by_strategy: BTreeMap::from([("LowestLegal".to_string(), 0.1)]),
+            role_retention_by_strategy: BTreeMap::from([(
+                "LowestLegal".to_string(),
+                BTreeMap::from([(
+                    Role::President,
+                    sim::RoleRetention {
+                        held: 4,
+                        retained_next_round: 3,
+                    },
+                )]),
+            )]),
+            first_round_placement_variance_by_strategy: BTreeMap::from([(
+                "LowestLegal".to_string(),
+                None,
+            )]),
         }
     }
 
@@ -100,5 +178,23 @@ mod tests {
     fn render_summary_includes_formatted_pass_rate() {
         let summary = render_summary(&sample_args(), &sample_statistics());
         assert!(summary.contains("Voluntary pass rate: 12.50%"));
+    }
+
+    #[test]
+    fn render_summary_includes_per_strategy_pass_rate() {
+        let summary = render_summary(&sample_args(), &sample_statistics());
+        assert!(summary.contains("10.00%"));
+    }
+
+    #[test]
+    fn render_summary_includes_president_retention() {
+        let summary = render_summary(&sample_args(), &sample_statistics());
+        assert!(summary.contains("75.00% (3/4)"));
+    }
+
+    #[test]
+    fn render_summary_shows_not_enough_data_for_missing_variance() {
+        let summary = render_summary(&sample_args(), &sample_statistics());
+        assert!(summary.contains("(not enough data)"));
     }
 }
