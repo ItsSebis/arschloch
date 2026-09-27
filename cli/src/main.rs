@@ -1,10 +1,48 @@
-//! Entry point. Wiring continues through Phase 3's remaining tasks (see
-//! docs/ROADMAP.md).
+//! Entry point: parse CLI args, run a batch of simulated matches, write
+//! the JSON results file, and print a human-readable summary. See
+//! docs/ARCHITECTURE.md, "cli".
 
 mod args;
 mod output;
 mod summary;
 
-fn main() {
-    println!("arschloch CLI: args parsing wired up, batch runner not yet (Phase 3 in progress)");
+use std::sync::Arc;
+
+use anyhow::Context;
+use clap::Parser;
+
+fn main() -> anyhow::Result<()> {
+    let args = args::Args::parse();
+    args::validate(&args)?;
+
+    if args.threads > 0 {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(args.threads)
+            .build_global()
+            .context("failed to configure thread pool")?;
+    }
+
+    let strategies: Vec<Arc<dyn sim::Strategy>> =
+        args.strategies.iter().map(|s| s.build()).collect();
+
+    let configs: Vec<sim::MatchConfig> = (0..args.matches)
+        .map(|i| sim::MatchConfig {
+            player_count: args.player_count,
+            deck_variant: args.deck_variant.into(),
+            duplicate_rule: args.duplicate_rule.into(),
+            rounds: args.rounds,
+            seed: args
+                .seed
+                .wrapping_add(u64::try_from(i).expect("match index fits in u64")),
+        })
+        .collect();
+
+    let results = sim::run_batch(&configs, &strategies);
+    let statistics = sim::aggregate(&results);
+
+    output::write_json_output(&args.output, &results, &statistics)
+        .with_context(|| format!("failed to write results to {}", args.output.display()))?;
+
+    println!("{}", summary::render_summary(&args, &statistics));
+    Ok(())
 }
