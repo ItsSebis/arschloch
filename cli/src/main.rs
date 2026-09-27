@@ -2,6 +2,7 @@
 //! docs/ROADMAP.md).
 
 mod args;
+mod output;
 
 fn main() {
     println!("arschloch CLI: args parsing wired up, batch runner not yet (Phase 3 in progress)");
