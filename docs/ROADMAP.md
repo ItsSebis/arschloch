@@ -80,7 +80,41 @@ sitting; a phase that grows beyond that should be split.
   Phase 4's existing statistics can show which technique — counting or
   denial — actually helps.
 
-## Phase 7 — Web interface
+## Phase 7 — Adaptive strategy
+
+- `engine`: `Round` gains a pass-history accessor alongside Phase 6's
+  play history (every pass this round, tagged with the seat, the combo
+  it declined to beat, and the play count at that moment) — the raw
+  material for hand reading.
+- `sim`: a new `hand_reading` module reduces a round's play/pass
+  history into per-seat "pass ceilings" (the lowest top card a seat is
+  known unable to beat, per combo size), with unrefuted-pass logic so a
+  seat that later plays above a card it passed on doesn't leave a false
+  ceiling behind. `TurnContext` gains these ceilings (both the acting
+  seat's own and every opponent's) plus the combo currently on the
+  table, and `Strategy::name()` changes from `&'static str` to `&str`
+  so a configurable strategy's name can reflect its actual
+  configuration.
+- One new strategy, `Adaptive`: `LowestLegal` (or `CardCounter`, if
+  card-counting is enabled) as its base play selection, with two more
+  independently-toggleable modifiers layered on top — endgame denial
+  (either a plain hand-size trigger matching `EndgameDenial`, or the
+  same trigger sharpened by hand reading to spend the *lowest* card
+  that provably locks a close-to-finishing opponent out, rather than a
+  blanket highest-card push) and deception (occasionally bluff-passing
+  on a seat's only beating rank, to plant a false pass ceiling in an
+  opponent's hand reading). Each modifier reuses the existing
+  `CardCounter`/`GreedyHighest`/`LowestLegal` strategies by direct
+  delegation rather than duplicating their logic, so Phase 4's
+  statistics can show which modifier combination actually beats plain
+  `LowestLegal` — the strategy that beat every existing strategy in an
+  empirical batch run.
+- `cli`: `--strategy` becomes a per-seat spec grammar, `FIXED |
+  "adaptive" | "adaptive:" OPTIONS`, so a batch run can seat any mix of
+  the six fixed strategies and independently-configured `Adaptive`
+  instances (e.g. `adaptive:reading,deception=0.2`) in the same table.
+
+## Phase 8 — Web interface
 
 - A small web frontend (technology choice deferred to when this phase
   starts) to view running simulations and the Phase 4 statistics as an

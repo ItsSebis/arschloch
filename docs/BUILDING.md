@@ -46,8 +46,45 @@ cargo run -p cli -- \
   seat each strategy occupies for every subsequent match, to cancel out
   a seat-position bias in how cards are dealt (see `docs/RULES.md`,
   "Players & Deck"). Must be repeated exactly `--player-count` times.
-  Valid values: `lowest-legal`, `greedy-highest`, `random-legal`,
-  `hold-back-pairs`, `card-counter`, `endgame-denial`.
+  Each value is a spec, `SPEC := FIXED | "adaptive" | "adaptive:"
+  OPTIONS`:
+  - `FIXED` is one of the six fixed strategy names: `lowest-legal`,
+    `greedy-highest`, `random-legal`, `hold-back-pairs`, `card-counter`,
+    `endgame-denial`.
+  - `adaptive` on its own uses `sim::AdaptiveConfig::default()`
+    (card-counting on, hand-reading endgame denial with `close=2`,
+    deception off).
+  - `adaptive:OPTIONS` configures it explicitly. `OPTIONS` is a
+    comma-separated list of:
+    - `counting` — enable the card-counting modifier (base play becomes
+      `card-counter` instead of `lowest-legal`).
+    - `denial` — enable endgame denial, judged purely by hand size
+      (reproducing `endgame-denial` exactly).
+    - `reading` — enable endgame denial sharpened by pass-based hand
+      reading: spends the *lowest* card that provably locks a
+      close-to-finishing opponent out, rather than a blanket highest-card
+      push. `denial` and `reading` are mutually exclusive triggers for
+      the same modifier — set at most one.
+    - `close=<n>` — the hand-size threshold for whichever of
+      `denial`/`reading` is set (default `2`); an error if given without
+      one of them.
+    - `deception=<rate>` — probability in `[0, 1]` (default `0.0`, i.e.
+      off) that this seat bluff-passes on a turn it could legally beat,
+      to plant a false pass ceiling in an opponent's hand reading.
+    - `none` — all modifiers off; on its own, byte-identical to plain
+      `lowest-legal` for the same seed.
+  - Options may be given in any order; each key may appear at most once;
+    an empty option list, an unknown key, a flag given a value, or a
+    parameter missing its value are all parse errors.
+
+  For example, a three-seat table with one fixed strategy and two
+  differently-configured `adaptive` seats:
+
+  ```bash
+  --strategy lowest-legal \
+  --strategy adaptive:counting \
+  --strategy "adaptive:reading,deception=0.2"
+  ```
 - `--deck-variant` is `single` or `double`; `--duplicate-rule` is
   `first-dealt-wins` or `last-dealt-wins` (only matters for `double`).
 - `--threads 0` (the default) lets `rayon` pick its own thread count;

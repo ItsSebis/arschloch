@@ -49,7 +49,11 @@ The rules from `RULES.md`, encoded as types and pure functions:
   tagged with the seat that played it; passes are omitted, since a pass
   never removes a card from a hand) and `hand_size` (a seat's hand size
   without exposing its contents) — Phase 6's strategic-context
-  primitives, used to build `sim::TurnContext`.
+  primitives, used to build `sim::TurnContext`. `Round` also exposes
+  `pass_history` (every pass this round, in order, tagged with the seat,
+  the combo it declined to beat, and `play_history().len()` at that
+  moment) — Phase 7's addition, the raw material `sim::hand_reading`
+  reduces into pass ceilings.
 
 `engine` has no concept of "strategy" or "which move to pick" — it only
 knows how to validate and apply a move it's given.
@@ -73,17 +77,23 @@ legal, never which move to prefer.
   the match runner: this seat's own hand, every opponent's hand size
   (and whether it's still active), and the exact multiset of unseen
   cards — deterministic, since this is a closed-deck game with no draw
-  pile. Three baseline implementations from Phase 2: `LowestLegal`,
-  `RandomLegal`, `GreedyHighest`. A fourth, `HoldBackPairs` (Phase 4),
-  plays identically while leading but deliberately passes rather than
-  split up a same-rank reserve while following, as a diversification
-  comparison point against the three always-play baselines. Two more
-  strategies (Phase 6) use `TurnContext` directly: `CardCounter` plays
-  a legal combo while some unseen card could still beat it, and holds
-  it back once no unseen card can; `EndgameDenial` switches to
-  aggressive, control-retaining play whenever an active opponent's hand
-  size is low enough to be close to finishing, to deny them an easy
-  trick — otherwise it conserves like `LowestLegal`.
+  pile. Phase 7 extends `TurnContext` with `own_pass_ceilings` (this
+  seat's own pass ceilings, as read by anyone else) and each opponent's
+  `pass_ceilings`, plus `current_combo` (the combo on the table, or
+  `None` if this seat must lead). `Strategy::name()` also changes from
+  `&'static str` to `&str` in Phase 7, so a configurable strategy's name
+  can reflect its actual configuration. Three baseline implementations
+  from Phase 2: `LowestLegal`, `RandomLegal`, `GreedyHighest`. A fourth,
+  `HoldBackPairs` (Phase 4), plays identically while leading but
+  deliberately passes rather than split up a same-rank reserve while
+  following, as a diversification comparison point against the three
+  always-play baselines. Two more strategies (Phase 6) use `TurnContext`
+  directly: `CardCounter` plays a legal combo while some unseen card
+  could still beat it, and holds it back once no unseen card can;
+  `EndgameDenial` switches to aggressive, control-retaining play
+  whenever an active opponent's hand size is low enough to be close to
+  finishing, to deny them an easy trick — otherwise it conserves like
+  `LowestLegal`.
   `Strategy::choose_exchange_cards` (Phase 5,
   "smart exchange") now exists and is implemented by all strategies;
   `engine::exchange`'s naive top-N tie-break has been
@@ -98,6 +108,34 @@ legal, never which move to prefer.
   `engine::exchange` was strategy-agnostic and applied the same naive
   top-N selection no matter which strategy occupied the seat.
   `engine::rank_groups` is now public.
+- `hand_reading` (Phase 7): a pure reduction of a round's play/pass
+  history into one `PassCeilings` per seat — the lowest top card that
+  seat is known unable to beat, per combo size, derived from its
+  unrefuted passes (a pass is dropped if that seat later plays a combo
+  of the same or larger size topped above the passed-on card, proof it
+  held a beater at the time — a bluff or a forced pass like
+  `HoldBackPairs`'s is never mistaken for true information). This is
+  what powers `TurnContext`'s pass ceilings; the match runner computes
+  it fresh each turn from `Round::play_history`/`pass_history`.
+  `Adaptive` (Phase 7): one configurable strategy whose base play
+  selection is `LowestLegal` (or `CardCounter`, if its `counting`
+  modifier is enabled), with two more independently-toggleable
+  modifiers layered on top: endgame denial (either a plain hand-size
+  trigger reproducing `EndgameDenial` exactly, or that same trigger
+  sharpened by pass-based hand reading to spend the *lowest* card that
+  provably locks a close-to-finishing opponent out, rather than a
+  blanket `GreedyHighest` push) and deception (occasionally
+  bluff-passing on a seat's only beating rank, to plant a false pass
+  ceiling in an opponent's hand reading). Every modifier is implemented
+  by direct delegation to the existing `CardCounter`/`GreedyHighest`/
+  `LowestLegal` strategies rather than duplicating their logic, and a
+  fully disabled configuration (`AdaptiveConfig::NONE`) never draws from
+  `rng`, making `Adaptive`'s output byte-identical to plain
+  `LowestLegal` for the same seed. `AdaptiveConfig` has a
+  `Display`/`FromStr` grammar (a comma-separated option list — see
+  `docs/BUILDING.md` for the full grammar) so `cli` can parse a
+  per-seat spec from the command line and `Strategy::name()` can render
+  a configuration back out (e.g. `Adaptive(reading,deception=0.2)`).
 - A match runner that drives `engine`'s state machine to completion using
   each seat's `Strategy`.
 - Multi-threading via `rayon`: independent matches have no shared mutable

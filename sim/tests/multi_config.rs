@@ -1,39 +1,67 @@
 //! Sweeps every table size (3-6) and both deck variants, alternating the
 //! duplicate-tiebreak rule, through full multi-round matches with the
-//! six baseline strategies. Every round of every match must end in a
-//! role assignment that is exactly the table's role set, each role once.
+//! seven baseline strategies (six fixed strategies plus `Adaptive` on
+//! its defaults). Every round of every match must end in a role
+//! assignment that is exactly the table's role set, each role once.
 
 use std::sync::Arc;
 
 use engine::{roles_for_player_count, DeckVariant, DuplicateRule};
 use sim::{
-    run_batch, CardCounter, EndgameDenial, GreedyHighest, HoldBackPairs, LowestLegal, MatchConfig,
-    RandomLegal, Strategy,
+    run_batch, Adaptive, CardCounter, EndgameDenial, GreedyHighest, HoldBackPairs, LowestLegal,
+    MatchConfig, RandomLegal, Strategy,
 };
 
 fn baseline_strategies(player_count: u8) -> Vec<Arc<dyn Strategy>> {
-    let pool: [Arc<dyn Strategy>; 6] = [
+    let pool: [Arc<dyn Strategy>; 7] = [
         Arc::new(LowestLegal),
         Arc::new(RandomLegal),
         Arc::new(GreedyHighest),
         Arc::new(HoldBackPairs),
         Arc::new(CardCounter),
         Arc::new(EndgameDenial),
+        Arc::new(Adaptive::default()),
     ];
     // Start each table size at a different offset into the (cyclic) pool
-    // so every strategy near the tail — HoldBackPairs, CardCounter, and
-    // EndgameDenial — gets exercised at *every* table size (3-6), not
-    // just somewhere in the sweep.
+    // so the strategies near the tail get exercised at *every* table
+    // size (3-6), not just somewhere in the sweep.
     //
     // Walking the offset backward from the pool's end (rather than
     // forward from its start, i.e. `player_count % pool.len()`) is
-    // required here, not just a style choice: with a 6-entry pool and
-    // table sizes 3-6, a forward offset of `player_count % pool.len()`
-    // gives player_count=5 a window of indices [5,0,1,2,3], which skips
-    // index 4 (CardCounter) entirely — the same class of coverage bug
-    // Phase 4 already hit once in this exact pool. Walking backward
-    // instead gives windows [3,4,5], [2,3,4,5], [1,2,3,4,5], and the
-    // full pool, so indices 3-5 are covered at every table size.
+    // required here, not just a style choice — this is the same
+    // mechanism that fixed a coverage bug when this pool grew 4->6
+    // (Phase 4->5): a forward offset skips an index for at least one
+    // table size, while a backward offset makes the window for
+    // `player_count` seats exactly the pool's *last* `player_count`
+    // entries (since `player_count <= pool.len()` always holds here,
+    // `offset = pool.len() - player_count`, no wraparound). Re-derived
+    // by hand for this 7-entry pool at every table size:
+    //
+    //   player_count=3: offset=4, window = [4,5,6] = CardCounter, EndgameDenial, Adaptive
+    //   player_count=4: offset=3, window = [3,4,5,6] = HoldBackPairs, CardCounter, EndgameDenial, Adaptive
+    //   player_count=5: offset=2, window = [2,3,4,5,6] = GreedyHighest, HoldBackPairs, CardCounter, EndgameDenial, Adaptive
+    //   player_count=6: offset=1, window = [1,2,3,4,5,6] = RandomLegal, GreedyHighest, HoldBackPairs, CardCounter, EndgameDenial, Adaptive
+    //
+    // So `Adaptive` (index 6, the new tail) is reachable at every table
+    // size 3-6, matching the guarantee this pool has upheld for its
+    // most-recently-added entries twice before. Two things are new,
+    // accepted trade-offs of a 7-entry pool against a max table size of
+    // 6 (this project's engine caps `player_count` at 6, so this pool
+    // can never grow to a table size that shows all 7 at once):
+    // `HoldBackPairs` is no longer covered at player_count=3 (a window
+    // of 3 can't hold all 4 tail entries at once, so `Adaptive`
+    // displaces it there — `HoldBackPairs` is still covered at sizes
+    // 4-6), and `LowestLegal` (index 0) is never in any window in this
+    // sweep at all (it would only appear once `player_count` reached
+    // `pool.len()` = 7, which is above this engine's table-size cap).
+    // Both are fine per this project's established pattern: the
+    // guarantee this sweep upholds is "the newest strategy is reachable
+    // at every size", not "every strategy is reachable at every size"
+    // (mathematically impossible once the pool outgrows the max table
+    // size) — `LowestLegal` remains thoroughly covered elsewhere (its
+    // own unit tests, and as the base every other strategy delegates to
+    // or is compared against, including `Adaptive`'s own equivalence
+    // tests).
     let player_count = usize::from(player_count);
     let offset = (pool.len() - player_count % pool.len()) % pool.len();
     pool.iter()
