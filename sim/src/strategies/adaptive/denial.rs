@@ -21,13 +21,6 @@
 //! when it stops being necessary. Only falls back to a full push
 //! (`GreedyHighest`) when nothing is provably safe.
 
-// `respond` and its private helpers below aren't called from anywhere
-// in the crate yet — only from this module's own tests — until a
-// later task (`Adaptive::choose_play`, docs/ROADMAP.md Phase 7) wires
-// this modifier in alongside card-counting and deception. Remove this
-// allow once that call site lands.
-#![allow(dead_code)]
-
 use std::cmp::Ordering;
 
 use engine::{Card, DuplicateRule, Move};

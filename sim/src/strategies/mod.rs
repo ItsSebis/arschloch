@@ -8,7 +8,7 @@ mod random_legal;
 
 use engine::{Card, DuplicateRule};
 
-pub use adaptive::{AdaptiveConfig, DenialMode};
+pub use adaptive::{Adaptive, AdaptiveConfig, DenialMode};
 pub use card_counter::CardCounter;
 pub use endgame_denial::EndgameDenial;
 pub use greedy_highest::GreedyHighest;

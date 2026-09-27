@@ -25,13 +25,6 @@
 //! deceiver in tables without hand-reading opponents; the batch stats
 //! decide whether it's worth it in mixed tables.
 
-// `should_bluff_pass` isn't called from anywhere in the crate yet —
-// only from this module's own tests — until a later task
-// (`Adaptive::choose_play`, docs/ROADMAP.md Phase 7) wires this
-// modifier in alongside card-counting and denial. Remove this allow
-// once that call site lands.
-#![allow(dead_code)]
-
 use rand::RngExt;
 
 use engine::{DuplicateRule, Move};
