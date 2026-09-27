@@ -42,11 +42,14 @@ cases before this plan was approved.
   stateless (`#[derive(Debug, Clone, Copy, Default)]`, no interior
   mutability) since `Strategy` instances are shared read-only via `Arc`
   across parallel matches.
-- Tasks 1-2 are verified with `cargo test -p engine`/`cargo test -p sim`
-  respectively (plus `cargo clippy -p <crate> --all-targets -- -D
-  warnings`); Tasks 3-6 touch cross-crate call sites or the full
-  workspace and use the full gate (`cargo fmt --check`, `cargo clippy
-  --workspace --all-targets -- -D warnings`, `cargo test --workspace`).
+- Task 1 is verified with `cargo test -p engine` (plus `cargo clippy -p
+  engine --all-targets -- -D warnings`). Tasks 2-4 are verified with
+  `cargo test -p sim` (plus `cargo clippy -p sim --all-targets -- -D
+  warnings`) — Task 2 includes `match_runner.rs`'s own call site, but
+  that's still entirely within `sim`, so no cross-crate gate is needed
+  yet. Task 5 touches `cli` and docs and uses the full workspace gate
+  (`cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D
+  warnings`, `cargo test --workspace`).
 - `Option::is_none_or` is available on this workspace's toolchain
   (`rustc 1.98.1`, well past its 1.82 stabilization) — use it directly,
   no fallback needed.
@@ -54,14 +57,14 @@ cases before this plan was approved.
 ## Review Focus
 
 - **Off-by-one in `opponents`**: the acting seat must be genuinely
-  excluded from its own `context.opponents` list. Task 3's own tests
+  excluded from its own `context.opponents` list. Task 2's own tests
   must assert `opponents.len() == player_count - 1` and that no entry's
   `seat` equals the acting seat.
 - **Empty-`unseen_cards` edge case**: both new strategies must handle
   `unseen_cards.is_empty()` cleanly (no panic). Covered by `CardCounter`
-  Task 4's "everything is precious" test and `EndgameDenial` Task 5's
+  Task 3's "everything is precious" test and `EndgameDenial` Task 4's
   tests (which use `unseen_cards` only indirectly via `opponents`, so
-  Task 4's coverage is what actually exercises this for `CardCounter`
+  Task 3's coverage is what actually exercises this for `CardCounter`
   specifically — don't drop that test).
 - **The two hidden test-only `Strategy` implementors** in
   `match_runner.rs` (`LeadCounter`, `ExchangeCallCounter`) must be
@@ -70,11 +73,11 @@ cases before this plan was approved.
   list, found only because the crate failed to compile).
 - **Determinism regression**: `run_match`'s existing determinism tests
   (identical config + seed → identical results) must still pass
-  unchanged after Task 3 threads `TurnContext` through the trick loop —
+  unchanged after Task 2 threads `TurnContext` through the trick loop —
   verify by running the suite, don't assume it from reading the diff.
 - **`hand_size`/`active` consistency**: a seat's `hand_size == 0` must
   always imply `active == false` and vice versa (per `Round::is_active`
-  already meaning "hand is non-empty"). Any fixture in Task 5's tests
+  already meaning "hand is non-empty"). Any fixture in Task 4's tests
   using `active: false` must also use `hand_size: 0` — an inconsistent
   fixture (e.g. `active: false` with a nonzero `hand_size`) tests a
   state the real game can never produce.
@@ -215,7 +218,7 @@ git commit -m "engine: track play history and expose per-seat hand size on Round
 
 ---
 
-### Task 2: `sim::strategy.rs` — `TurnContext` and migrate all six `choose_play` implementors
+### Task 2: `sim::strategy.rs` + `match_runner.rs` — `TurnContext`, migrate all six `choose_play` implementors, and wire real context assembly
 
 **Files:**
 - Modify: `sim/src/strategy.rs`
@@ -224,8 +227,9 @@ git commit -m "engine: track play history and expose per-seat hand size on Round
 - Modify: `sim/src/strategies/random_legal.rs`
 - Modify: `sim/src/strategies/hold_back_pairs.rs`
 - Modify: `sim/src/match_runner.rs` (its two test-only `Strategy`
-  implementors, `LeadCounter` and `ExchangeCallCounter`, both inside
-  its own `#[cfg(test)] mod tests` — **do not skip these two**)
+  implementors, `LeadCounter` and `ExchangeCallCounter`, **and** the
+  production `run_match` trick loop's own `choose_play` call site —
+  see the note below on why these can't be split into separate tasks)
 - Modify: `sim/src/lib.rs` (re-export `OpponentHand`, `TurnContext`)
 
 **Interfaces:**
@@ -236,10 +240,21 @@ git commit -m "engine: track play history and expose per-seat hand size on Round
   signature: `fn choose_play(&self, legal_moves: &[Move],
   duplicate_rule: DuplicateRule, context: &TurnContext<'_>, rng: &mut
   dyn rand::Rng) -> Move`.
-- Consumes: nothing new from Task 1 — this task can be implemented
-  independently of `Round`'s new accessors (they're consumed by Task 3,
-  not here). `engine::{Card, DuplicateRule, Move, SeatId}` already
-  exist.
+- Consumes: `Round::play_history()`, `Round::hand_size()` (Task 1).
+
+**Why this is one task, not two:** an earlier draft of this plan split
+"define `TurnContext`+migrate implementors" from "wire it into
+`run_match`'s call site" into two separate tasks. That doesn't work:
+changing `Strategy::choose_play`'s signature immediately breaks
+`run_match`'s own production call site (`sim/src/match_runner.rs`,
+the trick loop itself, not just its test-only `Strategy` impls) — it
+would still be calling the old 3-argument form. There is no way to
+migrate the trait and leave that call site broken but "not yet in
+scope" without leaving the crate uncompilable at the end of a task,
+which no per-task review gate should ever have to pass through. So
+this task does both: change the signature, migrate every implementor
+(real and test-only), *and* wire the real context assembly into
+`run_match`'s call site, in one commit.
 
 Why `choose_exchange_cards` is untouched this phase: between rounds
 there's no play history yet, and "unseen" would always just be "the
@@ -249,9 +264,12 @@ mid-round. Do not add `TurnContext` to it.
 
 - [ ] **Step 1: Read the current files first**
 
-Read `sim/src/strategy.rs` and all five files listed above in full.
-Confirm each strategy's current `impl Strategy for ...` block and
-imports before editing.
+Read `sim/src/strategy.rs`, `sim/src/match_runner.rs` (in full,
+including its `run_match` function and its `#[cfg(test)] mod tests`),
+and the four strategy files listed above. Confirm each strategy's
+current `impl Strategy for ...` block, `run_match`'s exact current
+trick-loop shape (where `deal`/`exchange` happen before `Round::new`,
+and the existing `choose_play` call site), and imports before editing.
 
 - [ ] **Step 2: Add `OpponentHand`, `TurnContext`, and the new trait signature**
 
@@ -308,8 +326,10 @@ Leave `choose_exchange_cards` exactly as it is.
 
 Run: `cargo test -p sim`
 Expected: compile errors — every `impl Strategy for ...` block (six of
-them, across five files) is now missing the updated `choose_play`
-signature. This confirms the trait change took effect.
+them, across four strategy files plus the two test-only ones in
+`match_runner.rs`) is now missing the updated `choose_play` signature,
+and `run_match`'s own `choose_play` call site no longer matches either.
+This confirms the trait change took effect.
 
 - [ ] **Step 4: Migrate `LowestLegal` and `GreedyHighest`**
 
@@ -343,52 +363,7 @@ read each one's current body first; if unsure whether it needs the
 real context, use `_context` and let the test suite tell you if
 something breaks).
 
-- [ ] **Step 8: Run tests to verify everything compiles and passes**
-
-Run: `cargo test -p sim`
-Expected: PASS — every pre-existing test across all six migrated files
-unchanged and green.
-
-- [ ] **Step 9: Re-export from `sim/src/lib.rs`**
-
-Add `OpponentHand` and `TurnContext` to `sim/src/lib.rs`'s existing
-re-export list alongside `Strategy`.
-
-- [ ] **Step 10: Lint and format**
-
-Run: `cargo fmt -p sim` then `cargo clippy -p sim --all-targets -- -D warnings`
-Expected: no warnings.
-
-- [ ] **Step 11: Commit**
-
-```bash
-git add sim/src/strategy.rs sim/src/strategies/lowest_legal.rs sim/src/strategies/greedy_highest.rs sim/src/strategies/random_legal.rs sim/src/strategies/hold_back_pairs.rs sim/src/match_runner.rs sim/src/lib.rs
-git commit -m "sim: add TurnContext and thread it through Strategy::choose_play"
-```
-
----
-
-### Task 3: `sim::match_runner::run_match` — assemble `TurnContext` each turn
-
-**Files:**
-- Modify: `sim/src/match_runner.rs`
-
-**Interfaces:**
-- Consumes: `Round::play_history()`, `Round::hand_size()` (Task 1),
-  `TurnContext`, `OpponentHand`, the new `choose_play` signature
-  (Task 2).
-- Produces: nothing new for later tasks — this is the integration
-  point.
-
-- [ ] **Step 1: Read the current file first**
-
-Read `sim/src/match_runner.rs`'s `run_match` function in full,
-specifically: where `deal`/`exchange` happen before `Round::new` is
-called, and the trick loop's exact current shape (confirmed earlier at
-this file's lines ~81-102, but re-verify — Task 2 already touched two
-test-only structs in this same file, so re-read post-Task-2).
-
-- [ ] **Step 2: Write a new test for `TurnContext` correctness**
+- [ ] **Step 8: Write a new test for `TurnContext` correctness**
 
 Add to `match_runner.rs`'s existing `#[cfg(test)] mod tests`, following
 the same external-`Arc`-plus-clone pattern `ExchangeCallCounter`
@@ -459,16 +434,11 @@ fn turn_context_excludes_the_acting_seat_from_opponents() {
 ```
 
 This is the Review Focus item on off-by-one exclusion — write this
-test before implementing Step 4, and confirm it fails to compile
-(`TurnContext` doesn't exist as a call-site argument yet, and
-`choose_play`'s signature doesn't match) before making it pass.
+test before implementing Step 9, and confirm it still fails to compile
+(the production call site still isn't passing a `TurnContext`) before
+making it pass.
 
-- [ ] **Step 3: Run to verify the new test fails to compile**
-
-Run: `cargo test -p sim run_match` (or the specific new test name)
-Expected: fails — `run_match` doesn't build `TurnContext` yet.
-
-- [ ] **Step 4: Capture the round's dealt deck and assemble the context each turn**
+- [ ] **Step 9: Capture the round's dealt deck and assemble the context each turn**
 
 Right after `hands` is dealt/exchanged and before `Round::new` moves
 it, capture:
@@ -515,30 +485,41 @@ itself via NLL since `context` isn't used after the `choose_play` call
 — if it doesn't, report the exact compiler error rather than
 restructuring broadly.
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [ ] **Step 10: Run tests to verify everything compiles and passes**
 
 Run: `cargo test -p sim`
-Expected: PASS — the new test from Step 2, plus every pre-existing
-`sim` test unchanged, **specifically including**
+Expected: PASS — every pre-existing test across all six migrated files
+unchanged and green, plus the new `turn_context_excludes_the_acting_
+seat_from_opponents` test, **specifically including**
 `identical_config_and_strategies_are_fully_deterministic` and
-`identical_seeds_produce_identical_results` (Review Focus:
-determinism must not regress).
+`identical_seeds_produce_identical_results` (Review Focus: determinism
+must not regress).
 
-- [ ] **Step 6: Lint and format**
+- [ ] **Step 11: Re-export from `sim/src/lib.rs`**
+
+Add `OpponentHand` and `TurnContext` to `sim/src/lib.rs`'s existing
+re-export list alongside `Strategy`.
+
+- [ ] **Step 12: Run tests once more**
+
+Run: `cargo test -p sim`
+Expected: PASS (confirms the Step 11 re-export didn't break anything).
+
+- [ ] **Step 13: Lint and format**
 
 Run: `cargo fmt -p sim` then `cargo clippy -p sim --all-targets -- -D warnings`
 Expected: no warnings.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 14: Commit**
 
 ```bash
-git add sim/src/match_runner.rs
-git commit -m "sim: assemble TurnContext each turn and pass it to choose_play"
+git add sim/src/strategy.rs sim/src/strategies/lowest_legal.rs sim/src/strategies/greedy_highest.rs sim/src/strategies/random_legal.rs sim/src/strategies/hold_back_pairs.rs sim/src/match_runner.rs sim/src/lib.rs
+git commit -m "sim: add TurnContext, migrate all Strategy implementors, and wire it into run_match"
 ```
 
 ---
 
-### Task 4: `CardCounter` — `sim/src/strategies/card_counter.rs` (new)
+### Task 3: `CardCounter` — `sim/src/strategies/card_counter.rs` (new)
 
 **Files:**
 - Create: `sim/src/strategies/card_counter.rs`
@@ -801,7 +782,7 @@ git commit -m "sim: add CardCounter, a strategy that holds back unbeatable combo
 
 ---
 
-### Task 5: `EndgameDenial` — `sim/src/strategies/endgame_denial.rs` (new)
+### Task 4: `EndgameDenial` — `sim/src/strategies/endgame_denial.rs` (new)
 
 **Files:**
 - Create: `sim/src/strategies/endgame_denial.rs`
@@ -818,7 +799,7 @@ git commit -m "sim: add CardCounter, a strategy that holds back unbeatable combo
 
 Create `sim/src/strategies/endgame_denial.rs` with its test module
 first, matching the same `card(rank, suit)`/`TurnContext` construction
-idiom Task 4 used:
+idiom Task 3 used:
 
 ```rust
 #[cfg(test)]
@@ -1026,7 +1007,7 @@ git commit -m "sim: add EndgameDenial, a strategy that denies control to opponen
 
 ---
 
-### Task 6: `cli` wiring, integration coverage, and docs
+### Task 5: `cli` wiring, integration coverage, and docs
 
 **Files:**
 - Modify: `cli/src/args.rs`
@@ -1036,7 +1017,7 @@ git commit -m "sim: add EndgameDenial, a strategy that denies control to opponen
 - Modify: `README.md`
 
 **Interfaces:**
-- Consumes: `sim::{CardCounter, EndgameDenial}` (Tasks 4-5).
+- Consumes: `sim::{CardCounter, EndgameDenial}` (Tasks 3-4).
 
 - [ ] **Step 1: Read the current files first**
 
