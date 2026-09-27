@@ -1,3 +1,4 @@
+mod card_counter;
 mod greedy_highest;
 mod hold_back_pairs;
 mod lowest_legal;
@@ -5,6 +6,7 @@ mod random_legal;
 
 use engine::{Card, DuplicateRule};
 
+pub use card_counter::CardCounter;
 pub use greedy_highest::GreedyHighest;
 pub use hold_back_pairs::HoldBackPairs;
 pub use lowest_legal::LowestLegal;

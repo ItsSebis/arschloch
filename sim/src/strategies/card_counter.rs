@@ -1,0 +1,211 @@
+//! A pure card-counting strategy: every decision is driven by exact
+//! knowledge of which cards remain unseen (unplayed and not in this
+//! seat's own hand) — this is a closed deck with no draw pile, so
+//! "unseen" is exact, not an estimate (docs/ROADMAP.md, Phase 6).
+//!
+//! **Precious combos.** A legal combo of rank `R` is "precious" when no
+//! unseen card outranks it. This is a deliberately cheap, rank-only
+//! scarcity check, not a full analysis of whether a beating combo is
+//! actually *formable*: a combo of size 2+ can only be beaten by
+//! another same-size combo, which needs enough unseen copies of some
+//! higher rank to exist — a single unseen higher-ranked card is enough
+//! to mark a rank non-precious here even if no one could ever actually
+//! assemble a same-size beater from it. That means this rule is
+//! deliberately conservative (it may treat some truly-unbeatable
+//! combos as "spendable"), never the reverse — it never calls a combo
+//! precious that could really be beaten. This project's existing
+//! strategies are cheap heuristics, not search, so this conservatism
+//! is accepted rather than counting per-rank unseen quantities to
+//! determine formability.
+//!
+//! Preciousness is upward-closed in rank (if a low rank is precious,
+//! every higher rank is too), so this signal only ever changes the
+//! outcome relative to `LowestLegal` while *leading*, where combo size
+//! can differ across candidates (`LowestLegal` breaks ties by size
+//! first, so it would spend a small precious card immediately). While
+//! *following*, size is fixed by the table, so this strategy
+//! deliberately degenerates to `LowestLegal`'s choice — leading always
+//! requires a play (never `Pass`), so holding a precious combo back
+//! only changes *which* combo leads, never *whether* one does, and
+//! precious combos get forced out once every legal lead is precious
+//! (typically late in the round) — this never stalls emptying the
+//! hand.
+
+use engine::{Card, DuplicateRule, Move, Rank};
+
+use crate::strategy::{Strategy, TurnContext};
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct CardCounter;
+
+impl Strategy for CardCounter {
+    fn name(&self) -> &'static str {
+        "CardCounter"
+    }
+
+    fn choose_play(
+        &self,
+        legal_moves: &[Move],
+        duplicate_rule: DuplicateRule,
+        context: &TurnContext<'_>,
+        _rng: &mut dyn rand::Rng,
+    ) -> Move {
+        let highest_unseen_rank = context.unseen_cards.iter().map(|c| c.rank).max();
+        let is_precious = |rank: Rank| highest_unseen_rank.is_none_or(|highest| rank >= highest);
+
+        let plays: Vec<(usize, Card, bool, &Move)> = legal_moves
+            .iter()
+            .filter_map(|mv| match mv {
+                Move::Play(combo) => {
+                    let top = combo.top_card(duplicate_rule);
+                    Some((combo.size(), top, is_precious(top.rank), mv))
+                }
+                Move::Pass => None,
+            })
+            .collect();
+
+        let lowest = |pool: &[(usize, Card, bool, &Move)]| {
+            pool.iter()
+                .min_by(|a, b| {
+                    a.0.cmp(&b.0)
+                        .then_with(|| a.1.compare(&b.1, duplicate_rule))
+                })
+                .map(|&(_, _, _, mv)| mv.clone())
+        };
+
+        let non_precious: Vec<_> = plays.iter().copied().filter(|&(_, _, p, _)| !p).collect();
+        lowest(&non_precious)
+            .or_else(|| lowest(&plays))
+            .unwrap_or(Move::Pass)
+    }
+
+    fn choose_exchange_cards(
+        &self,
+        hand: &[Card],
+        count: usize,
+        duplicate_rule: DuplicateRule,
+        _rng: &mut dyn rand::Rng,
+    ) -> Vec<Card> {
+        // Card-counting-aware exchange selection is out of this
+        // phase's scope (Global Constraints) — reuse the naive
+        // highest-N give-up.
+        crate::strategies::take_highest_naive(hand, count, duplicate_rule)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::strategy::OpponentHand;
+    use engine::{Combo, Suit};
+    use rand::SeedableRng;
+
+    fn card(rank: Rank, suit: Suit) -> Card {
+        Card::new(rank, suit, 0)
+    }
+
+    fn context_with_unseen(unseen_cards: Vec<Card>) -> TurnContext<'static> {
+        TurnContext {
+            seat: 0,
+            hand: &[],
+            opponents: vec![OpponentHand {
+                seat: 1,
+                hand_size: 5,
+                active: true,
+            }],
+            unseen_cards,
+        }
+    }
+
+    #[test]
+    fn leading_saves_a_precious_single_ace_for_a_non_precious_pair_of_threes() {
+        let legal_moves = vec![
+            Move::Play(Combo::new(vec![card(Rank::Ace, Suit::Clubs)]).unwrap()),
+            Move::Play(
+                Combo::new(vec![
+                    card(Rank::Three, Suit::Clubs),
+                    card(Rank::Three, Suit::Diamonds),
+                ])
+                .unwrap(),
+            ),
+        ];
+        let context = context_with_unseen(vec![card(Rank::Nine, Suit::Hearts)]);
+        let mut rng = rand::rngs::StdRng::seed_from_u64(0);
+        let chosen = CardCounter.choose_play(
+            &legal_moves,
+            DuplicateRule::FirstDealtWins,
+            &context,
+            &mut rng,
+        );
+        assert_eq!(
+            chosen,
+            Move::Play(
+                Combo::new(vec![
+                    card(Rank::Three, Suit::Clubs),
+                    card(Rank::Three, Suit::Diamonds),
+                ])
+                .unwrap()
+            )
+        );
+    }
+
+    #[test]
+    fn leading_with_no_precious_option_picks_lowest_like_lowest_legal() {
+        let legal_moves = vec![
+            Move::Play(Combo::new(vec![card(Rank::Six, Suit::Clubs)]).unwrap()),
+            Move::Play(Combo::new(vec![card(Rank::Nine, Suit::Clubs)]).unwrap()),
+        ];
+        let context = context_with_unseen(vec![card(Rank::King, Suit::Hearts)]);
+        let mut rng = rand::rngs::StdRng::seed_from_u64(0);
+        let chosen = CardCounter.choose_play(
+            &legal_moves,
+            DuplicateRule::FirstDealtWins,
+            &context,
+            &mut rng,
+        );
+        assert_eq!(
+            chosen,
+            Move::Play(Combo::new(vec![card(Rank::Six, Suit::Clubs)]).unwrap())
+        );
+    }
+
+    #[test]
+    fn leading_when_everything_is_precious_still_plays_the_lowest() {
+        let legal_moves = vec![
+            Move::Play(Combo::new(vec![card(Rank::King, Suit::Clubs)]).unwrap()),
+            Move::Play(Combo::new(vec![card(Rank::Ace, Suit::Clubs)]).unwrap()),
+        ];
+        let context = context_with_unseen(vec![]);
+        let mut rng = rand::rngs::StdRng::seed_from_u64(0);
+        let chosen = CardCounter.choose_play(
+            &legal_moves,
+            DuplicateRule::FirstDealtWins,
+            &context,
+            &mut rng,
+        );
+        assert_eq!(
+            chosen,
+            Move::Play(Combo::new(vec![card(Rank::King, Suit::Clubs)]).unwrap())
+        );
+    }
+
+    #[test]
+    fn following_plays_the_only_legal_beater_even_when_it_is_precious() {
+        let legal_moves = vec![
+            Move::Pass,
+            Move::Play(Combo::new(vec![card(Rank::King, Suit::Clubs)]).unwrap()),
+        ];
+        let context = context_with_unseen(vec![]);
+        let mut rng = rand::rngs::StdRng::seed_from_u64(0);
+        let chosen = CardCounter.choose_play(
+            &legal_moves,
+            DuplicateRule::FirstDealtWins,
+            &context,
+            &mut rng,
+        );
+        assert_eq!(
+            chosen,
+            Move::Play(Combo::new(vec![card(Rank::King, Suit::Clubs)]).unwrap())
+        );
+    }
+}
