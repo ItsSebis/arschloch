@@ -42,8 +42,8 @@ pub fn run_match(config: &MatchConfig, strategies: &[Arc<dyn Strategy>]) -> Matc
     let mut previous_arschloch: Option<SeatId> = None;
     let mut role_history = Vec::with_capacity(config.rounds);
     let mut trick_count = 0u32;
-    let mut pass_count = 0u32;
-    let mut voluntary_pass_count = 0u32;
+    let mut pass_counts = vec![0u32; usize::from(config.player_count)];
+    let mut voluntary_pass_counts = vec![0u32; usize::from(config.player_count)];
 
     for _ in 0..config.rounds {
         let mut deck = standard_deck(config.deck_variant);
@@ -80,9 +80,9 @@ pub fn run_match(config: &MatchConfig, strategies: &[Arc<dyn Strategy>]) -> Matc
             );
 
             if chosen == Move::Pass {
-                pass_count += 1;
+                pass_counts[usize::from(seat)] += 1;
                 if legal_moves.iter().any(|mv| matches!(mv, Move::Play(_))) {
-                    voluntary_pass_count += 1;
+                    voluntary_pass_counts[usize::from(seat)] += 1;
                 }
             }
             round
@@ -103,8 +103,8 @@ pub fn run_match(config: &MatchConfig, strategies: &[Arc<dyn Strategy>]) -> Matc
         strategy_names: strategies.iter().map(|s| s.name().to_string()).collect(),
         role_history,
         trick_count,
-        pass_count,
-        voluntary_pass_count,
+        pass_counts,
+        voluntary_pass_counts,
     }
 }
 
@@ -180,7 +180,7 @@ mod tests {
         let second = run_match(&config, &strategies);
         assert_eq!(first.role_history, second.role_history);
         assert_eq!(first.trick_count, second.trick_count);
-        assert_eq!(first.pass_count, second.pass_count);
+        assert_eq!(first.pass_counts, second.pass_counts);
     }
 
     /// Wraps `LowestLegal`, independently counting every call where

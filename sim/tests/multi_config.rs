@@ -64,7 +64,12 @@ fn every_table_size_and_deck_variant_plays_to_completion_with_valid_roles() {
                 // Every round leads at least one trick, and a voluntary
                 // pass is a subset of all passes.
                 assert!(result.trick_count >= 3, "{label}");
-                assert!(result.voluntary_pass_count <= result.pass_count, "{label}");
+                for seat in 0..result.pass_counts.len() {
+                    assert!(
+                        result.voluntary_pass_counts[seat] <= result.pass_counts[seat],
+                        "{label}"
+                    );
+                }
             }
         }
     }

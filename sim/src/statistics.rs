@@ -37,8 +37,10 @@ pub fn aggregate(results: &[MatchResult]) -> Statistics {
                     .or_insert(0) += 1;
             }
         }
-        total_passes += u64::from(result.pass_count);
-        total_voluntary_passes += u64::from(result.voluntary_pass_count);
+        for seat in 0..result.pass_counts.len() {
+            total_passes += u64::from(result.pass_counts[seat]);
+            total_voluntary_passes += u64::from(result.voluntary_pass_counts[seat]);
+        }
     }
 
     let voluntary_pass_rate = if total_passes == 0 {
@@ -66,16 +68,16 @@ mod tests {
     fn result(
         strategy_names: Vec<&str>,
         roles: Vec<Role>,
-        pass_count: u32,
-        voluntary: u32,
+        pass_counts: Vec<u32>,
+        voluntary_pass_counts: Vec<u32>,
     ) -> MatchResult {
         MatchResult {
             player_count: u8::try_from(strategy_names.len()).unwrap(),
             strategy_names: strategy_names.into_iter().map(String::from).collect(),
             role_history: vec![roles],
             trick_count: 0,
-            pass_count,
-            voluntary_pass_count: voluntary,
+            pass_counts,
+            voluntary_pass_counts,
         }
     }
 
@@ -85,14 +87,14 @@ mod tests {
             result(
                 vec!["LowestLegal", "GreedyHighest"],
                 vec![Role::President, Role::Arschloch],
-                10,
-                2,
+                vec![5, 5],
+                vec![1, 1],
             ),
             result(
                 vec!["LowestLegal", "GreedyHighest"],
                 vec![Role::Arschloch, Role::President],
-                10,
-                8,
+                vec![5, 5],
+                vec![4, 4],
             ),
         ];
         let stats = aggregate(&results);
@@ -110,7 +112,12 @@ mod tests {
 
     #[test]
     fn aggregate_of_no_passes_reports_zero_rate() {
-        let results = vec![result(vec!["LowestLegal"], vec![Role::President], 0, 0)];
+        let results = vec![result(
+            vec!["LowestLegal"],
+            vec![Role::President],
+            vec![0],
+            vec![0],
+        )];
         let stats = aggregate(&results);
         // Exact equality is guaranteed, not approximate: `aggregate` returns
         // the hardcoded literal `0.0` on this path (no passes occurred),

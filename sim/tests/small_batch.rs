@@ -70,5 +70,5 @@ fn identical_seeds_produce_identical_results() {
     let second = run_match(&config, &strategies);
     assert_eq!(first.role_history, second.role_history);
     assert_eq!(first.trick_count, second.trick_count);
-    assert_eq!(first.pass_count, second.pass_count);
+    assert_eq!(first.pass_counts, second.pass_counts);
 }
