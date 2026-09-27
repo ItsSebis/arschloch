@@ -1,21 +1,29 @@
 //! Sweeps every table size (3-6) and both deck variants, alternating the
 //! duplicate-tiebreak rule, through full multi-round matches with the
-//! three baseline strategies. Every round of every match must end in a
+//! four baseline strategies. Every round of every match must end in a
 //! role assignment that is exactly the table's role set, each role once.
 
 use std::sync::Arc;
 
 use engine::{roles_for_player_count, DeckVariant, DuplicateRule};
-use sim::{run_batch, GreedyHighest, LowestLegal, MatchConfig, RandomLegal, Strategy};
+use sim::{
+    run_batch, GreedyHighest, HoldBackPairs, LowestLegal, MatchConfig, RandomLegal, Strategy,
+};
 
 fn baseline_strategies(player_count: u8) -> Vec<Arc<dyn Strategy>> {
-    let pool: [Arc<dyn Strategy>; 3] = [
+    let pool: [Arc<dyn Strategy>; 4] = [
         Arc::new(LowestLegal),
         Arc::new(RandomLegal),
         Arc::new(GreedyHighest),
+        Arc::new(HoldBackPairs),
     ];
+    // Start each table size at a different offset into the (cyclic) pool
+    // so every strategy — including HoldBackPairs at index 3 — gets
+    // exercised somewhere in the sweep, not just at tables large enough
+    // to wrap around from index 0.
     pool.iter()
         .cycle()
+        .skip(usize::from(player_count) % pool.len())
         .take(usize::from(player_count))
         .cloned()
         .collect()
