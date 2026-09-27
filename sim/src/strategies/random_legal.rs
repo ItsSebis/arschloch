@@ -2,8 +2,8 @@
 //! the strategy that produces the "voluntary pass" signal (see
 //! docs/ROADMAP.md, Phase 4).
 
-use engine::{DuplicateRule, Move};
-use rand::seq::IndexedRandom;
+use engine::{Card, DuplicateRule, Move};
+use rand::seq::{IndexedRandom, SliceRandom};
 
 use crate::strategy::Strategy;
 
@@ -25,6 +25,19 @@ impl Strategy for RandomLegal {
             .choose(rng)
             .cloned()
             .expect("legal_moves is never empty when a seat is actually to move")
+    }
+
+    fn choose_exchange_cards(
+        &self,
+        hand: &[Card],
+        count: usize,
+        _duplicate_rule: DuplicateRule,
+        rng: &mut dyn rand::Rng,
+    ) -> Vec<Card> {
+        let mut indices: Vec<usize> = (0..hand.len()).collect();
+        indices.shuffle(rng);
+        indices.truncate(count);
+        indices.into_iter().map(|i| hand[i]).collect()
     }
 }
 
@@ -68,5 +81,45 @@ mod tests {
             }
         }
         assert!(saw_pass && saw_play);
+    }
+
+    #[test]
+    fn choose_exchange_cards_returns_exactly_count_distinct_cards_from_hand() {
+        let strategy = RandomLegal;
+        let hand = vec![
+            Card::new(Rank::Two, Suit::Clubs, 0),
+            Card::new(Rank::Five, Suit::Clubs, 0),
+            Card::new(Rank::Seven, Suit::Clubs, 0),
+            Card::new(Rank::Jack, Suit::Clubs, 0),
+            Card::new(Rank::Ace, Suit::Clubs, 0),
+        ];
+        let given = strategy.choose_exchange_cards(
+            &hand,
+            2,
+            DuplicateRule::FirstDealtWins,
+            &mut test_rng(7),
+        );
+        assert_eq!(given.len(), 2);
+        assert_ne!(given[0], given[1]);
+        for card in &given {
+            assert!(hand.contains(card));
+        }
+    }
+
+    #[test]
+    fn choose_exchange_cards_can_give_up_the_entire_hand() {
+        let strategy = RandomLegal;
+        let hand = vec![
+            Card::new(Rank::Two, Suit::Clubs, 0),
+            Card::new(Rank::Five, Suit::Clubs, 0),
+        ];
+        let given = strategy.choose_exchange_cards(
+            &hand,
+            hand.len(),
+            DuplicateRule::FirstDealtWins,
+            &mut test_rng(3),
+        );
+        assert_eq!(given.len(), hand.len());
+        assert_ne!(given[0], given[1]);
     }
 }

@@ -138,7 +138,7 @@ pub fn run_batch(configs: &[MatchConfig], strategies: &[Arc<dyn Strategy>]) -> V
 #[cfg(test)]
 mod tests {
     use super::*;
-    use engine::{DeckVariant, DuplicateRule};
+    use engine::{Card, DeckVariant, DuplicateRule};
     use std::sync::atomic::{AtomicU32, Ordering};
 
     fn four_lowest_legal() -> Vec<Arc<dyn Strategy>> {
@@ -207,6 +207,16 @@ mod tests {
                 self.leads.fetch_add(1, Ordering::Relaxed);
             }
             crate::strategies::LowestLegal.choose_play(legal_moves, duplicate_rule, rng)
+        }
+
+        fn choose_exchange_cards(
+            &self,
+            hand: &[Card],
+            count: usize,
+            duplicate_rule: DuplicateRule,
+            rng: &mut dyn rand::Rng,
+        ) -> Vec<Card> {
+            crate::strategies::LowestLegal.choose_exchange_cards(hand, count, duplicate_rule, rng)
         }
     }
 

@@ -6,7 +6,7 @@
 
 use std::collections::HashMap;
 
-use engine::{Card, DuplicateRule, Move, Rank};
+use engine::{rank_groups, Card, DuplicateRule, Move, Rank};
 
 use crate::strategies::LowestLegal;
 use crate::strategy::Strategy;
@@ -66,6 +66,37 @@ impl Strategy for HoldBackPairs {
                 .clone(),
             None => Move::Pass,
         }
+    }
+
+    fn choose_exchange_cards(
+        &self,
+        hand: &[Card],
+        count: usize,
+        duplicate_rule: DuplicateRule,
+        _rng: &mut dyn rand::Rng,
+    ) -> Vec<Card> {
+        // Give up whole isolated cards before touching any same-rank
+        // group of 2+, smallest groups first; within a length class,
+        // prefer the highest-ranked group (still shed value
+        // preferentially, just never break a reserve while an isolated
+        // card remains).
+        let mut groups = rank_groups(hand);
+        groups.sort_by(|a, b| {
+            a.len()
+                .cmp(&b.len())
+                .then_with(|| b[0].compare(&a[0], duplicate_rule))
+        });
+
+        let mut selected = Vec::with_capacity(count);
+        for mut group in groups {
+            if selected.len() >= count {
+                break;
+            }
+            let take = (count - selected.len()).min(group.len());
+            group.sort_by(|a, b| b.compare(a, duplicate_rule));
+            selected.extend(group.into_iter().take(take));
+        }
+        selected
     }
 }
 
@@ -167,5 +198,80 @@ mod tests {
         let chosen =
             HoldBackPairs.choose_play(&legal, DuplicateRule::FirstDealtWins, &mut test_rng());
         assert_eq!(chosen, pair(Rank::Nine, [Suit::Diamonds, Suit::Hearts]));
+    }
+
+    #[test]
+    fn choose_exchange_cards_prefers_isolated_cards_over_a_pair() {
+        let strategy = HoldBackPairs;
+        let hand = vec![
+            Card::new(Rank::Five, Suit::Clubs, 0),
+            Card::new(Rank::Five, Suit::Hearts, 0), // pair of 5s
+            Card::new(Rank::Nine, Suit::Clubs, 0),  // isolated
+            Card::new(Rank::Jack, Suit::Clubs, 0),  // isolated
+        ];
+
+        let one = strategy.choose_exchange_cards(
+            &hand,
+            1,
+            DuplicateRule::FirstDealtWins,
+            &mut test_rng(),
+        );
+        assert_eq!(one, vec![Card::new(Rank::Jack, Suit::Clubs, 0)]);
+
+        let two = strategy.choose_exchange_cards(
+            &hand,
+            2,
+            DuplicateRule::FirstDealtWins,
+            &mut test_rng(),
+        );
+        assert_eq!(two.len(), 2);
+        assert!(two.contains(&Card::new(Rank::Jack, Suit::Clubs, 0)));
+        assert!(two.contains(&Card::new(Rank::Nine, Suit::Clubs, 0)));
+    }
+
+    #[test]
+    fn choose_exchange_cards_breaks_the_pair_only_when_forced() {
+        let strategy = HoldBackPairs;
+        let hand = vec![
+            Card::new(Rank::Five, Suit::Clubs, 0),
+            Card::new(Rank::Five, Suit::Hearts, 0),
+            Card::new(Rank::Nine, Suit::Clubs, 0),
+            Card::new(Rank::Jack, Suit::Clubs, 0),
+        ];
+
+        let three = strategy.choose_exchange_cards(
+            &hand,
+            3,
+            DuplicateRule::FirstDealtWins,
+            &mut test_rng(),
+        );
+        assert_eq!(three.len(), 3);
+        assert!(three.contains(&Card::new(Rank::Jack, Suit::Clubs, 0)));
+        assert!(three.contains(&Card::new(Rank::Nine, Suit::Clubs, 0)));
+        let fives_included = three.iter().filter(|c| c.rank == Rank::Five).count();
+        assert_eq!(fives_included, 1);
+    }
+
+    #[test]
+    fn choose_exchange_cards_handles_no_isolated_cards_at_all() {
+        // Two pairs, no singles: forced to break at least one pair even
+        // for a small count.
+        let strategy = HoldBackPairs;
+        let hand = vec![
+            Card::new(Rank::Five, Suit::Clubs, 0),
+            Card::new(Rank::Five, Suit::Hearts, 0),
+            Card::new(Rank::Nine, Suit::Clubs, 0),
+            Card::new(Rank::Nine, Suit::Hearts, 0),
+        ];
+        let given = strategy.choose_exchange_cards(
+            &hand,
+            3,
+            DuplicateRule::FirstDealtWins,
+            &mut test_rng(),
+        );
+        assert_eq!(given.len(), 3);
+        for card in &given {
+            assert!(hand.contains(card));
+        }
     }
 }

@@ -1,7 +1,7 @@
 //! The most conservative legal strategy: always plays the smallest, then
 //! lowest-ranked, legal combo; passes only when no `Play` is legal.
 
-use engine::{DuplicateRule, Move};
+use engine::{Card, DuplicateRule, Move};
 
 use crate::strategy::Strategy;
 
@@ -30,6 +30,16 @@ impl Strategy for LowestLegal {
                     .then_with(|| a.1.compare(&b.1, duplicate_rule))
             })
             .map_or(Move::Pass, |(_, _, mv)| mv.clone())
+    }
+
+    fn choose_exchange_cards(
+        &self,
+        hand: &[Card],
+        count: usize,
+        duplicate_rule: DuplicateRule,
+        _rng: &mut dyn rand::Rng,
+    ) -> Vec<Card> {
+        crate::strategies::take_highest_naive(hand, count, duplicate_rule)
     }
 }
 
@@ -79,5 +89,26 @@ mod tests {
         let strategy = LowestLegal;
         let chosen = strategy.choose_play(&legal, DuplicateRule::FirstDealtWins, &mut test_rng());
         assert_eq!(chosen, Move::Pass);
+    }
+
+    #[test]
+    fn choose_exchange_cards_gives_up_the_highest_cards() {
+        let strategy = LowestLegal;
+        let hand = vec![
+            Card::new(Rank::Two, Suit::Clubs, 0),
+            Card::new(Rank::Five, Suit::Clubs, 0),
+            Card::new(Rank::Seven, Suit::Clubs, 0),
+            Card::new(Rank::Jack, Suit::Clubs, 0),
+            Card::new(Rank::Ace, Suit::Clubs, 0),
+        ];
+        let given = strategy.choose_exchange_cards(
+            &hand,
+            2,
+            DuplicateRule::FirstDealtWins,
+            &mut test_rng(),
+        );
+        assert_eq!(given.len(), 2);
+        assert!(given.contains(&Card::new(Rank::Ace, Suit::Clubs, 0)));
+        assert!(given.contains(&Card::new(Rank::Jack, Suit::Clubs, 0)));
     }
 }

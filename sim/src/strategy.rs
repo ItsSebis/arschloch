@@ -1,6 +1,6 @@
 //! The `Strategy` trait: how a simulated seat picks among legal moves.
 
-use engine::{DuplicateRule, Move};
+use engine::{Card, DuplicateRule, Move};
 
 /// Chooses a move from the moves `engine` reports as legal. Implementors
 /// must be `Send + Sync` so a single instance (behind `Arc`) can be
@@ -21,4 +21,18 @@ pub trait Strategy: Send + Sync {
         duplicate_rule: DuplicateRule,
         rng: &mut dyn rand::Rng,
     ) -> Move;
+
+    /// Chooses which `count` cards to give up when this seat holds a
+    /// role required to hand over its best cards during the exchange
+    /// (`docs/ROADMAP.md`, Phase 5, "Smart exchange"). Must return
+    /// exactly `count` distinct cards, each present in `hand`;
+    /// `engine::exchange_with_selection` treats anything else as a bug
+    /// (`ExchangeError::InvalidSelection`).
+    fn choose_exchange_cards(
+        &self,
+        hand: &[Card],
+        count: usize,
+        duplicate_rule: DuplicateRule,
+        rng: &mut dyn rand::Rng,
+    ) -> Vec<Card>;
 }
