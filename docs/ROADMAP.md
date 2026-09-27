@@ -71,9 +71,9 @@ sitting; a phase that grows beyond that should be split.
   fresh each turn: this seat's own hand, every opponent's hand size (and
   whether it's still active), and the exact multiset of unseen cards —
   deterministic, since this is a closed-deck game with no draw pile.
-- Two new strategies built on `TurnContext`: `CardCounter`, which holds
-  back a legal combo while some unseen card could still beat it, and
-  spends it once no unseen card can; and `EndgameDenial`, which switches
+- Two new strategies built on `TurnContext`: `CardCounter`, which plays
+  a legal combo while some unseen card could still beat it, and holds
+  it back once no unseen card can; and `EndgameDenial`, which switches
   to aggressive, control-retaining play whenever an active opponent's
   hand size is low enough to be close to finishing, to deny them an easy
   trick. Kept as two separate strategies rather than merged into one so

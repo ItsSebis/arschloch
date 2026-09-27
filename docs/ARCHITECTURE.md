@@ -78,9 +78,9 @@ legal, never which move to prefer.
   plays identically while leading but deliberately passes rather than
   split up a same-rank reserve while following, as a diversification
   comparison point against the three always-play baselines. Two more
-  strategies (Phase 6) use `TurnContext` directly: `CardCounter` holds
-  back a legal combo while some unseen card could still beat it, and
-  spends it once no unseen card can; `EndgameDenial` switches to
+  strategies (Phase 6) use `TurnContext` directly: `CardCounter` plays
+  a legal combo while some unseen card could still beat it, and holds
+  it back once no unseen card can; `EndgameDenial` switches to
   aggressive, control-retaining play whenever an active opponent's hand
   size is low enough to be close to finishing, to deny them an easy
   trick — otherwise it conserves like `LowestLegal`.

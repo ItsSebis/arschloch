@@ -46,9 +46,9 @@ duplicate-card rule, thread count, and cross-compiling a Windows `.exe`).
   than this play needs, it passes instead, to keep that reserve intact
   for a later lead. It applies the same reserve-protecting logic when
   choosing which cards to give up during the card exchange.
-- `card-counter` — tracks the exact multiset of unseen cards and holds
-  back a legal combo while some unseen card could still beat it, only
-  spending it once no unseen card can.
+- `card-counter` — tracks the exact multiset of unseen cards and plays
+  a legal combo while some unseen card could still beat it, only
+  holding it back once no unseen card can.
 - `endgame-denial` — plays like `lowest-legal`, except it switches to
   `greedy-highest`'s aggressive play whenever an active opponent's hand
   is down to 2 cards or fewer, to deny them an easy trick.
