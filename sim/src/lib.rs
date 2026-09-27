@@ -12,6 +12,6 @@ pub mod strategy;
 pub use match_config::MatchConfig;
 pub use match_result::MatchResult;
 pub use match_runner::{run_batch, run_match};
-pub use statistics::{aggregate, Statistics};
+pub use statistics::{aggregate, RoleRetention, Statistics};
 pub use strategies::{GreedyHighest, LowestLegal, RandomLegal};
 pub use strategy::Strategy;

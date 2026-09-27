@@ -54,6 +54,9 @@ fn a_small_batch_produces_well_shaped_results() {
 
     let json = serde_json::to_string(&stats).expect("Statistics serializes to JSON");
     assert!(json.contains("matches_played"));
+    assert!(json.contains("voluntary_pass_rate_by_strategy"));
+    assert!(json.contains("role_retention_by_strategy"));
+    assert!(json.contains("first_round_placement_variance_by_strategy"));
 }
 
 #[test]
