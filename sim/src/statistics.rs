@@ -8,6 +8,8 @@ use engine::{roles_for_player_count, Role};
 
 use crate::match_result::MatchResult;
 
+/// Round-to-round role-sustainment counts for one role held by one
+/// strategy (docs/ROADMAP.md, Phase 4, "Role-sustainment tracking").
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize)]
 pub struct RoleRetention {
     /// Round-to-next-round transitions where a strategy held this role
