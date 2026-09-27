@@ -16,7 +16,7 @@ pub use card::{rank_groups, Card, DeckVariant, DuplicateRule, Rank, Suit};
 pub use combo::Combo;
 pub use deal::{deal, lowest_card_holder};
 pub use deck::standard_deck;
-pub use exchange::{exchange, ExchangeError};
+pub use exchange::{exchange, exchange_with_selection, ExchangeError};
 pub use role::{assign_roles, exchange_counts_for_player_count, roles_for_player_count, Role};
 pub use round::{Move, MoveError, Round};
 

@@ -7,7 +7,8 @@
 use std::sync::Arc;
 
 use engine::{
-    assign_roles, deal, exchange, lowest_card_holder, standard_deck, Move, Round, SeatId,
+    assign_roles, deal, exchange_with_selection, lowest_card_holder, standard_deck, Move, Round,
+    SeatId,
 };
 use rand::seq::SliceRandom;
 use rand::SeedableRng;
@@ -56,8 +57,18 @@ pub fn run_match(config: &MatchConfig, strategies: &[Arc<dyn Strategy>]) -> Matc
 
         let leader = match (&previous_roles, previous_arschloch) {
             (Some(roles), Some(arschloch)) => {
-                exchange(&mut hands, roles, config.duplicate_rule)
-                    .expect("previous_roles always came from assign_roles for this player_count");
+                exchange_with_selection(
+                    &mut hands,
+                    roles,
+                    config.duplicate_rule,
+                    |seat, hand, count, duplicate_rule| {
+                        strategies[seat].choose_exchange_cards(hand, count, duplicate_rule, &mut rng)
+                    },
+                )
+                .expect(
+                    "previous_roles always came from assign_roles for this player_count, and every \
+                     Strategy::choose_exchange_cards returns exactly `count` cards from its own hand",
+                );
                 arschloch
             }
             _ => lowest_card_holder(&hands, config.duplicate_rule)
