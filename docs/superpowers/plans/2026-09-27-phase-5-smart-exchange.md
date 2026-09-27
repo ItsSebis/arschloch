@@ -209,6 +209,14 @@ closure/function — that module already defines; do not redefine one):
 ```rust
 #[test]
 fn exchange_with_selection_uses_the_provided_cards() {
+    // For 4 players, exchange_counts_for_player_count(4) == [2, 1]: the
+    // outer pair (President/Arschloch) exchanges 2 cards, the inner pair
+    // (Vize/ViceArschloch) exchanges 1. Seat 3's hand has exactly 2
+    // cards and the outer pair's count is 2, so its whole hand moves
+    // regardless of selection order — that pair can't distinguish naive
+    // from custom. Assert on the inner pair instead, where count (1) is
+    // smaller than the low seat's hand size (2), so which card is chosen
+    // actually matters.
     let role_by_seat = vec![
         Role::President,
         Role::Vize,
@@ -237,10 +245,10 @@ fn exchange_with_selection_uses_the_provided_cards() {
     )
     .unwrap();
 
-    // Seat 3 (Arschloch, giving 1 card up to President) gave its LOWEST
-    // card (Two) instead of the naive highest (Ace).
-    assert!(hands[0].contains(&card(Rank::Two, Suit::Clubs)));
-    assert!(hands[3].contains(&card(Rank::Ace, Suit::Clubs)) || hands[3].contains(&card(Rank::King, Suit::Clubs)));
+    // Seat 2 (ViceArschloch, giving 1 card up to seat 1/Vize) gave its
+    // LOWEST card (Six) instead of the naive highest (Seven).
+    assert!(hands[1].contains(&card(Rank::Six, Suit::Clubs)));
+    assert!(!hands[1].contains(&card(Rank::Seven, Suit::Clubs)));
 }
 
 #[test]
