@@ -68,12 +68,27 @@ establishes roles for the exchange before round 2.
 
 ## Card Exchange ("Drücken")
 
-Before every round after the first, roles exchange cards: the
-lower-ranked role hands over their **highest** N cards, and the
-higher-ranked role hands back their **lowest** N cards. This is mandatory
-— there is no discretion about *whether* to exchange, only (for a future
-phase — see `ROADMAP.md`, "smart exchange") discretion about *which*
-specific cards satisfy "highest/lowest" when there's a tie.
+Before every round after the first, roles exchange cards. The
+higher-ranked role hands back their **lowest** N cards, chosen naively
+(no strategic input on that side). The lower-ranked role, however, hands
+over any N cards of its own choosing: which cards it gives up is decided
+by its `Strategy` (see `docs/ARCHITECTURE.md` for which strategies do
+what — e.g. `HoldBackPairs` will keep a pair of Aces intact and instead
+give up an isolated 9 and Jack). The exchange itself is still mandatory
+— there is no discretion about *whether* to exchange, only about
+*which* specific cards the lower-ranked role gives up, which is now
+strategy-driven.
+
+This was originally planned as merely a tie-break among the "highest N"
+cards on the giving side, but that framing turned out not to make sense:
+under `Card::compare`'s total order (rank, then suit, then a
+deal-index tiebreak — see "Card Ranking" above), no two cards in a hand
+are ever truly equal, so a literal "break ties among the Nth-highest
+cards" rule would have nothing to ever act on. The real design goal —
+letting a strategy avoid splitting up a useful same-rank reserve when
+it's forced to exchange — required giving strategies full freedom over
+which cards to give up, not just a tie-break among equally-ranked
+candidates.
 
 **Decision — exchange counts scale with table size** (outer role-pair
 exchanges the most, decreasing by 1 per pair moving inward, a lone

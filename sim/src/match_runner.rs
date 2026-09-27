@@ -263,6 +263,66 @@ mod tests {
         }
     }
 
+    /// Wraps `LowestLegal`, independently counting every call to
+    /// `choose_exchange_cards` — used to confirm `run_match` actually
+    /// routes the exchange through each seat's `Strategy` rather than
+    /// falling back to some naive selection that never calls it.
+    struct ExchangeCallCounter {
+        calls: Arc<AtomicU32>,
+    }
+
+    impl Strategy for ExchangeCallCounter {
+        fn name(&self) -> &'static str {
+            "ExchangeCallCounter"
+        }
+
+        fn choose_play(
+            &self,
+            legal_moves: &[Move],
+            duplicate_rule: DuplicateRule,
+            rng: &mut dyn rand::Rng,
+        ) -> Move {
+            crate::strategies::LowestLegal.choose_play(legal_moves, duplicate_rule, rng)
+        }
+
+        fn choose_exchange_cards(
+            &self,
+            hand: &[Card],
+            count: usize,
+            duplicate_rule: DuplicateRule,
+            rng: &mut dyn rand::Rng,
+        ) -> Vec<Card> {
+            self.calls.fetch_add(1, Ordering::Relaxed);
+            crate::strategies::LowestLegal.choose_exchange_cards(hand, count, duplicate_rule, rng)
+        }
+    }
+
+    #[test]
+    fn run_match_calls_choose_exchange_cards_during_the_exchange() {
+        let calls = Arc::new(AtomicU32::new(0));
+        let counter: Arc<dyn Strategy> = Arc::new(ExchangeCallCounter {
+            calls: calls.clone(),
+        });
+        let strategies: Vec<Arc<dyn Strategy>> = vec![
+            counter.clone(),
+            counter.clone(),
+            counter.clone(),
+            counter.clone(),
+        ];
+        let config = MatchConfig {
+            player_count: 4,
+            deck_variant: DeckVariant::Single,
+            duplicate_rule: DuplicateRule::FirstDealtWins,
+            rounds: 3,
+            seed: 7,
+        };
+        // The first round never exchanges (no prior roles yet), so at
+        // least one of the two later rounds must trigger the exchange
+        // for every seat that ends up in a low-ranked role.
+        let _ = run_match(&config, &strategies);
+        assert!(calls.load(Ordering::Relaxed) > 0);
+    }
+
     #[test]
     fn run_batch_rotates_which_seat_each_strategy_occupies() {
         let strategies: Vec<Arc<dyn Strategy>> = vec![

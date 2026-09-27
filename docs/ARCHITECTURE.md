@@ -75,9 +75,13 @@ legal, never which move to prefer.
   seat's strategy choose which cards it gives up, validated by
   `engine` rather than merely tie-broken. `HoldBackPairs` avoids
   splitting a same-rank reserve here the same way it does while
-  playing; the other three strategies reproduce the old naive
-  behavior (two by replicating the highest-N sort, `RandomLegal` by
-  picking uniformly at random). `engine::rank_groups` is now public.
+  playing, per `docs/ROADMAP.md`'s Phase 5 entry.
+  `LowestLegal`/`GreedyHighest` reproduce the old naive highest-N
+  selection; `RandomLegal` now gives up `count` uniformly random cards
+  instead — a real behavior change from before Phase 5, when
+  `engine::exchange` was strategy-agnostic and applied the same naive
+  top-N selection no matter which strategy occupied the seat.
+  `engine::rank_groups` is now public.
 - A match runner that drives `engine`'s state machine to completion using
   each seat's `Strategy`.
 - Multi-threading via `rayon`: independent matches have no shared mutable
