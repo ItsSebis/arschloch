@@ -68,11 +68,16 @@ legal, never which move to prefer.
   `HoldBackPairs` (Phase 4), plays identically while leading but
   deliberately passes rather than split up a same-rank reserve while
   following, as a diversification comparison point against the three
-  always-play baselines. `choose_exchange_cards` doesn't exist yet —
-  `exchange()`'s naive top/bottom-N tie-break (Phase 1) is applied
-  directly by the match runner; strategy-aware exchange selection is
-  Phase 5's job ("smart exchange"), not introduced early as speculative
-  generality.
+  always-play baselines. `Strategy::choose_exchange_cards` (Phase 5,
+  "smart exchange") now exists and is implemented by all four
+  strategies; `engine::exchange`'s naive top-N tie-break has been
+  replaced by `engine::exchange_with_selection`, which lets each low
+  seat's strategy choose which cards it gives up, validated by
+  `engine` rather than merely tie-broken. `HoldBackPairs` avoids
+  splitting a same-rank reserve here the same way it does while
+  playing; the other three strategies reproduce the old naive
+  behavior (two by replicating the highest-N sort, `RandomLegal` by
+  picking uniformly at random). `engine::rank_groups` is now public.
 - A match runner that drives `engine`'s state machine to completion using
   each seat's `Strategy`.
 - Multi-threading via `rayon`: independent matches have no shared mutable

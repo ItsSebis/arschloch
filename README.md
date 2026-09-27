@@ -43,7 +43,8 @@ duplicate-card rule, thread count, and cross-compiling a Windows `.exe`).
 - `hold-back-pairs` — plays like `lowest-legal`, except while following:
   if every beating play would break up cards of a rank it holds more of
   than this play needs, it passes instead, to keep that reserve intact
-  for a later lead.
+  for a later lead. It applies the same reserve-protecting logic when
+  choosing which cards to give up during the card exchange.
 
 ### The stdout summary
 
