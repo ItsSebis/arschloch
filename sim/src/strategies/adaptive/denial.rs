@@ -8,18 +8,28 @@
 //! `EndgameDenial` itself.
 //!
 //! `HandReading` asks a narrower question than a blanket push: which
-//! legal plays can a close-to-finishing opponent *provably* not beat,
-//! using their unrefuted pass ceilings plus two other sound public
-//! facts (the combo is bigger than their whole hand; no unseen card
-//! beats it at all)? Taking the *lowest* such play denies the threat as
-//! surely as a highest-card push while spending less — the working
-//! theory (docs/ROADMAP.md, Phase 7) is that `EndgameDenial` loses to
-//! `LowestLegal` precisely because it spends high cards it doesn't
-//! need to. When following and the table combo is already provably
-//! safe against every threat, every legal beater qualifies, so this
-//! reduces to `LowestLegal`'s own choice: aggression relaxes exactly
-//! when it stops being necessary. Only falls back to a full push
-//! (`GreedyHighest`) when nothing is provably safe.
+//! legal plays are *provably* unbeatable by every still-active
+//! opponent — not just the ones close to finishing — using each
+//! opponent's unrefuted pass ceilings plus two other sound public
+//! facts (a combo bigger than an opponent's whole hand can never be
+//! matched; no unseen card beats this play's top card at all)? A play
+//! only proven safe against the close-to-finishing opponent is not
+//! enough: with more than two players, the trick passes through every
+//! other active seat before it can circle back to the one being
+//! denied, so anyone else still holding an unproven beater can raise
+//! over a merely-threat-safe play and reopen the door with a card the
+//! threat *can* beat. Requiring safety against the whole active field
+//! is what actually forces the trick to resolve now, the same
+//! practical effect a highest-card push gets from brute force. Taking
+//! the *lowest* such play still denies the threat while spending
+//! less — the working theory (docs/ROADMAP.md, Phase 7) is that
+//! `EndgameDenial` loses to `LowestLegal` precisely because it spends
+//! high cards it doesn't need to. When following and the table combo
+//! is already provably safe against every active opponent, every legal
+//! beater qualifies, so this reduces to `LowestLegal`'s own choice:
+//! aggression relaxes exactly when it stops being necessary. Only
+//! falls back to a full push (`GreedyHighest`) when nothing is provably
+//! safe.
 
 use std::cmp::Ordering;
 
@@ -40,26 +50,33 @@ fn any_threat(context: &TurnContext<'_>, close: usize) -> bool {
 }
 
 /// The result of asking `targeted_denial` whether some legal play can
-/// provably deny every close-to-finishing opponent.
+/// provably hold the whole trick against every active opponent, given
+/// that at least one of them is close enough to finishing to be worth
+/// denying.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Denial {
     /// No opponent is close enough to finishing to be worth denying.
     NoThreat,
-    /// This play is provably safe against every threat — the cheapest
-    /// such play, specifically, since callers want to spend the least.
+    /// This play is provably safe against every still-active
+    /// opponent — the cheapest such play, specifically, since callers
+    /// want to spend the least.
     Lock(Move),
     /// At least one opponent is close to finishing, but no legal play
-    /// is provably safe against all of them; caller should fall back to
-    /// a full push.
+    /// is provably safe against the whole active field; caller should
+    /// fall back to a full push.
     Unproven,
 }
 
-/// Finds the cheapest legal play that provably denies every
-/// close-to-finishing opponent, using only sound public facts: an
-/// opponent's unrefuted pass ceilings (`PassCeilings::cannot_beat`), the
-/// fact that a combo bigger than an opponent's whole hand can never be
-/// matched by them, and the fact that no unseen card beats this play's
-/// top card at all (so literally nobody, threat or not, can beat it).
+/// Finds the cheapest legal play that's provably unbeatable by every
+/// still-active opponent — not only the ones close to finishing — using
+/// only sound public facts: an opponent's unrefuted pass ceilings
+/// (`PassCeilings::cannot_beat`), the fact that a combo bigger than an
+/// opponent's whole hand can never be matched by them, and the fact
+/// that no unseen card beats this play's top card at all (so literally
+/// nobody can beat it). Checking only the close-to-finishing opponents
+/// would be unsound in practice: any other active opponent left
+/// unchecked could hold an unproven beater, raise over the "safe" play,
+/// and hand the threat a fresh combo none of this reasoning covered.
 /// Returns `Denial::Unproven` when no legal play clears that bar, even
 /// though at least one threat exists.
 fn targeted_denial(
@@ -68,24 +85,20 @@ fn targeted_denial(
     context: &TurnContext<'_>,
     close: usize,
 ) -> Denial {
-    let threats: Vec<_> = context
-        .opponents
-        .iter()
-        .filter(|o| o.active && o.hand_size <= close)
-        .collect();
-    if threats.is_empty() {
+    if !any_threat(context, close) {
         return Denial::NoThreat;
     }
 
+    let active_opponents: Vec<_> = context.opponents.iter().filter(|o| o.active).collect();
     let highest_unseen = context
         .unseen_cards
         .iter()
         .copied()
         .max_by(|a, b| a.compare(b, duplicate_rule));
-    let locks_out_every_threat = |size: usize, top: Card| {
+    let locks_out_every_opponent = |size: usize, top: Card| {
         highest_unseen.is_none_or(|h| top.compare(&h, duplicate_rule) != Ordering::Less)
-            || threats.iter().all(|t| {
-                size > t.hand_size || t.pass_ceilings.cannot_beat(size, top, duplicate_rule)
+            || active_opponents.iter().all(|o| {
+                size > o.hand_size || o.pass_ceilings.cannot_beat(size, top, duplicate_rule)
             })
     };
 
@@ -95,7 +108,7 @@ fn targeted_denial(
             Move::Play(combo) => Some((combo.size(), combo.top_card(duplicate_rule), mv)),
             Move::Pass => None,
         })
-        .filter(|&(size, top, _)| locks_out_every_threat(size, top))
+        .filter(|&(size, top, _)| locks_out_every_opponent(size, top))
         .min_by(|a, b| {
             a.0.cmp(&b.0)
                 .then_with(|| a.1.compare(&b.1, duplicate_rule))
@@ -313,6 +326,64 @@ mod tests {
             ])),
             "threat has only 1 card, so it can't field any size-2 combo at all — \
              the lowest size-2 play already locks it out"
+        );
+    }
+
+    #[test]
+    fn e_lock_must_be_safe_against_every_active_opponent_not_just_the_threat() {
+        // Same threat, ceiling, unseen set, and legal moves as test A —
+        // King of Hearts locked there because the lone opponent (the
+        // threat) couldn't beat it. Add a second, non-threat opponent
+        // with no pass history at all: King of Hearts must stop
+        // qualifying, since that opponent could be holding the unseen
+        // Ace of Diamonds and raise over it, handing the threat a fresh
+        // combo this reasoning never covered. Only Ace of Clubs still
+        // locks, because it beats every unseen card outright.
+        let threat_ceilings = ceilings_from(&[(1, card(Rank::Jack, Suit::Spades))]);
+        let context = TurnContext {
+            seat: 0,
+            hand: &[],
+            opponents: vec![
+                OpponentHand {
+                    seat: 1,
+                    hand_size: 2,
+                    active: true,
+                    pass_ceilings: threat_ceilings,
+                },
+                OpponentHand {
+                    seat: 2,
+                    hand_size: 6,
+                    active: true,
+                    pass_ceilings: PassCeilings::default(),
+                },
+            ],
+            unseen_cards: vec![
+                card(Rank::Queen, Suit::Diamonds),
+                card(Rank::Ace, Suit::Diamonds),
+            ],
+            own_pass_ceilings: PassCeilings::default(),
+            current_combo: None,
+        };
+        let legal = vec![
+            Move::Pass,
+            play(vec![card(Rank::King, Suit::Hearts)]),
+            play(vec![card(Rank::Ace, Suit::Clubs)]),
+        ];
+        let mut rng = rand::rngs::StdRng::seed_from_u64(0);
+
+        let result = respond(
+            DenialMode::HandReading { close: 2 },
+            &legal,
+            DuplicateRule::FirstDealtWins,
+            &context,
+            &mut rng,
+        );
+        assert_eq!(
+            result,
+            Some(play(vec![card(Rank::Ace, Suit::Clubs)])),
+            "King of Hearts is only proven safe against the threat, not against the \
+             untracked second opponent, so it must not lock; Ace of Clubs beats every \
+             unseen card outright and is the only legal play that still qualifies"
         );
     }
 
