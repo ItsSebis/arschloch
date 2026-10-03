@@ -1,11 +1,15 @@
 //! `Adaptive`: a single configurable strategy that layers card-counting,
-//! endgame denial, and deception on top of a `LowestLegal`/`CardCounter`
-//! base (docs/ROADMAP.md, Phase 7). See `config` for the toggles,
-//! `denial`/`deception` for the modifiers themselves.
+//! endgame denial, deception, and trick-lead tempo on top of a
+//! `LowestLegal`/`CardCounter` base (docs/ROADMAP.md, Phase 7 and
+//! Phase 8). See `config` for the toggles, `denial`/`deception`/`tempo`
+//! for the modifiers themselves, and `safety` for the proof `denial`
+//! and `tempo` share.
 
 mod config;
 mod deception;
 mod denial;
+mod safety;
+mod tempo;
 
 pub use config::{AdaptiveConfig, DenialMode};
 
@@ -15,9 +19,9 @@ use crate::strategies::{CardCounter, LowestLegal};
 use crate::strategy::{Strategy, TurnContext};
 
 /// A configurable strategy: `LowestLegal` (or `CardCounter`, if
-/// `config.counting`) as its base play selection, with endgame denial
-/// and deception layered on top — see `AdaptiveConfig` for what each
-/// modifier does and how to enable it.
+/// `config.counting`) as its base play selection, with endgame denial,
+/// trick-lead tempo, and deception layered on top — see `AdaptiveConfig`
+/// for what each modifier does and how to enable it.
 #[derive(Debug, Clone)]
 pub struct Adaptive {
     config: AdaptiveConfig,
@@ -76,6 +80,10 @@ impl Strategy for Adaptive {
             return mv;
         }
 
+        if let Some(mv) = tempo::respond(self.config.tempo, legal_moves, duplicate_rule, context) {
+            return mv;
+        }
+
         let base = if self.config.counting {
             CardCounter.choose_play(legal_moves, duplicate_rule, context, rng)
         } else {
@@ -116,11 +124,22 @@ impl Strategy for Adaptive {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use engine::DeckVariant;
+    use engine::{Combo, DeckVariant, Rank, Suit};
+    use rand::SeedableRng;
     use std::sync::Arc;
 
+    use crate::hand_reading::PassCeilings;
     use crate::strategies::EndgameDenial;
+    use crate::strategy::OpponentHand;
     use crate::{run_batch, MatchConfig};
+
+    fn card(rank: Rank, suit: Suit) -> Card {
+        Card::new(rank, suit, 0)
+    }
+
+    fn play(cards: Vec<Card>) -> Move {
+        Move::Play(Combo::new(cards).unwrap())
+    }
 
     fn configs(seeds: impl Iterator<Item = u64>, player_count: u8) -> Vec<MatchConfig> {
         seeds
@@ -155,6 +174,7 @@ mod tests {
             counting: true,
             denial: DenialMode::Off,
             deception_rate: 0.0,
+            tempo: false,
         };
         let adaptive: Arc<dyn Strategy> = Arc::new(Adaptive::new(config));
         let counter: Arc<dyn Strategy> = Arc::new(CardCounter);
@@ -172,6 +192,7 @@ mod tests {
             counting: false,
             denial: DenialMode::HandSize { close: 2 },
             deception_rate: 0.0,
+            tempo: false,
         };
         let adaptive: Arc<dyn Strategy> = Arc::new(Adaptive::new(config));
         let denier: Arc<dyn Strategy> = Arc::new(EndgameDenial);
@@ -199,16 +220,90 @@ mod tests {
         assert!(Adaptive::new(AdaptiveConfig {
             counting: true,
             denial: DenialMode::Off,
-            deception_rate: 0.0
+            deception_rate: 0.0,
+            tempo: false,
         })
         .name()
         .contains("counting"));
         assert!(Adaptive::new(AdaptiveConfig {
             counting: false,
             denial: DenialMode::HandReading { close: 2 },
-            deception_rate: 0.0
+            deception_rate: 0.0,
+            tempo: false,
         })
         .name()
         .contains("reading"));
+        assert!(Adaptive::new(AdaptiveConfig {
+            counting: false,
+            denial: DenialMode::Off,
+            deception_rate: 0.0,
+            tempo: true,
+        })
+        .name()
+        .contains("tempo"));
+    }
+
+    #[test]
+    fn tempo_overrides_base_selection_when_the_cheaper_card_would_lose_the_lead() {
+        let hand = vec![card(Rank::King, Suit::Hearts), card(Rank::Ace, Suit::Clubs)];
+        let context = TurnContext {
+            seat: 0,
+            hand: &hand,
+            opponents: vec![OpponentHand {
+                seat: 1,
+                hand_size: 2,
+                active: true,
+                pass_ceilings: PassCeilings::default(),
+            }],
+            unseen_cards: vec![
+                card(Rank::Queen, Suit::Diamonds),
+                card(Rank::Ace, Suit::Diamonds),
+            ],
+            own_pass_ceilings: PassCeilings::default(),
+            current_combo: None,
+        };
+        let legal = vec![
+            play(vec![card(Rank::King, Suit::Hearts)]),
+            play(vec![card(Rank::Ace, Suit::Clubs)]),
+        ];
+        let mut rng = rand::rngs::StdRng::seed_from_u64(0);
+
+        // Plain LowestLegal picks the cheaper King — nothing in its
+        // logic knows that King is beatable by the unseen Ace.
+        assert_eq!(
+            LowestLegal.choose_play(&legal, DuplicateRule::FirstDealtWins, &context, &mut rng),
+            play(vec![card(Rank::King, Suit::Hearts)])
+        );
+
+        // With tempo enabled and this seat down to its last 2 cards,
+        // Adaptive overrides that choice with the only provably safe
+        // play (Ace of Clubs beats the unseen Ace of Diamonds outright).
+        let adaptive = Adaptive::new(AdaptiveConfig {
+            counting: false,
+            denial: DenialMode::Off,
+            deception_rate: 0.0,
+            tempo: true,
+        });
+        assert_eq!(
+            adaptive.choose_play(&legal, DuplicateRule::FirstDealtWins, &context, &mut rng),
+            play(vec![card(Rank::Ace, Suit::Clubs)])
+        );
+    }
+
+    #[test]
+    fn tempo_only_runs_to_completion_at_every_table_size() {
+        for player_count in [3u8, 4, 5, 6] {
+            let cfgs = configs(0..20, player_count);
+            let config = AdaptiveConfig {
+                counting: false,
+                denial: DenialMode::Off,
+                deception_rate: 0.0,
+                tempo: true,
+            };
+            let adaptive: Arc<dyn Strategy> = Arc::new(Adaptive::new(config));
+            let strategies = vec![adaptive; usize::from(player_count)];
+            let results = run_batch(&cfgs, &strategies);
+            assert_eq!(results.len(), 20, "player_count {player_count}");
+        }
     }
 }

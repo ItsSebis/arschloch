@@ -63,14 +63,20 @@ cargo run -p cli -- \
     - `reading` — enable endgame denial sharpened by pass-based hand
       reading: spends the *lowest* card that provably locks a
       close-to-finishing opponent out, rather than a blanket highest-card
-      push. `denial` and `reading` are mutually exclusive triggers for
-      the same modifier — set at most one.
+      push. If both `denial` and `reading` are set, `reading` wins.
     - `close=<n>` — the hand-size threshold for whichever of
       `denial`/`reading` is set (default `2`); an error if given without
       one of them.
     - `deception=<rate>` — probability in `[0, 1]` (default `0.0`, i.e.
       off) that this seat bluff-passes on a turn it could legally beat,
       to plant a false pass ceiling in an opponent's hand reading.
+    - `tempo` — enable trick-lead tempo: once this seat's own hand is
+      down to 2 cards, spend the cheapest play that's provably safe
+      against the whole active field instead of the base strategy's
+      cheapest-legal instinct, to win the race to lead the next trick.
+      Not a configurable threshold (see `sim`'s `adaptive::tempo` module
+      doc comment for why `close=2` is a fixed constant here, unlike
+      `denial`/`reading`'s `close`).
     - `none` — all modifiers off; on its own, byte-identical to plain
       `lowest-legal` for the same seed.
   - Options may be given in any order; each key may appear at most once;
@@ -83,7 +89,7 @@ cargo run -p cli -- \
   ```bash
   --strategy lowest-legal \
   --strategy adaptive:counting \
-  --strategy "adaptive:reading,deception=0.2"
+  --strategy "adaptive:reading,deception=0.2,tempo"
   ```
 - `--deck-variant` is `single` or `double`; `--duplicate-rule` is
   `first-dealt-wins` or `last-dealt-wins` (only matters for `double`).

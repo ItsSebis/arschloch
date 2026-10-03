@@ -117,25 +117,34 @@ legal, never which move to prefer.
   `HoldBackPairs`'s is never mistaken for true information). This is
   what powers `TurnContext`'s pass ceilings; the match runner computes
   it fresh each turn from `Round::play_history`/`pass_history`.
-  `Adaptive` (Phase 7): one configurable strategy whose base play
-  selection is `LowestLegal` (or `CardCounter`, if its `counting`
-  modifier is enabled), with two more independently-toggleable
-  modifiers layered on top: endgame denial (either a plain hand-size
-  trigger reproducing `EndgameDenial` exactly, or that same trigger
-  sharpened by pass-based hand reading to spend the *lowest* card that
-  provably locks a close-to-finishing opponent out, rather than a
-  blanket `GreedyHighest` push) and deception (occasionally
+  `Adaptive` (Phase 7, extended in Phase 8): one configurable strategy
+  whose base play selection is `LowestLegal` (or `CardCounter`, if its
+  `counting` modifier is enabled), with three more
+  independently-toggleable modifiers layered on top: endgame denial
+  (either a plain hand-size trigger reproducing `EndgameDenial` exactly,
+  or that same trigger sharpened by pass-based hand reading to spend the
+  *lowest* card that provably locks a close-to-finishing opponent out,
+  rather than a blanket `GreedyHighest` push), trick-lead tempo (Phase
+  8: once this seat's own hand is down to 2 cards, spend the cheapest
+  play that's provably safe against the *whole* active field instead of
+  the base strategy's cheapest-legal instinct, to win the race to lead
+  the next trick rather than risk losing that race to an opponent's
+  re-escalation — empirically validated to beat plain `LowestLegal`
+  outright, the first modifier in this project to do so rather than
+  trade placement for safety), and deception (occasionally
   bluff-passing on a seat's only beating rank, to plant a false pass
-  ceiling in an opponent's hand reading). Every modifier is implemented
-  by direct delegation to the existing `CardCounter`/`GreedyHighest`/
-  `LowestLegal` strategies rather than duplicating their logic, and a
-  fully disabled configuration (`AdaptiveConfig::NONE`) never draws from
-  `rng`, making `Adaptive`'s output byte-identical to plain
-  `LowestLegal` for the same seed. `AdaptiveConfig` has a
-  `Display`/`FromStr` grammar (a comma-separated option list — see
-  `docs/BUILDING.md` for the full grammar) so `cli` can parse a
-  per-seat spec from the command line and `Strategy::name()` can render
-  a configuration back out (e.g. `Adaptive(reading,deception=0.2)`).
+  ceiling in an opponent's hand reading). Denial and tempo share their
+  core proof — `adaptive::safety::cheapest_universally_safe_play` — and
+  every modifier is implemented by direct delegation to the existing
+  `CardCounter`/`GreedyHighest`/`LowestLegal` strategies rather than
+  duplicating their logic. A fully disabled configuration
+  (`AdaptiveConfig::NONE`) never draws from `rng`, making `Adaptive`'s
+  output byte-identical to plain `LowestLegal` for the same seed.
+  `AdaptiveConfig` has a `Display`/`FromStr` grammar (a comma-separated
+  option list — see `docs/BUILDING.md` for the full grammar) so `cli`
+  can parse a per-seat spec from the command line and `Strategy::name()`
+  can render a configuration back out (e.g.
+  `Adaptive(reading,deception=0.2)`).
 - A match runner that drives `engine`'s state machine to completion using
   each seat's `Strategy`.
 - Multi-threading via `rayon`: independent matches have no shared mutable

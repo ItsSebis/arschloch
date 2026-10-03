@@ -292,6 +292,7 @@ mod tests {
                 counting: true,
                 denial: sim::DenialMode::Off,
                 deception_rate: 0.0,
+                tempo: false,
             })
         );
     }

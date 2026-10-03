@@ -1,12 +1,12 @@
 //! Configuration surface for `Adaptive` (a later task in this module),
 //! a single configurable strategy whose base behavior is `LowestLegal`
-//! with three independently-toggleable modifiers layered on top:
+//! with four independently-toggleable modifiers layered on top:
 //! card-counting, endgame denial (optionally sharpened by pass-based
-//! hand-reading), and deception (docs/ROADMAP.md, Phase 7). Each
-//! modifier can be switched on or off (and, for denial, chosen between
-//! two strengths) without writing a new strategy struct, so batch runs
-//! can isolate which modifier combination actually beats plain
-//! `LowestLegal`.
+//! hand-reading), deception (docs/ROADMAP.md, Phase 7), and trick-lead
+//! tempo (docs/ROADMAP.md, Phase 8). Each modifier can be switched on or
+//! off (and, for denial, chosen between two strengths) without writing
+//! a new strategy struct, so batch runs can isolate which modifier
+//! combination actually beats plain `LowestLegal`.
 //!
 //! This module only defines the configuration type and its `Display`/
 //! `FromStr` grammar (for the CLI's per-seat strategy spec, added in a
@@ -84,6 +84,15 @@ pub struct AdaptiveConfig {
     /// hand harder for opponents to read. `0.0` disables deception
     /// entirely.
     pub deception_rate: f64,
+    /// Enables the trick-lead-tempo modifier: once this seat's own hand
+    /// is down to 2 cards or fewer, prefer the cheapest legal play
+    /// that's provably safe against the whole active field over the
+    /// base strategy's own cheapest-legal instinct, to seize the next
+    /// trick's lead rather than risk losing it to an opponent's
+    /// re-escalation. See `crate::strategies::adaptive::tempo` for the
+    /// full rationale and the empirical data behind its fixed
+    /// threshold (not configurable — see that module's doc comment).
+    pub tempo: bool,
 }
 
 impl AdaptiveConfig {
@@ -93,6 +102,7 @@ impl AdaptiveConfig {
         counting: false,
         denial: DenialMode::Off,
         deception_rate: 0.0,
+        tempo: false,
     };
 
     /// Whether this configuration's fields are all in-range, in
@@ -115,6 +125,7 @@ impl Default for AdaptiveConfig {
                 close: DEFAULT_CLOSE,
             },
             deception_rate: 0.0,
+            tempo: false,
         }
     }
 }
@@ -139,6 +150,9 @@ impl fmt::Display for AdaptiveConfig {
         }
         if self.deception_rate > 0.0 {
             items.push(format!("deception={}", self.deception_rate));
+        }
+        if self.tempo {
+            items.push("tempo".into());
         }
         if items.is_empty() {
             f.write_str("none")
@@ -180,6 +194,7 @@ impl FromStr for AdaptiveConfig {
         let mut denial = false;
         let mut close: Option<usize> = None;
         let mut deception_rate = 0.0f64;
+        let mut tempo = false;
         let mut seen_keys: Vec<&str> = Vec::new();
 
         for item in options.split(',') {
@@ -200,7 +215,8 @@ impl FromStr for AdaptiveConfig {
                 ("counting", None) => counting = true,
                 ("denial", None) => denial = true,
                 ("reading", None) => reading = true,
-                ("counting" | "denial" | "reading", Some(_)) => {
+                ("tempo", None) => tempo = true,
+                ("counting" | "denial" | "reading" | "tempo", Some(_)) => {
                     return Err(err(format!("`{key}` doesn't take a value")));
                 }
                 ("close", Some(v)) => {
@@ -227,7 +243,7 @@ impl FromStr for AdaptiveConfig {
                 (other, _) => {
                     return Err(err(format!(
                         "unknown option `{other}` (expected one of: counting, denial, \
-                         reading, deception=<rate>, close=<n>)"
+                         reading, tempo, deception=<rate>, close=<n>)"
                     )));
                 }
             }
@@ -255,6 +271,7 @@ impl FromStr for AdaptiveConfig {
             counting,
             denial: denial_mode,
             deception_rate,
+            tempo,
         })
     }
 }
@@ -272,26 +289,43 @@ mod tests {
                 counting: true,
                 denial: DenialMode::Off,
                 deception_rate: 0.0,
+                tempo: false,
             },
             AdaptiveConfig {
                 counting: false,
                 denial: DenialMode::HandSize { close: 2 },
                 deception_rate: 0.0,
+                tempo: false,
             },
             AdaptiveConfig {
                 counting: false,
                 denial: DenialMode::HandSize { close: 3 },
                 deception_rate: 0.0,
+                tempo: false,
             },
             AdaptiveConfig {
                 counting: false,
                 denial: DenialMode::HandReading { close: 2 },
                 deception_rate: 0.0,
+                tempo: false,
             },
             AdaptiveConfig {
                 counting: true,
                 denial: DenialMode::Off,
                 deception_rate: 0.2,
+                tempo: false,
+            },
+            AdaptiveConfig {
+                counting: false,
+                denial: DenialMode::Off,
+                deception_rate: 0.0,
+                tempo: true,
+            },
+            AdaptiveConfig {
+                counting: true,
+                denial: DenialMode::HandReading { close: 2 },
+                deception_rate: 0.1,
+                tempo: true,
             },
         ];
         for cfg in configs {
@@ -314,9 +348,36 @@ mod tests {
             AdaptiveConfig {
                 counting: true,
                 denial: DenialMode::Off,
-                deception_rate: 0.0
+                deception_rate: 0.0,
+                tempo: false,
             }
         );
+    }
+
+    #[test]
+    fn parses_tempo() {
+        assert_eq!(
+            "tempo".parse::<AdaptiveConfig>().unwrap(),
+            AdaptiveConfig {
+                counting: false,
+                denial: DenialMode::Off,
+                deception_rate: 0.0,
+                tempo: true,
+            }
+        );
+    }
+
+    #[test]
+    fn parses_tempo_combined_with_other_modifiers() {
+        let cfg: AdaptiveConfig = "counting,reading,tempo".parse().unwrap();
+        assert!(cfg.counting);
+        assert!(matches!(cfg.denial, DenialMode::HandReading { .. }));
+        assert!(cfg.tempo);
+    }
+
+    #[test]
+    fn rejects_tempo_given_a_value() {
+        assert!("tempo=1".parse::<AdaptiveConfig>().is_err());
     }
 
     #[test]

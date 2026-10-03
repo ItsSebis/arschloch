@@ -54,10 +54,13 @@ duplicate-card rule, thread count, and cross-compiling a Windows `.exe`).
   is down to 2 cards or fewer, to deny them an easy trick.
 - `adaptive` — a configurable strategy: `lowest-legal` (or
   `card-counter`, if enabled) as its base, with card-counting,
-  endgame-denial (optionally sharpened by pass-based hand reading), and
-  deception each independently toggleable via a comma-separated option
-  grammar, e.g. `adaptive:reading,deception=0.2` — see `docs/BUILDING.md`
-  for the full grammar.
+  endgame-denial (optionally sharpened by pass-based hand reading),
+  trick-lead tempo, and deception each independently toggleable via a
+  comma-separated option grammar, e.g.
+  `adaptive:reading,deception=0.2,tempo` — see `docs/BUILDING.md` for
+  the full grammar. Trick-lead tempo is the first modifier validated to
+  beat plain `lowest-legal` outright (not just trade placement for
+  safety) in a clean head-to-head.
 
 ### The stdout summary
 

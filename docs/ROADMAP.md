@@ -114,7 +114,34 @@ sitting; a phase that grows beyond that should be split.
   the six fixed strategies and independently-configured `Adaptive`
   instances (e.g. `adaptive:reading,deception=0.2`) in the same table.
 
-## Phase 8 — Web interface
+## Phase 8 — Trick-lead tempo
+
+- A fourth `Adaptive` modifier, `tempo`: finishing a round is a race to
+  be the one who *leads* a trick while holding exactly one card
+  (leading your last card finishes you unconditionally; being stuck
+  *responding* with your last card means someone already claimed that
+  position). Once this seat's own hand is down to 2 cards, `tempo`
+  spends the cheapest legal play that's provably safe against the
+  *whole* active field — reusing the same proof `denial` uses, now
+  extracted into a shared `adaptive::safety` module — instead of the
+  base strategy's cheapest-legal instinct, to seize the next trick's
+  lead rather than risk losing that race to an opponent's
+  re-escalation.
+- Empirically validated (not just argued): across four independent
+  seed bases and all four supported table sizes, `close=2` gave a
+  consistent ~4-6% relative edge over plain `lowest-legal` in a clean
+  head-to-head, with monotonic dominance across *every* role (higher
+  President/Vize/Offizier rates, lower Dummkopf/ViceArschloch/Arschloch
+  rates simultaneously) — the first modifier in this project validated
+  to beat `lowest-legal` outright rather than trade placement for
+  safety. The threshold is deliberately a fixed constant, not a
+  configurable `tempo=<n>` option: `close=1` was statistically a wash
+  and `close=3` and up actively lost ground, so this sweet spot doesn't
+  extend safely in either direction.
+- `cli`: `adaptive:tempo` (combinable with every other modifier, e.g.
+  `adaptive:reading,deception=0.2,tempo`).
+
+## Phase 9 — Web interface
 
 - A small web frontend (technology choice deferred to when this phase
   starts) to view running simulations and the Phase 4 statistics as an

@@ -7,20 +7,9 @@
 //! `Adaptive(denial)` stays an honest baseline comparison against
 //! `EndgameDenial` itself.
 //!
-//! `HandReading` asks a narrower question than a blanket push: which
-//! legal plays are *provably* unbeatable by every still-active
-//! opponent — not just the ones close to finishing — using each
-//! opponent's unrefuted pass ceilings plus two other sound public
-//! facts (a combo bigger than an opponent's whole hand can never be
-//! matched; no unseen card beats this play's top card at all)? A play
-//! only proven safe against the close-to-finishing opponent is not
-//! enough: with more than two players, the trick passes through every
-//! other active seat before it can circle back to the one being
-//! denied, so anyone else still holding an unproven beater can raise
-//! over a merely-threat-safe play and reopen the door with a card the
-//! threat *can* beat. Requiring safety against the whole active field
-//! is what actually forces the trick to resolve now, the same
-//! practical effect a highest-card push gets from brute force. Taking
+//! `HandReading` asks a narrower question than a blanket push: is some
+//! legal play cheaply, provably safe against the whole active field
+//! (see `safety::cheapest_universally_safe_play` for the proof)? Taking
 //! the *lowest* such play still denies the threat while spending
 //! less — the working theory (docs/ROADMAP.md, Phase 7) is that
 //! `EndgameDenial` loses to `LowestLegal` precisely because it spends
@@ -31,14 +20,13 @@
 //! falls back to a full push (`GreedyHighest`) when nothing is provably
 //! safe.
 
-use std::cmp::Ordering;
-
-use engine::{Card, DuplicateRule, Move};
+use engine::{DuplicateRule, Move};
 
 use crate::strategies::GreedyHighest;
 use crate::strategy::{Strategy, TurnContext};
 
 use super::config::DenialMode;
+use super::safety::cheapest_universally_safe_play;
 
 /// Whether any still-active opponent is at or below `close` cards —
 /// `EndgameDenial`'s own trigger, reused verbatim by `HandSize`.
@@ -67,18 +55,12 @@ enum Denial {
     Unproven,
 }
 
-/// Finds the cheapest legal play that's provably unbeatable by every
-/// still-active opponent — not only the ones close to finishing — using
-/// only sound public facts: an opponent's unrefuted pass ceilings
-/// (`PassCeilings::cannot_beat`), the fact that a combo bigger than an
-/// opponent's whole hand can never be matched by them, and the fact
-/// that no unseen card beats this play's top card at all (so literally
-/// nobody can beat it). Checking only the close-to-finishing opponents
-/// would be unsound in practice: any other active opponent left
-/// unchecked could hold an unproven beater, raise over the "safe" play,
-/// and hand the threat a fresh combo none of this reasoning covered.
-/// Returns `Denial::Unproven` when no legal play clears that bar, even
-/// though at least one threat exists.
+/// Checks whether denial applies at all (`any_threat`), then defers the
+/// actual safety proof to `safety::cheapest_universally_safe_play` — see
+/// that function's doc comment for why the proof must cover every
+/// active opponent, not just the one being denied. Returns
+/// `Denial::Unproven` when no legal play clears that bar, even though
+/// at least one threat exists.
 fn targeted_denial(
     legal_moves: &[Move],
     duplicate_rule: DuplicateRule,
@@ -88,32 +70,8 @@ fn targeted_denial(
     if !any_threat(context, close) {
         return Denial::NoThreat;
     }
-
-    let active_opponents: Vec<_> = context.opponents.iter().filter(|o| o.active).collect();
-    let highest_unseen = context
-        .unseen_cards
-        .iter()
-        .copied()
-        .max_by(|a, b| a.compare(b, duplicate_rule));
-    let locks_out_every_opponent = |size: usize, top: Card| {
-        highest_unseen.is_none_or(|h| top.compare(&h, duplicate_rule) != Ordering::Less)
-            || active_opponents.iter().all(|o| {
-                size > o.hand_size || o.pass_ceilings.cannot_beat(size, top, duplicate_rule)
-            })
-    };
-
-    legal_moves
-        .iter()
-        .filter_map(|mv| match mv {
-            Move::Play(combo) => Some((combo.size(), combo.top_card(duplicate_rule), mv)),
-            Move::Pass => None,
-        })
-        .filter(|&(size, top, _)| locks_out_every_opponent(size, top))
-        .min_by(|a, b| {
-            a.0.cmp(&b.0)
-                .then_with(|| a.1.compare(&b.1, duplicate_rule))
-        })
-        .map_or(Denial::Unproven, |(_, _, mv)| Denial::Lock(mv.clone()))
+    cheapest_universally_safe_play(legal_moves, duplicate_rule, context)
+        .map_or(Denial::Unproven, Denial::Lock)
 }
 
 /// `Adaptive`'s endgame-denial modifier, for either `DenialMode`.
