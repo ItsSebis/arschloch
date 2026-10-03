@@ -1,9 +1,10 @@
 //! Configuration surface for `Adaptive` (a later task in this module),
 //! a single configurable strategy whose base behavior is `LowestLegal`
-//! with four independently-toggleable modifiers layered on top:
+//! with five independently-toggleable modifiers layered on top:
 //! card-counting, endgame denial (optionally sharpened by pass-based
-//! hand-reading), deception (docs/ROADMAP.md, Phase 7), and trick-lead
-//! tempo (docs/ROADMAP.md, Phase 8). Each modifier can be switched on or
+//! hand-reading), deception (docs/ROADMAP.md, Phase 7), trick-lead
+//! tempo (docs/ROADMAP.md, Phase 8), and lead-order bullying
+//! (docs/ROADMAP.md, Phase 9). Each modifier can be switched on or
 //! off (and, for denial, chosen between two strengths) without writing
 //! a new strategy struct, so batch runs can isolate which modifier
 //! combination actually beats plain `LowestLegal`.
@@ -93,16 +94,26 @@ pub struct AdaptiveConfig {
     /// full rationale and the empirical data behind its fixed
     /// threshold (not configurable — see that module's doc comment).
     pub tempo: bool,
+    /// Enables the lead-order-bullying modifier: while leading, with
+    /// this hand shaped mostly as same-rank groups, lead the cheapest
+    /// whole same-rank group before ever leading a single, banking
+    /// singles for a free, unconditional finish later. See
+    /// `crate::strategies::adaptive::bully` for the full rationale,
+    /// including why — unlike `denial`'s `close` — this modifier has no
+    /// opponent-proximity threshold at all (empirically found to only
+    /// limit the benefit, never protect against a downside).
+    pub bully: bool,
 }
 
 impl AdaptiveConfig {
-    /// All three modifiers disabled — `Adaptive::new(AdaptiveConfig::NONE)`
+    /// Every modifier disabled — `Adaptive::new(AdaptiveConfig::NONE)`
     /// behaves identically to plain `LowestLegal`.
     pub const NONE: Self = Self {
         counting: false,
         denial: DenialMode::Off,
         deception_rate: 0.0,
         tempo: false,
+        bully: false,
     };
 
     /// Whether this configuration's fields are all in-range, in
@@ -126,6 +137,7 @@ impl Default for AdaptiveConfig {
             },
             deception_rate: 0.0,
             tempo: false,
+            bully: false,
         }
     }
 }
@@ -153,6 +165,9 @@ impl fmt::Display for AdaptiveConfig {
         }
         if self.tempo {
             items.push("tempo".into());
+        }
+        if self.bully {
+            items.push("bully".into());
         }
         if items.is_empty() {
             f.write_str("none")
@@ -195,6 +210,7 @@ impl FromStr for AdaptiveConfig {
         let mut close: Option<usize> = None;
         let mut deception_rate = 0.0f64;
         let mut tempo = false;
+        let mut bully = false;
         let mut seen_keys: Vec<&str> = Vec::new();
 
         for item in options.split(',') {
@@ -216,7 +232,8 @@ impl FromStr for AdaptiveConfig {
                 ("denial", None) => denial = true,
                 ("reading", None) => reading = true,
                 ("tempo", None) => tempo = true,
-                ("counting" | "denial" | "reading" | "tempo", Some(_)) => {
+                ("bully", None) => bully = true,
+                ("counting" | "denial" | "reading" | "tempo" | "bully", Some(_)) => {
                     return Err(err(format!("`{key}` doesn't take a value")));
                 }
                 ("close", Some(v)) => {
@@ -243,7 +260,7 @@ impl FromStr for AdaptiveConfig {
                 (other, _) => {
                     return Err(err(format!(
                         "unknown option `{other}` (expected one of: counting, denial, \
-                         reading, tempo, deception=<rate>, close=<n>)"
+                         reading, tempo, bully, deception=<rate>, close=<n>)"
                     )));
                 }
             }
@@ -272,6 +289,7 @@ impl FromStr for AdaptiveConfig {
             denial: denial_mode,
             deception_rate,
             tempo,
+            bully,
         })
     }
 }
@@ -290,42 +308,63 @@ mod tests {
                 denial: DenialMode::Off,
                 deception_rate: 0.0,
                 tempo: false,
+                bully: false,
             },
             AdaptiveConfig {
                 counting: false,
                 denial: DenialMode::HandSize { close: 2 },
                 deception_rate: 0.0,
                 tempo: false,
+                bully: false,
             },
             AdaptiveConfig {
                 counting: false,
                 denial: DenialMode::HandSize { close: 3 },
                 deception_rate: 0.0,
                 tempo: false,
+                bully: false,
             },
             AdaptiveConfig {
                 counting: false,
                 denial: DenialMode::HandReading { close: 2 },
                 deception_rate: 0.0,
                 tempo: false,
+                bully: false,
             },
             AdaptiveConfig {
                 counting: true,
                 denial: DenialMode::Off,
                 deception_rate: 0.2,
                 tempo: false,
+                bully: false,
             },
             AdaptiveConfig {
                 counting: false,
                 denial: DenialMode::Off,
                 deception_rate: 0.0,
                 tempo: true,
+                bully: false,
             },
             AdaptiveConfig {
                 counting: true,
                 denial: DenialMode::HandReading { close: 2 },
                 deception_rate: 0.1,
                 tempo: true,
+                bully: false,
+            },
+            AdaptiveConfig {
+                counting: false,
+                denial: DenialMode::Off,
+                deception_rate: 0.0,
+                tempo: false,
+                bully: true,
+            },
+            AdaptiveConfig {
+                counting: true,
+                denial: DenialMode::HandReading { close: 3 },
+                deception_rate: 0.1,
+                tempo: true,
+                bully: true,
             },
         ];
         for cfg in configs {
@@ -350,6 +389,7 @@ mod tests {
                 denial: DenialMode::Off,
                 deception_rate: 0.0,
                 tempo: false,
+                bully: false,
             }
         );
     }
@@ -363,6 +403,7 @@ mod tests {
                 denial: DenialMode::Off,
                 deception_rate: 0.0,
                 tempo: true,
+                bully: false,
             }
         );
     }
@@ -378,6 +419,34 @@ mod tests {
     #[test]
     fn rejects_tempo_given_a_value() {
         assert!("tempo=1".parse::<AdaptiveConfig>().is_err());
+    }
+
+    #[test]
+    fn parses_bully() {
+        assert_eq!(
+            "bully".parse::<AdaptiveConfig>().unwrap(),
+            AdaptiveConfig {
+                counting: false,
+                denial: DenialMode::Off,
+                deception_rate: 0.0,
+                tempo: false,
+                bully: true,
+            }
+        );
+    }
+
+    #[test]
+    fn parses_bully_combined_with_other_modifiers() {
+        let cfg: AdaptiveConfig = "counting,reading,tempo,bully".parse().unwrap();
+        assert!(cfg.counting);
+        assert!(matches!(cfg.denial, DenialMode::HandReading { .. }));
+        assert!(cfg.tempo);
+        assert!(cfg.bully);
+    }
+
+    #[test]
+    fn rejects_bully_given_a_value() {
+        assert!("bully=1".parse::<AdaptiveConfig>().is_err());
     }
 
     #[test]

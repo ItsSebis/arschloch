@@ -141,7 +141,44 @@ sitting; a phase that grows beyond that should be split.
 - `cli`: `adaptive:tempo` (combinable with every other modifier, e.g.
   `adaptive:reading,deception=0.2,tempo`).
 
-## Phase 9 — Web interface
+## Phase 9 — Lead-order bullying
+
+- A fifth `Adaptive` modifier, `bully`: finishing a round on your very
+  last card locks in your placement unconditionally, the same mechanic
+  `tempo` relies on. A hand shaped mostly as same-rank groups (pairs,
+  triples, ...) plus one or a few leftover singles can turn that into a
+  free win *if* every group is led before any single — opponents who
+  can't match a group are forced to pass, handing the lead straight
+  back, while leading a vulnerable single too early risks losing the
+  lead (and every unplayed group's leverage) to whoever beats it. While
+  leading, with this seat's hand shaped mostly as same-rank groups
+  (`engine::rank_groups` groups of size >= 2 at least as numerous as
+  singleton groups), `bully` leads the cheapest *whole* same-rank group
+  instead of the base strategy's own cheapest-legal instinct — careful
+  to never split a larger group into a smaller lead, since
+  `engine::legal_moves` offers every subset size of a held group while
+  leading, not just the smallest and the whole thing.
+- Empirically validated (not just argued): in a clean head-to-head
+  against plain `lowest-legal` across four independent seed bases and
+  all four table sizes, `bully` gave a large, monotonic edge across
+  *every* role (higher President/Vize/Offizier rates, lower Dummkopf/
+  ViceArschloch/Arschloch rates simultaneously) — markedly bigger than
+  `tempo`'s own ~4-6% edge. The design originally included a third
+  gate, an opponent-proximity threshold (by analogy to `denial`/
+  `tempo`), but sweeping that threshold showed the edge only grew as
+  the gate was relaxed, plateauing once it exceeded every realistic
+  hand size rather than reversing — the gate was never protecting
+  against a downside, so it was removed entirely rather than shipped as
+  a no-op constant. `bully` also stacks cleanly with `tempo` (their
+  trigger windows don't overlap), but its marginal contribution
+  vanishes once `denial`'s `reading` mode is also enabled — `denial`
+  runs earlier in the pipeline and is a strictly broader trigger
+  (fires on both leading and following), so it already claims most of
+  the same opportunities once active.
+- `cli`: `adaptive:bully` (combinable with every other modifier, e.g.
+  `adaptive:tempo,bully`).
+
+## Phase 10 — Web interface
 
 - A small web frontend (technology choice deferred to when this phase
   starts) to view running simulations and the Phase 4 statistics as an

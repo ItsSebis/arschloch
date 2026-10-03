@@ -117,9 +117,9 @@ legal, never which move to prefer.
   `HoldBackPairs`'s is never mistaken for true information). This is
   what powers `TurnContext`'s pass ceilings; the match runner computes
   it fresh each turn from `Round::play_history`/`pass_history`.
-  `Adaptive` (Phase 7, extended in Phase 8): one configurable strategy
-  whose base play selection is `LowestLegal` (or `CardCounter`, if its
-  `counting` modifier is enabled), with three more
+  `Adaptive` (Phase 7, extended in Phase 8 and Phase 9): one
+  configurable strategy whose base play selection is `LowestLegal` (or
+  `CardCounter`, if its `counting` modifier is enabled), with four more
   independently-toggleable modifiers layered on top: endgame denial
   (either a plain hand-size trigger reproducing `EndgameDenial` exactly,
   or that same trigger sharpened by pass-based hand reading to spend the
@@ -131,11 +131,17 @@ legal, never which move to prefer.
   the next trick rather than risk losing that race to an opponent's
   re-escalation — empirically validated to beat plain `LowestLegal`
   outright, the first modifier in this project to do so rather than
-  trade placement for safety), and deception (occasionally
-  bluff-passing on a seat's only beating rank, to plant a false pass
-  ceiling in an opponent's hand reading). Denial and tempo share their
-  core proof — `adaptive::safety::cheapest_universally_safe_play` — and
-  every modifier is implemented by direct delegation to the existing
+  trade placement for safety), lead-order bullying (Phase 9: while
+  leading, with this hand shaped mostly as same-rank groups, lead the
+  cheapest *whole* group before ever leading a single, banking singles
+  for a free, unconditional finish later — empirically an even larger
+  outright edge than `tempo`'s, monotonic across every role, though its
+  marginal contribution vanishes once `denial`'s `reading` mode is also
+  enabled), and deception (occasionally bluff-passing on a seat's only
+  beating rank, to plant a false pass ceiling in an opponent's hand
+  reading). Denial and tempo share their core proof —
+  `adaptive::safety::cheapest_universally_safe_play` — and every
+  modifier is implemented by direct delegation to the existing
   `CardCounter`/`GreedyHighest`/`LowestLegal` strategies rather than
   duplicating their logic. A fully disabled configuration
   (`AdaptiveConfig::NONE`) never draws from `rng`, making `Adaptive`'s

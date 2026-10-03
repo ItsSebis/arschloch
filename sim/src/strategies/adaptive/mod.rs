@@ -1,10 +1,11 @@
 //! `Adaptive`: a single configurable strategy that layers card-counting,
-//! endgame denial, deception, and trick-lead tempo on top of a
-//! `LowestLegal`/`CardCounter` base (docs/ROADMAP.md, Phase 7 and
-//! Phase 8). See `config` for the toggles, `denial`/`deception`/`tempo`
-//! for the modifiers themselves, and `safety` for the proof `denial`
-//! and `tempo` share.
+//! endgame denial, deception, trick-lead tempo, and lead-order bullying
+//! on top of a `LowestLegal`/`CardCounter` base (docs/ROADMAP.md, Phase 7,
+//! Phase 8, and Phase 9). See `config` for the toggles,
+//! `denial`/`deception`/`tempo`/`bully` for the modifiers themselves, and
+//! `safety` for the proof `denial` and `tempo` share.
 
+mod bully;
 mod config;
 mod deception;
 mod denial;
@@ -20,8 +21,8 @@ use crate::strategy::{Strategy, TurnContext};
 
 /// A configurable strategy: `LowestLegal` (or `CardCounter`, if
 /// `config.counting`) as its base play selection, with endgame denial,
-/// trick-lead tempo, and deception layered on top — see `AdaptiveConfig`
-/// for what each modifier does and how to enable it.
+/// lead-order bullying, trick-lead tempo, and deception layered on top —
+/// see `AdaptiveConfig` for what each modifier does and how to enable it.
 #[derive(Debug, Clone)]
 pub struct Adaptive {
     config: AdaptiveConfig,
@@ -77,6 +78,10 @@ impl Strategy for Adaptive {
             context,
             rng,
         ) {
+            return mv;
+        }
+
+        if let Some(mv) = bully::respond(self.config.bully, legal_moves, duplicate_rule, context) {
             return mv;
         }
 
@@ -175,6 +180,7 @@ mod tests {
             denial: DenialMode::Off,
             deception_rate: 0.0,
             tempo: false,
+            bully: false,
         };
         let adaptive: Arc<dyn Strategy> = Arc::new(Adaptive::new(config));
         let counter: Arc<dyn Strategy> = Arc::new(CardCounter);
@@ -193,6 +199,7 @@ mod tests {
             denial: DenialMode::HandSize { close: 2 },
             deception_rate: 0.0,
             tempo: false,
+            bully: false,
         };
         let adaptive: Arc<dyn Strategy> = Arc::new(Adaptive::new(config));
         let denier: Arc<dyn Strategy> = Arc::new(EndgameDenial);
@@ -222,6 +229,7 @@ mod tests {
             denial: DenialMode::Off,
             deception_rate: 0.0,
             tempo: false,
+            bully: false,
         })
         .name()
         .contains("counting"));
@@ -230,6 +238,7 @@ mod tests {
             denial: DenialMode::HandReading { close: 2 },
             deception_rate: 0.0,
             tempo: false,
+            bully: false,
         })
         .name()
         .contains("reading"));
@@ -238,9 +247,19 @@ mod tests {
             denial: DenialMode::Off,
             deception_rate: 0.0,
             tempo: true,
+            bully: false,
         })
         .name()
         .contains("tempo"));
+        assert!(Adaptive::new(AdaptiveConfig {
+            counting: false,
+            denial: DenialMode::Off,
+            deception_rate: 0.0,
+            tempo: false,
+            bully: true,
+        })
+        .name()
+        .contains("bully"));
     }
 
     #[test]
@@ -283,6 +302,7 @@ mod tests {
             denial: DenialMode::Off,
             deception_rate: 0.0,
             tempo: true,
+            bully: false,
         });
         assert_eq!(
             adaptive.choose_play(&legal, DuplicateRule::FirstDealtWins, &context, &mut rng),
@@ -299,6 +319,102 @@ mod tests {
                 denial: DenialMode::Off,
                 deception_rate: 0.0,
                 tempo: true,
+                bully: false,
+            };
+            let adaptive: Arc<dyn Strategy> = Arc::new(Adaptive::new(config));
+            let strategies = vec![adaptive; usize::from(player_count)];
+            let results = run_batch(&cfgs, &strategies);
+            assert_eq!(results.len(), 20, "player_count {player_count}");
+        }
+    }
+
+    #[test]
+    fn bully_overrides_base_selection_to_lead_the_cheapest_whole_group() {
+        let hand = vec![
+            card(Rank::Two, Suit::Diamonds),
+            card(Rank::Two, Suit::Hearts),
+            card(Rank::Three, Suit::Hearts),
+            card(Rank::Four, Suit::Diamonds),
+            card(Rank::Four, Suit::Hearts),
+            card(Rank::Eight, Suit::Diamonds),
+            card(Rank::Eight, Suit::Spades),
+        ];
+        let context = TurnContext {
+            seat: 0,
+            hand: &hand,
+            opponents: vec![OpponentHand {
+                seat: 1,
+                hand_size: 2,
+                active: true,
+                pass_ceilings: PassCeilings::default(),
+            }],
+            unseen_cards: vec![card(Rank::King, Suit::Clubs), card(Rank::Ace, Suit::Spades)],
+            own_pass_ceilings: PassCeilings::default(),
+            current_combo: None,
+        };
+        let legal = vec![
+            play(vec![card(Rank::Two, Suit::Diamonds)]),
+            play(vec![card(Rank::Two, Suit::Hearts)]),
+            play(vec![
+                card(Rank::Two, Suit::Diamonds),
+                card(Rank::Two, Suit::Hearts),
+            ]),
+            play(vec![card(Rank::Three, Suit::Hearts)]),
+            play(vec![card(Rank::Four, Suit::Diamonds)]),
+            play(vec![card(Rank::Four, Suit::Hearts)]),
+            play(vec![
+                card(Rank::Four, Suit::Diamonds),
+                card(Rank::Four, Suit::Hearts),
+            ]),
+            play(vec![card(Rank::Eight, Suit::Diamonds)]),
+            play(vec![card(Rank::Eight, Suit::Spades)]),
+            play(vec![
+                card(Rank::Eight, Suit::Diamonds),
+                card(Rank::Eight, Suit::Spades),
+            ]),
+        ];
+        let mut rng = rand::rngs::StdRng::seed_from_u64(0);
+
+        // Plain LowestLegal always prefers the smallest legal combo
+        // size, so among every size-1 option (one from each rank group,
+        // plus the lone 3H) it leads the globally lowest-ranked single --
+        // 2 of Diamonds -- immediately breaking up the pair of 2s rather
+        // than leading it whole. Worse than just leading 3H first, and
+        // exactly the kind of lead order the worked example shows loses
+        // the race to finish.
+        assert_eq!(
+            LowestLegal.choose_play(&legal, DuplicateRule::FirstDealtWins, &context, &mut rng),
+            play(vec![card(Rank::Two, Suit::Diamonds)])
+        );
+
+        // With bully enabled, Adaptive instead leads the cheapest whole
+        // same-rank group (the pair of 2s), saving the single for last.
+        let adaptive = Adaptive::new(AdaptiveConfig {
+            counting: false,
+            denial: DenialMode::Off,
+            deception_rate: 0.0,
+            tempo: false,
+            bully: true,
+        });
+        assert_eq!(
+            adaptive.choose_play(&legal, DuplicateRule::FirstDealtWins, &context, &mut rng),
+            play(vec![
+                card(Rank::Two, Suit::Diamonds),
+                card(Rank::Two, Suit::Hearts)
+            ])
+        );
+    }
+
+    #[test]
+    fn bully_only_runs_to_completion_at_every_table_size() {
+        for player_count in [3u8, 4, 5, 6] {
+            let cfgs = configs(0..20, player_count);
+            let config = AdaptiveConfig {
+                counting: false,
+                denial: DenialMode::Off,
+                deception_rate: 0.0,
+                tempo: false,
+                bully: true,
             };
             let adaptive: Arc<dyn Strategy> = Arc::new(Adaptive::new(config));
             let strategies = vec![adaptive; usize::from(player_count)];

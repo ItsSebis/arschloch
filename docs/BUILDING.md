@@ -77,6 +77,15 @@ cargo run -p cli -- \
       Not a configurable threshold (see `sim`'s `adaptive::tempo` module
       doc comment for why `close=2` is a fixed constant here, unlike
       `denial`/`reading`'s `close`).
+    - `bully` — enable lead-order bullying: while leading, with this
+      hand shaped mostly as same-rank groups (whole-group leads at
+      least as numerous as leftover singles), lead the cheapest whole
+      same-rank group before ever leading a single, banking singles
+      for the end of the hand. Unlike `denial`/`tempo`, has no
+      opponent-proximity threshold at all — see `sim`'s
+      `adaptive::bully` module doc comment for the empirical finding
+      behind that (a sweep showed such a gate only limited the
+      benefit, never protected against a downside).
     - `none` — all modifiers off; on its own, byte-identical to plain
       `lowest-legal` for the same seed.
   - Options may be given in any order; each key may appear at most once;
@@ -89,7 +98,7 @@ cargo run -p cli -- \
   ```bash
   --strategy lowest-legal \
   --strategy adaptive:counting \
-  --strategy "adaptive:reading,deception=0.2,tempo"
+  --strategy "adaptive:reading,deception=0.2,tempo,bully"
   ```
 - `--deck-variant` is `single` or `double`; `--duplicate-rule` is
   `first-dealt-wins` or `last-dealt-wins` (only matters for `double`).
