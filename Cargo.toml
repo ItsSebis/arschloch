@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["engine", "sim", "cli", "web"]
+members = ["engine", "sim", "cli", "web", "neat"]
 
 [workspace.package]
 edition = "2021"
