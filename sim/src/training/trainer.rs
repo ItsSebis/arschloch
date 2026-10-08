@@ -1,0 +1,382 @@
+//! The generational training loop: evaluate every genome on the same
+//! matches, let `neat` breed the next generation, re-evaluate the
+//! champion on fresh matches, and record everything.
+//!
+//! A run is a pure function of its `TrainConfig`: genomes are evaluated
+//! independently (so thread count cannot change results), match seeds
+//! derive only from `(run seed, generation, index)`, and the population's
+//! state is checkpointed after every generation, so a resumed run is
+//! identical to one that never stopped.
+
+use std::path::Path;
+use std::sync::Arc;
+use std::time::Instant;
+
+use neat::{Genome, Population};
+use rayon::prelude::*;
+
+use super::config::TrainConfig;
+use super::evaluate::{evaluate, match_seed, Opponents, Score};
+use super::events::{
+    ChampionStats, Complexity, Event, FitnessStats, GenerationEvent, OpponentStat, RunEnd,
+    RunStart, SCHEMA_VERSION,
+};
+use super::run_dir::{BestRecord, Checkpoint, RunDir, TrainError};
+use crate::{NeatStrategy, Strategy, FEATURE_COUNT, FEATURE_NAMES};
+
+/// One member of the opponent pool.
+#[derive(Clone)]
+pub struct Opponent {
+    pub name: String,
+    pub strategy: Arc<dyn Strategy>,
+}
+
+/// Receives progress while a run executes. All methods default to doing
+/// nothing; implementors only override what they show. Called on the
+/// thread that called `Trainer::run`, between evaluation steps.
+pub trait TrainObserver {
+    fn on_start(&mut self, _start: &RunStart) {}
+    /// `done` of `total` genomes of the current generation evaluated.
+    fn on_eval_progress(&mut self, _generation: u32, _done: usize, _total: usize) {}
+    fn on_generation(&mut self, _event: &GenerationEvent) {}
+    fn on_finish(&mut self, _end: &RunEnd) {}
+}
+
+pub struct Trainer {
+    config: TrainConfig,
+    opponents: Vec<Opponent>,
+    dir: RunDir,
+    population: Population,
+    best: Option<BestRecord>,
+    total_rounds: u64,
+    elapsed_before: f64,
+    resumed_from: Option<u32>,
+}
+
+/// Genomes are evaluated in this many parallel batches, with a progress
+/// callback between batches.
+const PROGRESS_STEPS: usize = 10;
+
+fn strategy_for(genome: &Genome) -> Arc<dyn Strategy> {
+    Arc::new(
+        NeatStrategy::new("candidate", genome).expect("trained genomes use this build's features"),
+    )
+}
+
+fn position_of_best(values: &[f64]) -> usize {
+    values
+        .iter()
+        .enumerate()
+        .fold((0, f64::NEG_INFINITY), |best, (i, &v)| {
+            if v > best.1 {
+                (i, v)
+            } else {
+                best
+            }
+        })
+        .0
+}
+
+#[allow(clippy::cast_precision_loss)] // counts are far below 2^52
+fn fitness_stats(fitness: &[f64]) -> FitnessStats {
+    let count = fitness.len() as f64;
+    let mean = fitness.iter().sum::<f64>() / count;
+    let mut sorted = fitness.to_vec();
+    sorted.sort_by(f64::total_cmp);
+    let (min, best) = (sorted[0], sorted[sorted.len() - 1]);
+    let median = if sorted.len() % 2 == 1 {
+        sorted[sorted.len() / 2]
+    } else {
+        f64::midpoint(sorted[sorted.len() / 2 - 1], sorted[sorted.len() / 2])
+    };
+    let std_dev = (fitness.iter().map(|f| (f - mean).powi(2)).sum::<f64>() / count).sqrt();
+    let mut histogram = vec![0u32; 10];
+    for &value in fitness {
+        let bucket = if best > min {
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            let bucket = (((value - min) / (best - min)) * 10.0) as usize;
+            bucket.min(9)
+        } else {
+            0
+        };
+        histogram[bucket] += 1;
+    }
+    FitnessStats {
+        best,
+        mean,
+        median,
+        min,
+        std_dev,
+        histogram,
+    }
+}
+
+impl Trainer {
+    /// Starts a new run in `dir`.
+    ///
+    /// # Errors
+    ///
+    /// `TrainError::Config` for an invalid setup (or a directory that
+    /// already holds a run), `TrainError::Io` if files cannot be written.
+    pub fn new(
+        config: TrainConfig,
+        opponents: Vec<Opponent>,
+        dir: &Path,
+    ) -> Result<Self, TrainError> {
+        config.validate().map_err(TrainError::Config)?;
+        if opponents.len() != config.opponent_specs.len() {
+            return Err(TrainError::Config(format!(
+                "{} opponents were built for {} specs",
+                opponents.len(),
+                config.opponent_specs.len()
+            )));
+        }
+        let dir = RunDir::create_new(dir)?;
+        dir.write_config(&config)?;
+        let population = Population::new(
+            FEATURE_COUNT,
+            config.neat.clone(),
+            match_seed(config.seed, u64::MAX, 0),
+        )
+        .map_err(|e| TrainError::Config(e.to_string()))?;
+        Ok(Self {
+            config,
+            opponents,
+            dir,
+            population,
+            best: None,
+            total_rounds: 0,
+            elapsed_before: 0.0,
+            resumed_from: None,
+        })
+    }
+
+    /// Continues the run in `dir` from its last checkpoint. `generations`
+    /// optionally raises (or lowers) the total to run up to.
+    ///
+    /// # Errors
+    ///
+    /// `TrainError::Checkpoint` for unusable files, `TrainError::Mismatch`
+    /// if `opponents` are not the pool the run started with.
+    pub fn resume(
+        dir: &Path,
+        opponents: Vec<Opponent>,
+        generations: Option<u32>,
+    ) -> Result<Self, TrainError> {
+        let dir = RunDir::open_existing(dir)?;
+        let checkpoint = dir.read_checkpoint()?;
+        let names: Vec<&str> = opponents.iter().map(|o| o.name.as_str()).collect();
+        if names
+            != checkpoint
+                .opponent_names
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>()
+        {
+            return Err(TrainError::Mismatch(format!(
+                "the run used opponents {:?} but {:?} were given",
+                checkpoint.opponent_names, names
+            )));
+        }
+        let mut config = checkpoint.config;
+        if let Some(total) = generations {
+            config.generations = total;
+        }
+        config.validate().map_err(TrainError::Config)?;
+        let population = Population::restore(checkpoint.population)
+            .map_err(|e| TrainError::Checkpoint(e.to_string()))?;
+        let completed = population.generation();
+        dir.truncate_events_from(completed)?;
+        Ok(Self {
+            config,
+            opponents,
+            dir,
+            population,
+            best: checkpoint.best,
+            total_rounds: checkpoint.total_rounds,
+            elapsed_before: checkpoint.elapsed_secs,
+            resumed_from: Some(completed),
+        })
+    }
+
+    #[must_use]
+    pub fn config(&self) -> &TrainConfig {
+        &self.config
+    }
+
+    #[must_use]
+    pub fn completed_generations(&self) -> u32 {
+        self.population.generation()
+    }
+
+    /// Runs generations until `config.generations` are complete.
+    ///
+    /// # Errors
+    ///
+    /// `TrainError::Io` if a run file cannot be written.
+    pub fn run(&mut self, observer: &mut dyn TrainObserver) -> Result<RunEnd, TrainError> {
+        let started = Instant::now();
+        let start = RunStart {
+            schema_version: SCHEMA_VERSION,
+            config: self.config.clone(),
+            opponents: self.opponents.iter().map(|o| o.name.clone()).collect(),
+            feature_names: FEATURE_NAMES.iter().map(|&n| n.to_owned()).collect(),
+            resumed_from_generation: self.resumed_from,
+        };
+        self.dir
+            .append_event(&Event::RunStart(Box::new(start.clone())))?;
+        observer.on_start(&start);
+
+        while self.population.generation() < self.config.generations {
+            self.step(observer, started)?;
+        }
+
+        let end = RunEnd {
+            generations_completed: self.population.generation(),
+            best_generation: self.best.as_ref().map(|b| b.generation),
+            best_reeval: self.best.as_ref().map(|b| b.reeval.clone()),
+            elapsed_secs: self.elapsed_before + started.elapsed().as_secs_f64(),
+        };
+        self.dir.append_event(&Event::RunEnd(end.clone()))?;
+        observer.on_finish(&end);
+        Ok(end)
+    }
+
+    fn evaluate_population(&self, generation: u32, observer: &mut dyn TrainObserver) -> Vec<f64> {
+        let table = self.config.table();
+        let pool: Vec<Arc<dyn Strategy>> =
+            self.opponents.iter().map(|o| o.strategy.clone()).collect();
+        let seeds: Vec<u64> = (0..self.config.matches_per_genome as u64)
+            .map(|i| match_seed(self.config.seed, 2 * u64::from(generation), i))
+            .collect();
+        let genomes = self.population.genomes();
+        let batch = genomes.len().div_ceil(PROGRESS_STEPS);
+        let mut fitness = Vec::with_capacity(genomes.len());
+        for chunk in genomes.chunks(batch) {
+            let scores: Vec<f64> = chunk
+                .par_iter()
+                .map(|genome| {
+                    evaluate(
+                        &strategy_for(genome),
+                        &table,
+                        Opponents::Mixed(&pool),
+                        &seeds,
+                    )
+                    .mean
+                })
+                .collect();
+            fitness.extend(scores);
+            observer.on_eval_progress(generation, fitness.len(), genomes.len());
+        }
+        fitness
+    }
+
+    fn reevaluate(&self, generation: u32, champion: &Genome) -> (Score, Vec<OpponentStat>) {
+        let table = self.config.table();
+        let pool: Vec<Arc<dyn Strategy>> =
+            self.opponents.iter().map(|o| o.strategy.clone()).collect();
+        let seeds: Vec<u64> = (0..self.config.reeval_matches as u64)
+            .map(|i| match_seed(self.config.seed, 2 * u64::from(generation) + 1, i))
+            .collect();
+        let candidate = strategy_for(champion);
+        let mixed = evaluate(&candidate, &table, Opponents::Mixed(&pool), &seeds);
+        let per_opponent = self
+            .opponents
+            .par_iter()
+            .map(|opponent| OpponentStat {
+                name: opponent.name.clone(),
+                score: evaluate(
+                    &candidate,
+                    &table,
+                    Opponents::Only(&opponent.strategy),
+                    &seeds,
+                )
+                .into(),
+            })
+            .collect();
+        (mixed, per_opponent)
+    }
+
+    fn step(
+        &mut self,
+        observer: &mut dyn TrainObserver,
+        started: Instant,
+    ) -> Result<(), TrainError> {
+        let step_started = Instant::now();
+        let generation = self.population.generation();
+
+        let fitness = self.evaluate_population(generation, observer);
+        let champion_index = position_of_best(&fitness);
+        // `advance` replaces the genomes, so take the champion first.
+        let champion = self.population.genomes()[champion_index].clone();
+        let stats = fitness_stats(&fitness);
+        self.population.set_fitness(fitness.clone());
+        let report = self.population.advance();
+
+        let (reeval, opponents) = self.reevaluate(generation, &champion);
+        let is_new_best = self
+            .best
+            .as_ref()
+            .is_none_or(|b| reeval.mean > b.reeval.mean);
+        let genome_file = self.dir.write_champion(generation, &champion)?;
+        if is_new_best {
+            self.dir.write_best(&champion)?;
+            self.best = Some(BestRecord {
+                generation,
+                reeval: reeval.clone().into(),
+            });
+        }
+
+        let table = self.config.table();
+        let rounds_per_match = table.rounds as u64;
+        let rounds_evaluated = rounds_per_match
+            * (self.config.matches_per_genome as u64 * self.config.neat.population_size as u64
+                + self.config.reeval_matches as u64 * (1 + self.opponents.len() as u64));
+        self.total_rounds += rounds_evaluated;
+        let generation_secs = step_started.elapsed().as_secs_f64();
+        let elapsed_secs = self.elapsed_before + started.elapsed().as_secs_f64();
+
+        let event = GenerationEvent {
+            generation,
+            elapsed_secs,
+            generation_secs,
+            rounds_evaluated,
+            total_rounds: self.total_rounds,
+            #[allow(clippy::cast_precision_loss)]
+            rounds_per_sec: rounds_evaluated as f64 / generation_secs.max(1e-9),
+            fitness: stats,
+            champion: ChampionStats {
+                train_fitness: fitness[champion_index],
+                reeval: reeval.into(),
+                hidden_nodes: champion.hidden_count(),
+                enabled_connections: champion.enabled_connection_count(),
+                genome_file,
+                is_new_best,
+            },
+            opponents,
+            species: report.species,
+            compatibility_threshold: report.compatibility_threshold,
+            complexity: Complexity {
+                mean_hidden_nodes: report.mean_hidden_nodes,
+                mean_enabled_connections: report.mean_enabled_connections,
+                innovation_count: report.innovation_count,
+            },
+        };
+
+        // The checkpoint comes last: if the process dies earlier, resume
+        // redoes this generation and trims the duplicate event.
+        self.dir
+            .append_event(&Event::Generation(Box::new(event.clone())))?;
+        self.dir.write_checkpoint(&Checkpoint {
+            schema_version: SCHEMA_VERSION,
+            config: self.config.clone(),
+            opponent_names: self.opponents.iter().map(|o| o.name.clone()).collect(),
+            population: self.population.snapshot(),
+            best: self.best.clone(),
+            total_rounds: self.total_rounds,
+            elapsed_secs,
+        })?;
+        observer.on_generation(&event);
+        Ok(())
+    }
+}

@@ -6,8 +6,10 @@ pub mod config;
 pub mod evaluate;
 pub mod events;
 pub mod run_dir;
+pub mod trainer;
 
 pub use config::{DeckChoice, DuplicateChoice, TrainConfig};
 pub use evaluate::{evaluate, match_seed, role_score, Opponents, Score, TableSpec};
 pub use events::{Event, GenerationEvent, RunEnd, RunStart, ScoreStat, SCHEMA_VERSION};
 pub use run_dir::{load_config, RunDir, TrainError};
+pub use trainer::{Opponent, TrainObserver, Trainer};
