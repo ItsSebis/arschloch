@@ -200,6 +200,11 @@ sitting; a phase that grows beyond that should be split.
 
 ## Phase 11 — Web interface
 
+**Status:** the interactive part is built: `cli play` (Phase 11, "play against the
+models"; see `docs/PLAYING.md`) with a pure `sim::session` game session, a POST-capable
+local HTTP layer, model advice and personal records. Still open: the
+simulation-statistics overview views below.
+
 - Extends the `web` crate that Phase 10d starts with the NEAT training
   dashboard (HTTP server, embedded single-page app, JSON API), rather
   than building a second frontend. Adds the simulation views: a small

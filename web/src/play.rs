@@ -819,7 +819,12 @@ mod tests {
     #[test]
     fn percent_encoded_query_values_are_decoded() {
         let (app, path) = app("encoded");
-        let (id, _) = new_game(&app, 4, 1, &["lowest-legal", "lowest-legal", "lowest-legal"]);
+        let (id, _) = new_game(
+            &app,
+            4,
+            1,
+            &["lowest-legal", "lowest-legal", "lowest-legal"],
+        );
         // Browsers encode the colon of `model:champion` in a query string.
         let (status, reply) = call(
             &app,

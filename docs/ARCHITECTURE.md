@@ -220,6 +220,15 @@ routes serve state, events, genomes and recorded decisions). `cli train
 `Statistics`/`MatchResult` JSON output (or driving `sim` live), rather
 than a refactor of the crates above.
 
+Playing in the browser (Phase 11): the server is generic over a `Handler`
+(`GET`, plus `POST` with a capped JSON body, a Host check and an Origin check
+for handlers that accept it). `PlayApp` holds a catalog of opponents, up to 16
+games and a `RecordStore`; each game is a `sim::session::Session`, a pure state
+machine that plays the strategy seats through the same `Strategy` interface and
+the same match loop pieces as `run_match`, pauses for the human (exchange
+selection, move, next round) and logs `GameEvent`s. `cli play` builds the
+catalog and serves it. See `docs/PLAYING.md`.
+
 ## Threading model
 
 `rayon`'s data-parallel `par_iter` over a list of independent match

@@ -797,7 +797,11 @@ impl Session {
         let in_exchange = self.phase == Phase::Exchange;
         // During the exchange the previous round is over and the next has not
         // started: no table, no places, nobody to move.
-        let round = if in_exchange { None } else { self.round.as_ref() };
+        let round = if in_exchange {
+            None
+        } else {
+            self.round.as_ref()
+        };
 
         let mut hand: Vec<Card> = if in_exchange {
             self.pending
@@ -1322,8 +1326,14 @@ mod tests {
                 continue;
             }
             let view = session.view();
-            assert!(view.table.is_none(), "last round's final combo is still shown");
-            assert!(view.seats.iter().all(|s| s.place.is_none()), "last round's places are still shown");
+            assert!(
+                view.table.is_none(),
+                "last round's final combo is still shown"
+            );
+            assert!(
+                view.seats.iter().all(|s| s.place.is_none()),
+                "last round's places are still shown"
+            );
             assert!(view.to_move.is_none() && !view.must_lead && view.playable.is_empty());
             return;
         }
