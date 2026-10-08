@@ -1,5 +1,6 @@
 //! `cli train`: wires the arguments to `sim::training::Trainer`.
 
+use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::Context;
@@ -10,12 +11,22 @@ use crate::args::{DeckVariantArg, DuplicateRuleArg, StrategyArg};
 use crate::train_args::{TrainArgs, DEFAULT_OPPONENTS};
 use crate::train_output::TerminalObserver;
 
-/// Builds the opponent pool from `--strategy`-style specs, rejecting two
+/// Resolves a stored `neat:@RELATIVE` spec (a frozen copy inside the run
+/// directory) to a loadable `neat:PATH`; every other spec is unchanged.
+fn resolve_spec(spec: &str, out: &Path) -> String {
+    match spec.trim().strip_prefix("neat:@") {
+        Some(relative) => format!("neat:{}", out.join(relative).display()),
+        None => spec.to_owned(),
+    }
+}
+
+/// Builds the opponent pool from `--strategy`-style specs (frozen
+/// `neat:@...` specs are resolved against `out`), rejecting two
 /// opponents with the same display name (their results would merge).
-fn build_opponents(specs: &[String]) -> anyhow::Result<Vec<Opponent>> {
+fn build_opponents(specs: &[String], out: &Path) -> anyhow::Result<Vec<Opponent>> {
     let mut opponents: Vec<Opponent> = Vec::new();
     for spec in specs {
-        let strategy: Arc<dyn sim::Strategy> = spec
+        let strategy: Arc<dyn sim::Strategy> = resolve_spec(spec, out)
             .parse::<StrategyArg>()
             .map_err(anyhow::Error::msg)
             .with_context(|| format!("invalid --opponent `{spec}`"))?
@@ -28,6 +39,37 @@ fn build_opponents(specs: &[String]) -> anyhow::Result<Vec<Opponent>> {
         opponents.push(Opponent { name, strategy });
     }
     Ok(opponents)
+}
+
+/// Copies every `neat:PATH` opponent into `<out>/opponents/` and returns
+/// the specs to record: `neat:@opponents/N-<stem>.json`. The run then
+/// owns its opponents, so a resume cannot silently face a different
+/// player if the original file is later changed, moved or deleted (and
+/// two files with the same name stay distinct).
+fn freeze_neat_specs(specs: &[String], out: &Path) -> anyhow::Result<Vec<String>> {
+    let mut frozen = Vec::with_capacity(specs.len());
+    for (index, spec) in specs.iter().enumerate() {
+        let Some(path) = spec.trim().strip_prefix("neat:") else {
+            frozen.push(spec.clone());
+            continue;
+        };
+        let source = Path::new(path.trim());
+        let stem = source
+            .file_stem()
+            .map_or_else(|| "genome".into(), |s| s.to_string_lossy());
+        let relative = format!("opponents/{index}-{stem}.json");
+        let target = out.join(&relative);
+        std::fs::create_dir_all(out.join("opponents"))
+            .and_then(|()| std::fs::copy(source, &target).map(|_| ()))
+            .with_context(|| {
+                format!(
+                    "cannot freeze --opponent `{spec}` into {}",
+                    target.display()
+                )
+            })?;
+        frozen.push(format!("neat:@{relative}"));
+    }
+    Ok(frozen)
 }
 
 fn new_config(args: &TrainArgs, specs: Vec<String>) -> TrainConfig {
@@ -66,7 +108,7 @@ pub fn run(raw_args: impl Iterator<Item = String>) -> anyhow::Result<()> {
 
     let mut trainer = if args.resume {
         let config = load_config(&args.out)?;
-        let opponents = build_opponents(&config.opponent_specs)?;
+        let opponents = build_opponents(&config.opponent_specs, &args.out)?;
         Trainer::resume(&args.out, opponents, args.generations)?
     } else {
         let specs: Vec<String> = if args.opponent.is_empty() {
@@ -74,8 +116,21 @@ pub fn run(raw_args: impl Iterator<Item = String>) -> anyhow::Result<()> {
         } else {
             args.opponent.clone()
         };
-        let opponents = build_opponents(&specs)?;
-        Trainer::new(new_config(&args, specs), opponents, &args.out)?
+        // Fail on a bad spec before anything is written, and never touch a
+        // directory that already holds a run.
+        anyhow::ensure!(
+            !args.out.join("checkpoint.json").exists(),
+            "{} already holds a run; resume it or choose another directory",
+            args.out.display()
+        );
+        for spec in &specs {
+            spec.parse::<StrategyArg>()
+                .map_err(anyhow::Error::msg)
+                .with_context(|| format!("invalid --opponent `{spec}`"))?;
+        }
+        let frozen = freeze_neat_specs(&specs, &args.out)?;
+        let opponents = build_opponents(&frozen, &args.out)?;
+        Trainer::new(new_config(&args, frozen), opponents, &args.out)?
     };
 
     let mut observer = TerminalObserver::new(args.out.clone(), args.quiet);
@@ -90,7 +145,7 @@ mod tests {
     #[test]
     fn the_default_pool_builds_with_distinct_names() {
         let specs: Vec<String> = DEFAULT_OPPONENTS.iter().map(|&s| s.to_owned()).collect();
-        let pool = build_opponents(&specs).unwrap();
+        let pool = build_opponents(&specs, Path::new(".")).unwrap();
         let names: Vec<&str> = pool.iter().map(|o| o.name.as_str()).collect();
         assert_eq!(
             names,
@@ -104,7 +159,9 @@ mod tests {
 
     #[test]
     fn a_bad_spec_names_the_offending_option() {
-        let error = build_opponents(&["nonsense".to_owned()]).err().unwrap();
+        let error = build_opponents(&["nonsense".to_owned()], Path::new("."))
+            .err()
+            .unwrap();
         assert!(
             format!("{error:#}").contains("--opponent `nonsense`"),
             "{error:#}"
@@ -114,7 +171,10 @@ mod tests {
     #[test]
     fn a_duplicate_opponent_is_rejected() {
         let specs = vec!["lowest-legal".to_owned(), "lowest-legal".to_owned()];
-        let error = build_opponents(&specs).err().unwrap().to_string();
+        let error = build_opponents(&specs, Path::new("."))
+            .err()
+            .unwrap()
+            .to_string();
         assert!(error.contains("duplicates `LowestLegal`"), "{error}");
     }
 }

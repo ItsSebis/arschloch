@@ -296,10 +296,28 @@ shell may assume NEAT-specific data.
   players is a large effect (a clone of `LowestLegal` and `LowestLegal`
   exchange their results exactly when their seats swap), and cyclic
   rotation keeps neighbour order fixed.
-- **Re-evaluation:** each generation's champion is replayed on fresh
-  seeds against the mixed pool and against every opponent alone; the
-  event carries the score, its standard error and the placement counts.
-  `best.json` follows this fresh score, not the selection fitness.
+- **Re-evaluation and the believable score:** each generation's champion
+  is replayed against the mixed pool and against every opponent alone on
+  one *fixed* set of matches (the same deals every generation, never used
+  in training), so champions of different generations are compared like
+  for like; the event carries the score, its standard error and the
+  placement counts. `best.json` follows this score. Because picking the
+  maximum over many generations inflates it, a new best is also scored on
+  a second fixed *held-out* set that did not pick it; that held-out score
+  is what the summary reports (in a 120-generation run the selection
+  score overstated the champion by about 0.03-0.04).
+- **Frozen opponents:** `--opponent neat:PATH` files are copied into
+  `<run>/opponents/N-<stem>.json` and the run records
+  `neat:@opponents/...`, so a resume cannot silently face a different
+  player and two files with the same name stay distinct.
+- **Stagnation:** a species is exempt from culling if it holds the best
+  fitness ever recorded *or* this generation's champion (fitness is
+  noisy; a stagnant species can hold the current best genome).
+- **Crash safety:** the run directory holds a checkpoint from the moment
+  it is created (a run killed in generation 0 is resumable), and a
+  checkpoint records the feature count and feature-set version, so a
+  resume from a build with different features is refused before the log
+  is touched.
 - **Default pool:** `lowest-legal`, `endgame-denial`,
   `adaptive:reading,tempo,bully`. `CardCounter` is omitted: it plays
   identically to `LowestLegal` in every table tried (0 of 200 all-same

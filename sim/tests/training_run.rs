@@ -361,3 +361,98 @@ fn training_improves_play() {
     assert!(best.mean > 0.3, "best fresh-match score {}", best.mean);
     fs::remove_dir_all(&run).unwrap();
 }
+
+#[test]
+fn a_run_killed_before_its_first_generation_can_be_resumed() {
+    // Trainer::new returns, then the process dies during generation 0:
+    // the directory must stay usable (not "no checkpoint" and not
+    // "already holds a run").
+    let straight = dir("early-straight");
+    Trainer::new(config(3), opponents(), &straight)
+        .unwrap()
+        .run(&mut Recorder::default())
+        .unwrap();
+
+    let killed = dir("early-killed");
+    drop(Trainer::new(config(3), opponents(), &killed).unwrap());
+    let mut resumed =
+        Trainer::resume(&killed, opponents(), None).expect("resumable from the start");
+    assert_eq!(resumed.completed_generations(), 0);
+    resumed.run(&mut Recorder::default()).unwrap();
+    assert_eq!(
+        checkpoint_population(&killed),
+        checkpoint_population(&straight)
+    );
+    fs::remove_dir_all(&straight).unwrap();
+    fs::remove_dir_all(&killed).unwrap();
+}
+
+#[test]
+fn a_checkpoint_from_another_feature_set_is_refused_without_touching_the_log() {
+    let run = dir("featureset");
+    Trainer::new(config(2), opponents(), &run)
+        .unwrap()
+        .run(&mut Recorder::default())
+        .unwrap();
+    let path = run.join("checkpoint.json");
+    let mut value: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+    value["feature_count"] = serde_json::json!(5);
+    fs::write(&path, value.to_string()).unwrap();
+    let log_before = fs::read_to_string(run.join("events.jsonl")).unwrap();
+
+    let error = Trainer::resume(&run, opponents(), Some(3))
+        .err()
+        .expect("must be refused");
+    assert!(matches!(error, TrainError::Mismatch(_)), "{error}");
+    assert!(error.to_string().contains("feature"), "{error}");
+    assert_eq!(
+        fs::read_to_string(run.join("events.jsonl")).unwrap(),
+        log_before
+    );
+
+    value["feature_count"] = serde_json::json!(sim::FEATURE_COUNT);
+    value["feature_set_version"] = serde_json::json!(sim::FEATURE_SET_VERSION + 1);
+    fs::write(&path, value.to_string()).unwrap();
+    let error = Trainer::resume(&run, opponents(), Some(3))
+        .err()
+        .expect("must be refused");
+    assert!(matches!(error, TrainError::Mismatch(_)), "{error}");
+    fs::remove_dir_all(&run).unwrap();
+}
+
+#[test]
+fn the_best_champion_is_confirmed_on_held_out_matches() {
+    let run = dir("heldout");
+    let end = Trainer::new(config(4), opponents(), &run)
+        .unwrap()
+        .run(&mut Recorder::default())
+        .unwrap();
+    let generations: Vec<_> = events(&run)
+        .into_iter()
+        .filter_map(|e| {
+            if let Event::Generation(g) = e {
+                Some(g)
+            } else {
+                None
+            }
+        })
+        .collect();
+    for generation in &generations {
+        assert_eq!(
+            generation.champion.heldout.is_some(),
+            generation.champion.is_new_best,
+            "generation {}: only a new best is confirmed",
+            generation.generation
+        );
+    }
+    let last_best = generations
+        .iter()
+        .rev()
+        .find(|g| g.champion.is_new_best)
+        .unwrap();
+    assert_eq!(end.best_generation, Some(last_best.generation));
+    assert_eq!(end.best_heldout, last_best.champion.heldout);
+    assert!(end.best_heldout.is_some());
+    fs::remove_dir_all(&run).unwrap();
+}

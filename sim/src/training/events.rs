@@ -67,9 +67,17 @@ pub struct FitnessStats {
 pub struct ChampionStats {
     /// The champion's fitness in the generation that selected it.
     pub train_fitness: f64,
-    /// Its score on fresh matches against the mixed pool: the honest
-    /// number (the training fitness is inflated by selection).
+    /// Its score against the mixed pool on a fixed set of matches that
+    /// training never plays and that is the same every generation, so
+    /// champions of different generations are compared on the same deals
+    /// (the training fitness is inflated by selection).
     pub reeval: ScoreStat,
+    /// Present only for a new best champion: its score on a second fixed,
+    /// held-out set of matches that was *not* used to pick it. This is
+    /// the number to believe: choosing the maximum over many
+    /// generations inflates `reeval`.
+    #[serde(default)]
+    pub heldout: Option<ScoreStat>,
     pub hidden_nodes: usize,
     pub enabled_connections: usize,
     /// File name (inside the run directory) of this champion's genome.
@@ -113,7 +121,12 @@ pub struct GenerationEvent {
 pub struct RunEnd {
     pub generations_completed: u32,
     pub best_generation: Option<u32>,
+    /// The best champion's score on the fixed set it was selected on.
     pub best_reeval: Option<ScoreStat>,
+    /// The best champion's score on held-out matches (see
+    /// `ChampionStats::heldout`).
+    #[serde(default)]
+    pub best_heldout: Option<ScoreStat>,
     pub elapsed_secs: f64,
 }
 
@@ -136,6 +149,7 @@ mod tests {
             generations_completed: 3,
             best_generation: Some(2),
             best_reeval: Some(stat()),
+            best_heldout: Some(stat()),
             elapsed_secs: 1.5,
         });
         let line = serde_json::to_string(&end).unwrap();

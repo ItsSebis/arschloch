@@ -22,7 +22,7 @@ use super::events::{
     RunStart, SCHEMA_VERSION,
 };
 use super::run_dir::{BestRecord, Checkpoint, RunDir, TrainError};
-use crate::{NeatStrategy, Strategy, FEATURE_COUNT, FEATURE_NAMES};
+use crate::{NeatStrategy, Strategy, FEATURE_COUNT, FEATURE_NAMES, FEATURE_SET_VERSION};
 
 /// One member of the opponent pool.
 #[derive(Clone)]
@@ -56,6 +56,31 @@ pub struct Trainer {
 /// Genomes are evaluated in this many parallel batches, with a progress
 /// callback between batches.
 const PROGRESS_STEPS: usize = 10;
+
+/// Training matches of `generation`: different every generation, so a
+/// genome cannot be tuned to one set of deals.
+fn training_seeds(config: &TrainConfig, generation: u32) -> Vec<u64> {
+    (0..config.matches_per_genome as u64)
+        .map(|i| match_seed(config.seed, 2 * u64::from(generation), i))
+        .collect()
+}
+
+/// The fixed set every generation's champion is compared on: the same
+/// deals every time (so champions are compared like for like) and never
+/// part of training.
+fn reeval_seeds(config: &TrainConfig) -> Vec<u64> {
+    (0..config.reeval_matches as u64)
+        .map(|i| match_seed(config.seed, u64::MAX - 1, i))
+        .collect()
+}
+
+/// A second fixed set, used only to confirm a new best champion: it was
+/// not used to pick it, so its score is not inflated by the selection.
+fn heldout_seeds(config: &TrainConfig) -> Vec<u64> {
+    (0..config.reeval_matches as u64 * 2)
+        .map(|i| match_seed(config.seed, u64::MAX - 2, i))
+        .collect()
+}
 
 fn strategy_for(genome: &Genome) -> Arc<dyn Strategy> {
     Arc::new(
@@ -139,7 +164,7 @@ impl Trainer {
             match_seed(config.seed, u64::MAX, 0),
         )
         .map_err(|e| TrainError::Config(e.to_string()))?;
-        Ok(Self {
+        let trainer = Self {
             config,
             opponents,
             dir,
@@ -148,7 +173,26 @@ impl Trainer {
             total_rounds: 0,
             elapsed_before: 0.0,
             resumed_from: None,
-        })
+        };
+        // A run killed during generation 0 must still be resumable (and
+        // must not look like a run to overwrite), so the directory holds a
+        // checkpoint from the very start.
+        trainer.dir.write_checkpoint(&trainer.checkpoint(0.0))?;
+        Ok(trainer)
+    }
+
+    fn checkpoint(&self, elapsed_secs: f64) -> Checkpoint {
+        Checkpoint {
+            schema_version: SCHEMA_VERSION,
+            feature_count: FEATURE_COUNT,
+            feature_set_version: FEATURE_SET_VERSION,
+            config: self.config.clone(),
+            opponent_names: self.opponents.iter().map(|o| o.name.clone()).collect(),
+            population: self.population.snapshot(),
+            best: self.best.clone(),
+            total_rounds: self.total_rounds,
+            elapsed_secs,
+        }
     }
 
     /// Continues the run in `dir` from its last checkpoint. `generations`
@@ -165,6 +209,15 @@ impl Trainer {
     ) -> Result<Self, TrainError> {
         let dir = RunDir::open_existing(dir)?;
         let checkpoint = dir.read_checkpoint()?;
+        if checkpoint.feature_count != FEATURE_COUNT
+            || checkpoint.feature_set_version != FEATURE_SET_VERSION
+        {
+            return Err(TrainError::Mismatch(format!(
+                "the run was trained with {} features (feature-set version {}) but this build has {} (version {}); \
+                 its genomes cannot be continued",
+                checkpoint.feature_count, checkpoint.feature_set_version, FEATURE_COUNT, FEATURE_SET_VERSION
+            )));
+        }
         let names: Vec<&str> = opponents.iter().map(|o| o.name.as_str()).collect();
         if names
             != checkpoint
@@ -235,6 +288,7 @@ impl Trainer {
             generations_completed: self.population.generation(),
             best_generation: self.best.as_ref().map(|b| b.generation),
             best_reeval: self.best.as_ref().map(|b| b.reeval.clone()),
+            best_heldout: self.best.as_ref().map(|b| b.heldout.clone()),
             elapsed_secs: self.elapsed_before + started.elapsed().as_secs_f64(),
         };
         self.dir.append_event(&Event::RunEnd(end.clone()))?;
@@ -246,9 +300,7 @@ impl Trainer {
         let table = self.config.table();
         let pool: Vec<Arc<dyn Strategy>> =
             self.opponents.iter().map(|o| o.strategy.clone()).collect();
-        let seeds: Vec<u64> = (0..self.config.matches_per_genome as u64)
-            .map(|i| match_seed(self.config.seed, 2 * u64::from(generation), i))
-            .collect();
+        let seeds = training_seeds(&self.config, generation);
         let genomes = self.population.genomes();
         let batch = genomes.len().div_ceil(PROGRESS_STEPS);
         let mut fitness = Vec::with_capacity(genomes.len());
@@ -271,13 +323,11 @@ impl Trainer {
         fitness
     }
 
-    fn reevaluate(&self, generation: u32, champion: &Genome) -> (Score, Vec<OpponentStat>) {
+    fn reevaluate(&self, champion: &Genome) -> (Score, Vec<OpponentStat>) {
         let table = self.config.table();
         let pool: Vec<Arc<dyn Strategy>> =
             self.opponents.iter().map(|o| o.strategy.clone()).collect();
-        let seeds: Vec<u64> = (0..self.config.reeval_matches as u64)
-            .map(|i| match_seed(self.config.seed, 2 * u64::from(generation) + 1, i))
-            .collect();
+        let seeds = reeval_seeds(&self.config);
         let candidate = strategy_for(champion);
         let mixed = evaluate(&candidate, &table, Opponents::Mixed(&pool), &seeds);
         let per_opponent = self
@@ -297,6 +347,18 @@ impl Trainer {
         (mixed, per_opponent)
     }
 
+    /// The champion's score on the held-out matches (see `heldout_seeds`).
+    fn confirm(&self, champion: &Genome) -> Score {
+        let pool: Vec<Arc<dyn Strategy>> =
+            self.opponents.iter().map(|o| o.strategy.clone()).collect();
+        evaluate(
+            &strategy_for(champion),
+            &self.config.table(),
+            Opponents::Mixed(&pool),
+            &heldout_seeds(&self.config),
+        )
+    }
+
     fn step(
         &mut self,
         observer: &mut dyn TrainObserver,
@@ -313,19 +375,24 @@ impl Trainer {
         self.population.set_fitness(fitness.clone());
         let report = self.population.advance();
 
-        let (reeval, opponents) = self.reevaluate(generation, &champion);
+        let (reeval, opponents) = self.reevaluate(&champion);
         let is_new_best = self
             .best
             .as_ref()
             .is_none_or(|b| reeval.mean > b.reeval.mean);
         let genome_file = self.dir.write_champion(generation, &champion)?;
-        if is_new_best {
+        let heldout = if is_new_best {
             self.dir.write_best(&champion)?;
+            let heldout = self.confirm(&champion);
             self.best = Some(BestRecord {
                 generation,
                 reeval: reeval.clone().into(),
+                heldout: heldout.clone().into(),
             });
-        }
+            Some(heldout)
+        } else {
+            None
+        };
 
         let table = self.config.table();
         let rounds_per_match = table.rounds as u64;
@@ -348,6 +415,7 @@ impl Trainer {
             champion: ChampionStats {
                 train_fitness: fitness[champion_index],
                 reeval: reeval.into(),
+                heldout: heldout.map(Into::into),
                 hidden_nodes: champion.hidden_count(),
                 enabled_connections: champion.enabled_connection_count(),
                 genome_file,
@@ -367,16 +435,36 @@ impl Trainer {
         // redoes this generation and trims the duplicate event.
         self.dir
             .append_event(&Event::Generation(Box::new(event.clone())))?;
-        self.dir.write_checkpoint(&Checkpoint {
-            schema_version: SCHEMA_VERSION,
-            config: self.config.clone(),
-            opponent_names: self.opponents.iter().map(|o| o.name.clone()).collect(),
-            population: self.population.snapshot(),
-            best: self.best.clone(),
-            total_rounds: self.total_rounds,
-            elapsed_secs,
-        })?;
+        self.dir.write_checkpoint(&self.checkpoint(elapsed_secs))?;
         observer.on_generation(&event);
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::config::test_support::sample;
+    use super::*;
+
+    #[test]
+    fn champions_are_compared_on_one_fixed_seed_set_that_training_never_uses() {
+        let config = sample();
+        let fixed = reeval_seeds(&config);
+        let held_out = heldout_seeds(&config);
+        assert_eq!(fixed.len(), config.reeval_matches);
+        assert_eq!(held_out.len(), config.reeval_matches * 2);
+        // The same every generation (paired comparison between champions).
+        assert_eq!(fixed, reeval_seeds(&config));
+        // Disjoint from each other and from every generation's training matches.
+        for seed in fixed.iter().chain(&held_out) {
+            assert_eq!(
+                fixed.iter().chain(&held_out).filter(|s| *s == seed).count(),
+                1,
+                "{seed}"
+            );
+            for generation in 0..200 {
+                assert!(!training_seeds(&config, generation).contains(seed));
+            }
+        }
     }
 }

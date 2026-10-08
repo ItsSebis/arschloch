@@ -54,11 +54,17 @@ fn io_error(path: &Path, error: &std::io::Error) -> TrainError {
 pub struct BestRecord {
     pub generation: u32,
     pub reeval: ScoreStat,
+    pub heldout: ScoreStat,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Checkpoint {
     pub schema_version: u32,
+    /// The feature set the genomes were trained against: a checkpoint from
+    /// a build with different features cannot be continued (its genomes
+    /// would be evaluated as something else).
+    pub feature_count: usize,
+    pub feature_set_version: u32,
     pub config: TrainConfig,
     pub opponent_names: Vec<String>,
     pub population: PopulationState,
@@ -274,6 +280,8 @@ mod tests {
         .unwrap();
         Checkpoint {
             schema_version: SCHEMA_VERSION,
+            feature_count: crate::FEATURE_COUNT,
+            feature_set_version: crate::FEATURE_SET_VERSION,
             config: sample(),
             opponent_names: vec!["LowestLegal".into()],
             population: population.snapshot(),
@@ -308,6 +316,7 @@ mod tests {
             champion: super::super::events::ChampionStats {
                 train_fitness: 0.0,
                 reeval: stat,
+                heldout: None,
                 hidden_nodes: 0,
                 enabled_connections: 0,
                 genome_file: String::new(),
@@ -416,6 +425,7 @@ mod tests {
             generations_completed: 4,
             best_generation: None,
             best_reeval: None,
+            best_heldout: None,
             elapsed_secs: 0.0,
         }))
         .unwrap();

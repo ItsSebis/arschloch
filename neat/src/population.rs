@@ -336,7 +336,12 @@ impl Population {
     /// stagnant species get nothing unless they hold the best fitness.
     fn offspring_quotas(&self, fitness: &[f64]) -> Vec<usize> {
         let floor = fitness.iter().copied().fold(f64::INFINITY, f64::min);
-        let protected = self
+        // Two species are exempt from culling: the one holding the best
+        // fitness ever recorded, and the one holding this generation's
+        // champion. Fitness is noisy, so a species' record is the luckiest
+        // sample it ever had; without the second exemption a stagnant
+        // species could be culled while holding the current best genome.
+        let record_holder = self
             .species
             .iter()
             .enumerate()
@@ -348,12 +353,18 @@ impl Population {
                 }
             })
             .0;
+        let champion = argmax(fitness);
+        let champions_species = self
+            .species
+            .iter()
+            .position(|s| s.members.contains(&champion));
+        let is_protected = |i: usize| i == record_holder || Some(i) == champions_species;
         let weights: Vec<f64> = self
             .species
             .iter()
             .enumerate()
             .map(|(i, s)| {
-                if s.stagnation >= self.config.stagnation_limit && i != protected {
+                if s.stagnation >= self.config.stagnation_limit && !is_protected(i) {
                     return 0.0;
                 }
                 let shifted: f64 = s.members.iter().map(|&m| fitness[m] - floor + 1e-6).sum();
@@ -711,11 +722,47 @@ mod tests {
         population.species[0].representative = population.genomes()[0].clone();
         population.species[1].representative = population.genomes()[1].clone();
         let doomed = population.species[0].id;
-        population.set_fitness(vec![1.0; 30]);
+        // The champion (genome 1) is in the protected species, not the doomed one.
+        let mut fitness = vec![1.0; 30];
+        fitness[1] = 2.0;
+        population.set_fitness(fitness);
         population.advance();
         assert!(
             population.species.iter().all(|s| s.id != doomed),
             "a species with no offspring quota must be dropped, not kept as a trap"
+        );
+    }
+
+    #[test]
+    fn the_species_holding_the_generations_champion_is_never_culled() {
+        // Fitness is noisy, so a species' record is the luckiest sample it
+        // ever had and a stagnant species can easily hold *this*
+        // generation's best genome. Culling it would delete the champion's
+        // whole lineage.
+        let config = NeatConfig {
+            population_size: 30,
+            compatibility_threshold: 0.0001,
+            min_compatibility_threshold: 0.0001,
+            stagnation_limit: 3,
+            ..NeatConfig::default()
+        };
+        let mut population = Population::new(2, config, 4).unwrap();
+        population.set_fitness(vec![1.0; 30]);
+        population.advance();
+        assert!(population.species.len() > 2, "need several species");
+        population.species[1].best_fitness = 100.0; // holds the all-time record
+        population.species[0].best_fitness = 50.0;
+        population.species[0].stagnation = 99;
+        population.species[0].representative = population.genomes()[0].clone();
+        population.species[1].representative = population.genomes()[1].clone();
+        let champions_species = population.species[0].id;
+        let mut fitness = vec![1.0; 30];
+        fitness[0] = 5.0; // genome 0 (species 0) is this generation's champion
+        population.set_fitness(fitness);
+        population.advance();
+        assert!(
+            population.species.iter().any(|s| s.id == champions_species),
+            "the champion's species must keep reproducing"
         );
     }
 

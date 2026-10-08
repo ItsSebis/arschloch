@@ -118,10 +118,13 @@ pub fn render_summary(end: &RunEnd, out: &std::path::Path) -> String {
         end.generations_completed,
         format_duration(end.elapsed_secs)
     );
-    if let (Some(generation), Some(score)) = (end.best_generation, &end.best_reeval) {
+    // The held-out score was not used to pick the champion, so it is not
+    // inflated by selection (the re-evaluation score is, a little).
+    let confirmed = end.best_heldout.as_ref().or(end.best_reeval.as_ref());
+    if let (Some(generation), Some(score)) = (end.best_generation, confirmed) {
         let _ = write!(
             text,
-            "\nbest champion: generation {generation}, score {:+.3} ±{:.3} against the pool (fresh matches)\nplay it: cli --player-count 4 --matches 1000 --strategy neat:{} --strategy lowest-legal --strategy lowest-legal --strategy lowest-legal",
+            "\nbest champion: generation {generation}, score {:+.3} ±{:.3} against the pool (held-out matches)\nplay it: cli --player-count 4 --matches 1000 --strategy neat:{} --strategy lowest-legal --strategy lowest-legal --strategy lowest-legal",
             score.mean,
             score.std_error,
             out.join("best.json").display()
@@ -250,6 +253,7 @@ mod tests {
             champion: ChampionStats {
                 train_fitness: 0.412,
                 reeval: stat(0.397),
+                heldout: None,
                 hidden_nodes: 7,
                 enabled_connections: 23,
                 genome_file: "gen-0042.json".into(),
@@ -320,13 +324,19 @@ mod tests {
             generations_completed: 100,
             best_generation: Some(87),
             best_reeval: Some(stat(0.652)),
+            best_heldout: Some(stat(0.640)),
             elapsed_secs: 5025.0,
         };
         let text = render_summary(&end, std::path::Path::new("runs/a"));
         assert!(text.contains("100 generations in 1:23:45"), "{text}");
         assert!(
-            text.contains("generation 87") && text.contains("+0.652"),
+            text.contains("generation 87") && text.contains("+0.640"),
             "{text}"
+        );
+        assert!(text.contains("held-out"), "{text}");
+        assert!(
+            !text.contains("+0.652"),
+            "the selection score is not the headline: {text}"
         );
         assert!(text.contains("neat:runs/a/best.json"), "{text}");
         let none = RunEnd {

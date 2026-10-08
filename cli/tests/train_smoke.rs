@@ -224,3 +224,103 @@ fn quiet_prints_only_the_summary() {
     );
     std::fs::remove_dir_all(&out).unwrap();
 }
+
+fn genome_file(path: &Path, seed: u64) {
+    let population = neat::Population::new(
+        sim::FEATURE_COUNT,
+        neat::NeatConfig {
+            population_size: 4,
+            ..neat::NeatConfig::default()
+        },
+        seed,
+    )
+    .unwrap();
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    sim::GenomeFile::new(population.genomes()[0].clone())
+        .unwrap()
+        .save(path)
+        .unwrap();
+}
+
+#[test]
+fn a_neat_opponent_is_frozen_into_the_run_so_resume_cannot_silently_change_the_pool() {
+    let out = run_dir("frozen");
+    let source = run_dir("frozen-src").join("champ.json");
+    genome_file(&source, 1);
+    let original = std::fs::read_to_string(&source).unwrap();
+    let opponent = format!("neat:{}", source.display());
+    let first = train(
+        &out,
+        &[
+            "--generations",
+            "1",
+            "--opponent",
+            &opponent,
+            "--opponent",
+            "lowest-legal",
+        ],
+    );
+    assert!(first.status.success(), "stderr: {}", text(&first.stderr));
+
+    // The run keeps its own copy of the opponent.
+    assert_eq!(
+        std::fs::read_to_string(out.join("opponents/0-champ.json")).unwrap(),
+        original
+    );
+    // Someone overwrites (or deletes) the original; the run is unaffected.
+    genome_file(&source, 2);
+    let resumed = cli(&[
+        "train",
+        "--out",
+        out.to_str().unwrap(),
+        "--resume",
+        "--generations",
+        "2",
+        "--threads",
+        "2",
+    ]);
+    assert!(
+        resumed.status.success(),
+        "stderr: {}",
+        text(&resumed.stderr)
+    );
+    assert_eq!(
+        std::fs::read_to_string(out.join("opponents/0-champ.json")).unwrap(),
+        original
+    );
+    assert!(
+        text(&resumed.stdout).contains("Neat(0-champ)"),
+        "{}",
+        text(&resumed.stdout)
+    );
+    std::fs::remove_dir_all(&out).unwrap();
+    std::fs::remove_dir_all(source.parent().unwrap()).unwrap();
+}
+
+#[test]
+fn two_neat_opponents_with_the_same_file_name_stay_distinct() {
+    let out = run_dir("samestem");
+    let base = run_dir("samestem-src");
+    let (a, b) = (base.join("a/champ.json"), base.join("b/champ.json"));
+    genome_file(&a, 1);
+    genome_file(&b, 2);
+    let result = train(
+        &out,
+        &[
+            "--generations",
+            "1",
+            "--opponent",
+            &format!("neat:{}", a.display()),
+            "--opponent",
+            &format!("neat:{}", b.display()),
+        ],
+    );
+    assert!(result.status.success(), "stderr: {}", text(&result.stderr));
+    let stdout = text(&result.stdout);
+    assert!(
+        stdout.contains("Neat(0-champ)") && stdout.contains("Neat(1-champ)"),
+        "{stdout}"
+    );
+    std::fs::remove_dir_all(&out).unwrap();
+    std::fs::remove_dir_all(&base).unwrap();
+}
