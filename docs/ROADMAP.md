@@ -217,6 +217,25 @@ sitting; a phase that grows beyond that should be split.
   against each model can be viewed and compared with the models' own
   scores.
 
+## Idea — GPU (CUDA / ROCm) training
+
+A thought, not scheduled. Training time is dominated by *playing games*
+(dealing, enumerating legal moves, building the strategy's view of the
+table), not by evaluating the neural network: the evolved networks are tiny
+(about 20 inputs and a few dozen connections), and the simulator's work is
+branchy, small-state logic that parallelizes well across CPU cores but not
+across the thousands of lockstep lanes a GPU needs. Offloading only the
+network evaluation (CUDA, or ROCm/HIP on AMD, or a portable layer such as
+wgpu) would therefore speed up very little, because the CPU would still have
+to simulate every game and feed the GPU. A real speedup would mean porting the
+game simulation itself to the GPU (a large, separate project: fixed-size card
+and hand representations, move generation without allocation, one match per
+GPU thread), and only pays off at population and match counts far beyond what
+the current CPU runs need. Before attempting it, profile a representative run
+and measure how much of the time the network actually takes, and consider the
+cheaper wins first (more CPU threads or machines, `--matches-per-genome`
+tuning, cheaper per-turn feature extraction).
+
 ## Parked — deferred rule variants
 
 Not scheduled, but recorded so they aren't lost (see `RULES.md`,

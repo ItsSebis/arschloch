@@ -92,6 +92,7 @@ fn a_run_prints_a_row_per_generation_and_leaves_playable_champions() {
 
     // The champion plays in an ordinary simulation run.
     let best = out.join("best.json");
+    let results = out.join("played.json"); // not /dev/null: this must also run on Windows
     let played = cli(&[
         "--player-count",
         "4",
@@ -100,7 +101,7 @@ fn a_run_prints_a_row_per_generation_and_leaves_playable_champions() {
         "--rounds",
         "2",
         "--output",
-        "/dev/null",
+        results.to_str().unwrap(),
         "--strategy",
         &format!("neat:{}", best.display()),
         "--strategy",

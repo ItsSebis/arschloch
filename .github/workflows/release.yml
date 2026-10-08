@@ -1,0 +1,51 @@
+name: Release binaries
+
+# Builds the macOS binaries and attaches them to a published release. The
+# Linux and Windows binaries are built and uploaded by hand when a release is
+# cut (see docs/RELEASING.md), because macOS binaries cannot be built outside
+# macOS.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to attach the binaries to (for example v0.1.0)
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+      - name: Build both architectures
+        run: |
+          cargo build --release -p cli --target aarch64-apple-darwin
+          cargo build --release -p cli --target x86_64-apple-darwin
+      - name: Package and upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for target in aarch64-apple-darwin:macos-arm64 x86_64-apple-darwin:macos-x86_64; do
+            triple=${target%%:*}; label=${target##*:}
+            name="arschloch-${TAG}-${label}"
+            mkdir -p "$name/docs"
+            cp "target/${triple}/release/cli" "$name/cli"
+            cp README.md "$name/"
+            cp docs/TRAINING.md docs/RULES.md "$name/docs/"
+            cp docs/baselines/neat-v1/champion.json "$name/champion.json"
+            tar -czf "${name}.tar.gz" "$name"
+            shasum -a 256 "${name}.tar.gz" > "${name}.tar.gz.sha256"
+            gh release upload "$TAG" "${name}.tar.gz" "${name}.tar.gz.sha256" --clobber
+          done
