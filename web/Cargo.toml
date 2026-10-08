@@ -8,3 +8,8 @@ license.workspace = true
 workspace = true
 
 [dependencies]
+serde_json = { version = "1.0.151", features = ["float_roundtrip"] }
+sim = { version = "0.1.0", path = "../sim" }
+
+[dev-dependencies]
+neat = { version = "0.1.0", path = "../neat" }
