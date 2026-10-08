@@ -12,4 +12,4 @@ mod test_fixture;
 
 pub use event_index::EventIndex;
 pub use routes::{App, Response};
-pub use server::Dashboard;
+pub use server::{Dashboard, Handler, HttpRequest, Server};
