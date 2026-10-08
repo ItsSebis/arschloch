@@ -423,6 +423,32 @@ shell may assume NEAT-specific data.
   has a measured need), complexity pressure in ties, the role feature and
   evolving the exchange step.
 
+## 7e. As built in Phase 10f
+
+- **Warm start.** `Population::warm_start(state, config, seed)` keeps the
+  genomes, innovation history, species and threshold of a snapshot and resets
+  the generation counter, the best-so-far and the random generator;
+  `Trainer::new_from` reads the source's checkpoint (read-only), refuses
+  another feature set or population size *before* creating anything, and
+  records `warm_started_from` in `RunStart` (additive, optional). `cli train
+  --from` takes the population size from the source.
+- **Sets.** `--runs N` creates `OUT/run-01..N` and `OUT/set.json`
+  (`total_runs`, `current_run`, `finished_secs`, `from`). `set_eta` (Rust, in
+  `sim::training::set`, mirrored by `setEta` in `web/assets/lib.js` with the
+  same test vectors) is the current run's ETA plus the remaining runs at the
+  mean time of the finished runs, or at the current run's projected total
+  before any has finished. The dashboard serves the set directory and shows the
+  set's current run; a change of run resets the event index and bumps the epoch
+  so clients reload.
+- **Speed.** The match loop rebuilt the pass ceilings from the whole round
+  history and the unseen cards by repeated removal before every turn (54% of a
+  game). `PassTracker` ingests each play/pass once and is tested equal to the
+  old reverse sweep after every move of random rounds (single and double
+  deck); unseen cards use a per-card bitmask. Results are bit-for-bit
+  unchanged (`docs/baselines/perf/bench.sh` checksums); about 1.5x faster.
+  The network is 2-6% of the time, so GPU offload of the network cannot help
+  (ROADMAP, "Idea — GPU").
+
 ## 8. Determinism and performance
 
 - A run is fully determined by `(config, seed)`: per-genome evaluation

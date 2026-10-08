@@ -193,7 +193,10 @@ sitting; a phase that grows beyond that should be split.
   dashboard, the first part of the `web` crate, which Phase 11 extends
   (fitness/species/complexity charts, champion network visualization,
   decision inspector). 10e (done): opponent pool, hall of
-  fame, tuning and baseline comparison.
+  fame, tuning and baseline comparison. 10f (done): warm start from an
+  earlier run (`--from`), sets of runs with a set-wide ETA (`--runs`), and a
+  CPU speedup of about 1.5x with measurements that rule out GPU offload of the
+  network (see the GPU idea below).
 
 ## Phase 11 — Web interface
 
@@ -219,22 +222,26 @@ sitting; a phase that grows beyond that should be split.
 
 ## Idea — GPU (CUDA / ROCm) training
 
-A thought, not scheduled. Training time is dominated by *playing games*
-(dealing, enumerating legal moves, building the strategy's view of the
-table), not by evaluating the neural network: the evolved networks are tiny
-(about 20 inputs and a few dozen connections), and the simulator's work is
-branchy, small-state logic that parallelizes well across CPU cores but not
-across the thousands of lockstep lanes a GPU needs. Offloading only the
-network evaluation (CUDA, or ROCm/HIP on AMD, or a portable layer such as
-wgpu) would therefore speed up very little, because the CPU would still have
-to simulate every game and feed the GPU. A real speedup would mean porting the
-game simulation itself to the GPU (a large, separate project: fixed-size card
-and hand representations, move generation without allocation, one match per
-GPU thread), and only pays off at population and match counts far beyond what
-the current CPU runs need. Before attempting it, profile a representative run
-and measure how much of the time the network actually takes, and consider the
-cheaper wins first (more CPU threads or machines, `--matches-per-genome`
-tuning, cheaper per-turn feature extraction).
+Measured in Phase 12 (details in `docs/baselines/perf/README.md`): the
+network is not where training time goes. One move scored costs 46 ns on the
+committed champion; a game spends about 54% of its time building the
+strategy's view of the table and 30% enumerating legal moves (both before
+the Phase 12 speedup), and the network is about 2% of a training table
+and 6% even when all four seats are neat players. Offloading only the
+network to a GPU (CUDA, ROCm/HIP or a portable layer such as wgpu) can
+therefore save at most a few percent, and moving data to the GPU and back for
+a handful of 20-number vectors per decision would cost more than that.
+
+A real speedup means porting the simulation itself to the GPU: dealing, legal
+move generation, the round state machine, feature extraction and the network,
+with fixed-size card and hand representations, no allocation and one match per
+GPU thread. That is a separate large project; it also has to reproduce the CPU
+simulator exactly (a bit-for-bit comparison on thousands of seeds is the
+acceptance test), and it only pays off at populations and match counts far
+beyond what the CPU runs need (about 30k rounds/s on a laptop, more on a
+desktop). Go / no-go: start it only if training runs that matter take hours
+on the best CPU available, and after the cheaper CPU wins listed in the perf
+README are exhausted.
 
 ## Parked — deferred rule variants
 

@@ -108,13 +108,18 @@ independent of `--threads`.
 | `--target-species` | 8 | how many species the speciation steers toward |
 | `--deck-variant`, `--duplicate-rule` | single, first-dealt-wins | table rules |
 | `--seed` | 0 | change it to get an independent run |
+| `--from RUN_DIR` | off | start from the final population of an earlier run instead of a random one (see below); the population size is the earlier run's, so `--population` cannot be given |
+| `--runs N` | 1 | train N independent runs one after another as a set (see below) |
 | `--threads` | all cores | rayon thread count (results do not depend on it) |
 | `--quiet` | off | print only the final summary |
 
-Cost: roughly 18,000-23,000 rounds per second on 8 cores. Examples measured on
-this project: population 100, 40 matches x 6 rounds, 60 generations took
-about 90 seconds; population 150, 80 matches x 8 rounds, 120 generations took
-about 11 minutes.
+Cost: roughly 30,000-33,000 rounds per second on a 4-core / 8-thread laptop
+(i5-11300H); a Ryzen 7 7800X3D should be about two to three times faster
+(an estimate, not a measurement: `--generations 5 --quiet` on your machine
+prints the real `rounds/s`). A default run (population 150, 100 generations,
+100 matches x 8 rounds) takes roughly 7 minutes on the laptop. Before
+Phase 10f the same laptop did 18,000-23,000 rounds/s; see
+`docs/baselines/perf/README.md` for what changed and the numbers.
 
 Recipes:
 
@@ -133,6 +138,49 @@ target/release/cli train --out runs/six --player-count 6 \
   --opponent endgame-denial --opponent adaptive:reading,tempo,bully \
   --opponent adaptive:counting,reading
 ```
+
+## Building on an earlier run
+
+`--from RUN_DIR` starts a *new* run whose first population is the final
+population of an earlier run, instead of random genomes:
+
+```bash
+# 20 generations against the default pool, then 10 more against a harder one
+target/release/cli train --out runs/a --seed 1 --generations 20
+target/release/cli train --out runs/b --from runs/a --seed 2 --generations 10 \
+  --opponent endgame-denial --opponent adaptive:counting,reading
+```
+
+The new run has its own settings, seed and generation counter (it counts
+from 0; the dashboard and `events.jsonl` show a `warm_started_from` entry),
+and the earlier run is only read. Because the genomes are kept as they are,
+the population size is the earlier run's. A source trained on another feature
+set cannot be used: the command says so and leaves nothing behind. To continue
+the *same* run with its own settings, use `--resume` instead.
+
+## Sets of runs and the time left
+
+`--runs N` trains N independent runs one after another. `--out` then holds
+`run-01`, `run-02`, ... (run k uses seed `SEED + k - 1`) and a `set.json`
+that records how long the finished runs took:
+
+```bash
+target/release/cli train --out runs/set --runs 5 --serve
+```
+
+Every row ends with `set H:MM:SS`, the estimate for the whole set: the
+current run's own ETA plus the remaining runs at the pace of the finished ones
+(before the first run ends, at this run's projected time). The dashboard
+shows the same on its Generation card (`run ETA ... · set ... · run 2/5`) and
+follows the set from run to run on its own. A measured example: three runs of
+12 generations, predicted 58 s at the first generation, took 55 s.
+`--runs 1` is an ordinary run. `--from` combined with `--runs` warm-starts
+every run from the same source.
+
+A killed set continues with `--resume` on the set directory: finished runs
+are left alone, the run in progress is resumed from its checkpoint, and runs
+that had not started are started. (`--generations` raises the total of the
+runs still to go.)
 
 ## Stopping and resuming
 
