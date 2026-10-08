@@ -17,7 +17,7 @@ pub use hold_back_pairs::HoldBackPairs;
 pub use lowest_legal::LowestLegal;
 pub use neat_player::{
     GenomeFile, GenomeFileError, NeatStrategy, TurnSummary, FEATURE_COUNT, FEATURE_NAMES,
-    FORMAT_VERSION,
+    FEATURE_SET_VERSION, FORMAT_VERSION,
 };
 pub use random_legal::RandomLegal;
 

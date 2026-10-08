@@ -39,6 +39,13 @@ pub const FEATURE_NAMES: [&str; 20] = [
 
 pub const FEATURE_COUNT: usize = FEATURE_NAMES.len();
 
+/// Bumped whenever a feature's formula, scale or meaning changes without
+/// its name changing (for example `HAND_SCALE`, `CLOSE_HAND`, the opponent
+/// divisor): saved genomes were trained against the old values and would
+/// load cleanly but misplay. Renaming, adding, removing or reordering
+/// features is already caught by the names stored in each genome file.
+pub const FEATURE_SET_VERSION: u32 = 1;
+
 /// Hand sizes are scaled by a typical single-deck hand (52 / 4).
 const HAND_SCALE: f64 = 13.0;
 /// The largest combo any seat can field (double deck, 8 of a rank).

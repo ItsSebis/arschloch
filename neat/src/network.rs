@@ -2,7 +2,8 @@
 //!
 //! Inputs are copied through, the bias node is always `1.0`, and every
 //! hidden and output node computes `tanh(sum of weight * source)` over
-//! its enabled incoming connections. `Network` holds no mutable state, so
+//! its enabled incoming connections (`score` exposes the output's sum
+//! before the `tanh`). `Network` holds no mutable state, so
 //! one instance can be shared across threads; callers supply the scratch
 //! buffer.
 
@@ -75,26 +76,49 @@ impl Network {
         self.num_inputs
     }
 
-    /// Evaluates the network. `scratch` is reused across calls to avoid
-    /// allocating; its prior contents are irrelevant.
+    /// Evaluates the network: the output node's `tanh` activation, in
+    /// `(-1, 1)`. `scratch` is reused across calls to avoid allocating;
+    /// its prior contents are irrelevant.
     ///
     /// # Panics
     ///
     /// Panics if `inputs.len()` is not `num_inputs()`.
     pub fn activate(&self, inputs: &[f64], scratch: &mut Vec<f64>) -> f64 {
+        self.evaluate(inputs, scratch).tanh()
+    }
+
+    /// The output node's weighted sum *before* `tanh`: the same ordering
+    /// as `activate`, but it never saturates. Compare candidates by this,
+    /// not by `activate`: `tanh(x)` is exactly `1.0` in `f64` for `x`
+    /// above about 18.7, so distinct large scores would tie.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `inputs.len()` is not `num_inputs()`.
+    pub fn score(&self, inputs: &[f64], scratch: &mut Vec<f64>) -> f64 {
+        self.evaluate(inputs, scratch)
+    }
+
+    /// Runs every node and returns the output node's pre-activation sum
+    /// (hidden nodes still squash with `tanh`).
+    fn evaluate(&self, inputs: &[f64], scratch: &mut Vec<f64>) -> f64 {
         assert_eq!(inputs.len(), self.num_inputs, "wrong number of inputs");
         scratch.clear();
         scratch.resize(self.node_count, 0.0);
         scratch[..self.num_inputs].copy_from_slice(inputs);
         scratch[self.bias_index] = 1.0;
+        let mut output_sum = 0.0;
         for (target, sources) in &self.steps {
             let sum: f64 = sources
                 .iter()
                 .map(|&(source, weight)| scratch[source] * weight)
                 .sum();
             scratch[*target] = sum.tanh();
+            if *target == self.output_index {
+                output_sum = sum;
+            }
         }
-        scratch[self.output_index]
+        output_sum
     }
 }
 
@@ -196,6 +220,46 @@ mod tests {
                 Network::compile(&genome).activate(&[0.1, -0.2, 0.3, 0.4], &mut Vec::new());
             assert!(output.is_finite() && output.abs() <= 1.0);
         }
+    }
+
+    fn one_input_network(weight: f64) -> Network {
+        let nodes = vec![
+            NodeGene {
+                id: 0,
+                kind: NodeKind::Input,
+            },
+            NodeGene {
+                id: 1,
+                kind: NodeKind::Bias,
+            },
+            NodeGene {
+                id: 2,
+                kind: NodeKind::Output,
+            },
+        ];
+        Network::compile(&Genome::from_parts(1, nodes, vec![gene(0, 0, 2, weight, true)]).unwrap())
+    }
+
+    #[test]
+    fn score_is_the_unsquashed_output_and_activate_squashes_it() {
+        let network = one_input_network(0.8);
+        let score = network.score(&[0.5], &mut Vec::new());
+        assert!((score - 0.4).abs() < 1e-12, "{score}");
+        let activated = network.activate(&[0.5], &mut Vec::new());
+        assert!((activated - score.tanh()).abs() < 1e-12);
+    }
+
+    #[test]
+    fn score_keeps_ordering_where_activate_saturates() {
+        // tanh(40) and tanh(41) are both exactly 1.0 in f64, which would
+        // make a strategy comparing activations see a tie.
+        let (low, high) = (one_input_network(40.0), one_input_network(41.0));
+        let mut scratch = Vec::new();
+        assert!(
+            (low.activate(&[1.0], &mut scratch) - high.activate(&[1.0], &mut scratch)).abs()
+                < f64::EPSILON
+        );
+        assert!(high.score(&[1.0], &mut scratch) > low.score(&[1.0], &mut scratch));
     }
 
     #[test]

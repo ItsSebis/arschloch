@@ -2,7 +2,7 @@
 //! neural network and choosing the highest score. See
 //! docs/superpowers/specs/2026-10-08-neat-engine-design.md, section 4.
 //!
-//! The network never produces a move, only a number per candidate, so
+//! The network never produces a move, only a score per candidate, so
 //! the chosen move is always one `engine` reported as legal. The
 //! strategy holds an immutable compiled network and no other state, so
 //! one instance is shared across parallel matches.
@@ -16,7 +16,7 @@ use std::path::Path;
 use engine::{Card, DuplicateRule, Move};
 use neat::{Genome, Network};
 
-pub use features::{TurnSummary, FEATURE_COUNT, FEATURE_NAMES};
+pub use features::{TurnSummary, FEATURE_COUNT, FEATURE_NAMES, FEATURE_SET_VERSION};
 pub use genome_file::{GenomeFile, GenomeFileError, FORMAT_VERSION};
 
 use crate::strategy::{Strategy, TurnContext};
@@ -61,6 +61,21 @@ impl NeatStrategy {
     }
 }
 
+/// Which of two exactly-tied candidates to prefer (`Less`: `a`): a play
+/// over a pass, then the smaller combo, then the weaker top card (spec
+/// section 4). Full ties keep the earlier-listed move.
+fn tie_break(a: &Move, b: &Move, duplicate_rule: DuplicateRule) -> Ordering {
+    match (a, b) {
+        (Move::Play(x), Move::Play(y)) => x.size().cmp(&y.size()).then_with(|| {
+            x.top_card(duplicate_rule)
+                .compare(&y.top_card(duplicate_rule), duplicate_rule)
+        }),
+        (Move::Play(_), Move::Pass) => Ordering::Less,
+        (Move::Pass, Move::Play(_)) => Ordering::Greater,
+        (Move::Pass, Move::Pass) => Ordering::Equal,
+    }
+}
+
 impl Strategy for NeatStrategy {
     fn name(&self) -> &str {
         &self.name
@@ -77,12 +92,19 @@ impl Strategy for NeatStrategy {
         let mut scratch = Vec::new();
         let mut best: Option<(&Move, f64)> = None;
         for candidate in legal_moves {
+            // Compare raw scores, not `tanh` activations: the latter
+            // saturate to exactly 1.0 and turn distinct scores into ties.
             let score = self
                 .network
-                .activate(&summary.features(candidate), &mut scratch);
-            // Strictly better only: ties keep the earlier-listed move, so
-            // the choice is a pure function of the legal-move order.
-            if best.is_none_or(|(_, top)| score.total_cmp(&top) == Ordering::Greater) {
+                .score(&summary.features(candidate), &mut scratch);
+            let better = best.is_none_or(|(incumbent, top)| match score.total_cmp(&top) {
+                Ordering::Greater => true,
+                Ordering::Equal => {
+                    tie_break(candidate, incumbent, duplicate_rule) == Ordering::Less
+                }
+                Ordering::Less => false,
+            });
+            if better {
                 best = Some((candidate, score));
             }
         }
@@ -215,19 +237,42 @@ mod tests {
     }
 
     #[test]
-    fn exact_ties_keep_the_first_listed_move() {
-        // No connections: every candidate scores tanh(0) = 0.
+    fn exact_ties_prefer_a_play_over_pass_then_the_lowest_combo() {
+        // No connections: every candidate scores exactly 0 (spec section 4).
         let strategy = NeatStrategy::new("t", &linear_genome(&[])).unwrap();
         let hand = [
             card(Rank::Nine, Suit::Spades),
             card(Rank::Four, Suit::Hearts),
         ];
+        let on_table = Combo::new(vec![card(Rank::Three, Suit::Hearts)]).unwrap();
+        let mut ctx = context(&hand);
+        ctx.current_combo = Some(&on_table);
         let moves = vec![
+            Move::Pass,
             single(Rank::Nine, Suit::Spades),
             single(Rank::Four, Suit::Hearts),
         ];
-        let chosen = strategy.choose_play(&moves, RULE, &context(&hand), &mut rng());
-        assert_eq!(chosen, moves[0]);
+        let chosen = strategy.choose_play(&moves, RULE, &ctx, &mut rng());
+        assert_eq!(chosen, single(Rank::Four, Suit::Hearts));
+    }
+
+    #[test]
+    fn saturated_activations_still_rank_candidates_by_their_raw_score() {
+        // A huge weight on hand size drives every candidate's activation
+        // to exactly 1.0; the small pass-flag weight must still decide.
+        let strategy = NeatStrategy::new("t", &linear_genome(&[(10, 100.0), (0, -0.5)])).unwrap();
+        let hand = [
+            card(Rank::Nine, Suit::Spades),
+            card(Rank::Four, Suit::Hearts),
+            card(Rank::Six, Suit::Clubs),
+            card(Rank::Two, Suit::Clubs),
+        ];
+        let on_table = Combo::new(vec![card(Rank::Three, Suit::Hearts)]).unwrap();
+        let mut ctx = context(&hand);
+        ctx.current_combo = Some(&on_table);
+        let moves = vec![Move::Pass, single(Rank::Nine, Suit::Spades)];
+        let chosen = strategy.choose_play(&moves, RULE, &ctx, &mut rng());
+        assert_eq!(chosen, single(Rank::Nine, Suit::Spades));
     }
 
     #[test]

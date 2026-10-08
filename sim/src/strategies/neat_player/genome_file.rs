@@ -11,14 +11,18 @@ use std::path::Path;
 use neat::Genome;
 use serde::{Deserialize, Serialize};
 
-use super::features::{FEATURE_COUNT, FEATURE_NAMES};
+use super::features::{FEATURE_COUNT, FEATURE_NAMES, FEATURE_SET_VERSION};
 
 /// Bumped when the file layout (not the feature set) changes.
 pub const FORMAT_VERSION: u32 = 1;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct GenomeFile {
     pub format_version: u32,
+    /// See `FEATURE_SET_VERSION`: catches changed feature semantics that
+    /// the names alone cannot.
+    pub feature_set_version: u32,
     pub feature_names: Vec<String>,
     pub genome: Genome,
 }
@@ -53,6 +57,7 @@ impl GenomeFile {
     pub fn new(genome: Genome) -> Result<Self, GenomeFileError> {
         let file = Self {
             format_version: FORMAT_VERSION,
+            feature_set_version: FEATURE_SET_VERSION,
             feature_names: FEATURE_NAMES.iter().map(|&n| n.to_owned()).collect(),
             genome,
         };
@@ -65,6 +70,13 @@ impl GenomeFile {
             return Err(GenomeFileError::Mismatch(format!(
                 "format version {} (this build reads {FORMAT_VERSION})",
                 self.format_version
+            )));
+        }
+        if self.feature_set_version != FEATURE_SET_VERSION {
+            return Err(GenomeFileError::Mismatch(format!(
+                "feature set version {} (this build uses {FEATURE_SET_VERSION}): the features \
+                 keep their names but were rescaled or redefined since this genome was trained",
+                self.feature_set_version
             )));
         }
         if self.feature_names != FEATURE_NAMES {
@@ -123,6 +135,7 @@ mod tests {
     use rand::SeedableRng;
 
     use super::*;
+    use crate::strategies::neat_player::features::FEATURE_SET_VERSION;
 
     fn sample_genome() -> Genome {
         let mut tracker = InnovationTracker::new(u32::try_from(FEATURE_COUNT).unwrap() + 2);
@@ -184,6 +197,29 @@ mod tests {
         file.format_version = 99;
         let error = GenomeFile::from_json(&serde_json::to_string(&file).unwrap()).unwrap_err();
         assert!(matches!(error, GenomeFileError::Mismatch(_)), "{error}");
+    }
+
+    #[test]
+    fn a_file_from_another_feature_set_version_is_refused() {
+        // Same names, same order, but a changed scale or formula: only
+        // the version can tell, and the genome would silently misplay.
+        let mut value = serde_json::to_value(GenomeFile::new(sample_genome()).unwrap()).unwrap();
+        value["feature_set_version"] = serde_json::json!(FEATURE_SET_VERSION + 1);
+        let error = GenomeFile::from_json(&value.to_string()).unwrap_err();
+        let GenomeFileError::Mismatch(reason) = &error else {
+            panic!("expected Mismatch, got {error}");
+        };
+        assert!(reason.contains("feature set version"), "{reason}");
+    }
+
+    #[test]
+    fn a_file_without_a_feature_set_version_is_refused() {
+        let mut value = serde_json::to_value(GenomeFile::new(sample_genome()).unwrap()).unwrap();
+        value.as_object_mut().unwrap().remove("feature_set_version");
+        assert!(matches!(
+            GenomeFile::from_json(&value.to_string()),
+            Err(GenomeFileError::Parse(_))
+        ));
     }
 
     #[test]

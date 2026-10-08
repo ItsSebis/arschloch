@@ -21,8 +21,10 @@ should be clean before any phase is considered finished.
 
 Trained genomes play like any other strategy via `--strategy
 neat:PATH` (the player appears in results as `Neat(<file name>)`); the
-file records the feature set it was trained on, and a file from a
-different build is refused with an error instead of silently misplaying.
+file records the feature names and the feature-set version it was
+trained on, and a file from a different build is refused with an error
+instead of silently misplaying. Two different genome files with the same
+file name cannot share a table (their results would merge); rename one.
 
 The `neat` crate has no game dependency: `cargo test -p neat` runs its
 unit tests and the XOR end-to-end evolution test in about a second.

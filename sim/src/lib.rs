@@ -18,6 +18,6 @@ pub use statistics::{aggregate, RoleRetention, Statistics};
 pub use strategies::{
     Adaptive, AdaptiveConfig, CardCounter, DenialMode, EndgameDenial, GenomeFile, GenomeFileError,
     GreedyHighest, HoldBackPairs, LowestLegal, NeatStrategy, RandomLegal, TurnSummary,
-    FEATURE_COUNT, FEATURE_NAMES,
+    FEATURE_COUNT, FEATURE_NAMES, FEATURE_SET_VERSION,
 };
 pub use strategy::{OpponentHand, Strategy, TurnContext};

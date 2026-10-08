@@ -2,7 +2,7 @@
 //! conversions into `engine`/`sim` types and cross-field validation that
 //! `clap` can't express declaratively. See docs/ARCHITECTURE.md, "cli".
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use clap::Parser;
@@ -223,6 +223,25 @@ pub fn validate(args: &Args) -> anyhow::Result<()> {
         args.player_count,
         args.strategies.len()
     );
+    // Results are grouped by player name, so two *different* genome
+    // files sharing a name (`runs/a/champion.json`, `runs/b/champion.json`)
+    // would be silently merged into one row.
+    let mut names: Vec<(&str, &Path)> = Vec::new();
+    for arg in &args.strategies {
+        if let StrategyArg::Neat(spec) = arg {
+            let name = sim::Strategy::name(&*spec.strategy);
+            match names.iter().find(|(seen, _)| *seen == name) {
+                Some((_, path)) => anyhow::ensure!(
+                    *path == spec.path.as_path(),
+                    "{name} would name two different genome files ({} and {}); rename one so \
+                     their results stay separate",
+                    path.display(),
+                    spec.path.display()
+                ),
+                None => names.push((name, &spec.path)),
+            }
+        }
+    }
     Ok(())
 }
 
@@ -400,6 +419,41 @@ mod tests {
             .unwrap_err();
         std::fs::remove_file(&path).unwrap();
         assert!(error.contains("does not fit this build"), "{error}");
+    }
+
+    #[test]
+    fn two_different_genome_files_with_the_same_name_are_rejected() {
+        // Results are grouped by player name, so two different genomes
+        // called `Neat(champion)` would be silently merged into one row.
+        let source = genome_file("dupe-source");
+        let base = std::env::temp_dir().join(format!("dupe-dirs-{}", std::process::id()));
+        let (a, b) = (base.join("a/champion.json"), base.join("b/champion.json"));
+        for target in [&a, &b] {
+            std::fs::create_dir_all(target.parent().unwrap()).unwrap();
+            std::fs::copy(&source, target).unwrap();
+        }
+        let spec = |p: &PathBuf| {
+            format!("neat:{}", p.display())
+                .parse::<StrategyArg>()
+                .unwrap()
+        };
+        let mut args = args_with_strategies(3, 0);
+        args.strategies = vec![
+            spec(&a),
+            spec(&b),
+            StrategyArg::Fixed(FixedStrategy::LowestLegal),
+        ];
+        let error = validate(&args).unwrap_err().to_string();
+        assert!(error.contains("Neat(champion)"), "{error}");
+        // The same file in two seats is fine: it is one player.
+        args.strategies = vec![
+            spec(&a),
+            spec(&a),
+            StrategyArg::Fixed(FixedStrategy::LowestLegal),
+        ];
+        assert!(validate(&args).is_ok());
+        std::fs::remove_dir_all(&base).unwrap();
+        std::fs::remove_file(&source).unwrap();
     }
 
     #[test]
