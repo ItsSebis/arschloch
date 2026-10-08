@@ -115,7 +115,11 @@ unpaired middle role exchanges nothing):
 2. **Follow.** Going around the table, each other player either:
    - **Passes** (always legal, even if they hold a card/combo that could
      beat the current play — this is an intentional strategic option the
-     simulator needs to model, not just a fallback when unable to beat), or
+     simulator needs to model, not just a fallback when unable to beat).
+     **A pass is final for the trick:** a player who has passed is out of
+     this trick and is skipped for the rest of it; they cannot play when
+     the turn comes round to them again, and they take part again in the
+     next trick (see "Pass rule" below), or
    - Plays a combo of the **same size**, with **strictly higher** rank
      (suit, then the duplicate-tiebreak rule, break ties within equal
      rank).
@@ -123,15 +127,31 @@ unpaired middle role exchanges nothing):
      card (by the same rank/suit/duplicate-tiebreak order used everywhere
      else) represents the whole combo when comparing it against another
      combo of the same size.
-3. **Trick ends** when every other active player has passed in sequence.
-   The last player to play a combo wins the trick, collects nothing (cards
-   are discarded, not collected — unlike Whist-style games), and leads the
-   next trick.
+3. **Trick ends** when every other active player has passed, that is, only
+   the player who made the last play is still in the trick. That player wins
+   the trick, collects nothing (cards are discarded, not collected — unlike
+   Whist-style games), and leads the next trick (if they emptied their hand
+   with that play, the next active seat in turn order leads).
 4. A player who empties their hand is removed from further trick-leading
    for the round and recorded in finishing order. Passing is not available
    to a player with no cards — they're simply skipped.
 5. The round ends when only one player still holds cards; that player is
    ranked last (Arschloch, or the table's lowest role).
+
+### Pass rule
+
+Example, four seats, seat 0 leads: seat 0 plays a 4, seat 1 passes (out of
+the trick), seat 2 plays a 6, seat 3 passes (out), seat 0 plays a 9. The turn
+now goes to seat 2 only; seats 1 and 3 are skipped. If seat 2 passes, seat 0
+is the last one in the trick, wins it and leads the next. A passing seat is
+only out of *that trick*: it plays again in the following trick.
+
+The simulator also implements the older behaviour, `--pass-rule free`, where
+a pass merely declined the current play and the player could still play when
+the turn came round again after someone else had played. It was how the
+simulator behaved until Phase 14 and is kept so earlier measurements
+(`docs/baselines/pre-neat`, `docs/baselines/neat-v1`) can be reproduced. The
+rules of the game, and the default everywhere, are `--pass-rule final`.
 
 ### First lead of a trick / round
 

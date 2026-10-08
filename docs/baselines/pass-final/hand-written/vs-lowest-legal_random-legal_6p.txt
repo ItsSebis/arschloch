@@ -1,0 +1,20 @@
+6 players, Single deck, FirstDealtWins, pass rule final, 2000 matches x 10 rounds, seed 1000, 4 threads
+
+Strategy     President       Vize            Offizier        Dummkopf        ViceArschloch   Arschloch       
+LowestLegal  19676           18969           17685           16391           14727           12552           
+RandomLegal  324             1031            2315            3609            5273            7448            
+
+Voluntary pass rate: 6.00%
+
+Voluntary pass rate by strategy:
+  LowestLegal  0.00%
+  RandomLegal  28.57%
+
+President retention (stayed President the very next round):
+  LowestLegal  46.64% (8256/17702)
+  RandomLegal  21.14% (63/298)
+
+First-round placement variance (lower = more skill-driven, higher = more luck-driven):
+  LowestLegal  2.68
+  RandomLegal  1.94
+

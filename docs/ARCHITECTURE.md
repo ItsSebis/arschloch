@@ -220,6 +220,10 @@ routes serve state, events, genomes and recorded decisions). `cli train
 `Statistics`/`MatchResult` JSON output (or driving `sim` live), rather
 than a refactor of the crates above.
 
+The pass rule (Phase 14): `engine::PassRule` (`Final` by default, `Free` for the older
+behaviour) lives in `Trick`; `MatchConfig`, `TableSpec`, `TrainConfig` and the play
+session carry it, and `--pass-rule` selects it. See `docs/RULES.md`.
+
 Playing in the browser (Phase 11): the server is generic over a `Handler`
 (`GET`, plus `POST` with a capped JSON body, a Host check and an Origin check
 for handlers that accept it). `PlayApp` holds a catalog of opponents, up to 16

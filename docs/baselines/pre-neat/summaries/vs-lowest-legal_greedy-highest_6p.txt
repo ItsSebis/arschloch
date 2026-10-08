@@ -1,4 +1,4 @@
-6 players, Single deck, FirstDealtWins, 2000 matches x 10 rounds, seed 1000, 4 threads
+6 players, Single deck, FirstDealtWins, pass rule free, 2000 matches x 10 rounds, seed 1000, 4 threads
 
 Strategy       President       Vize            Offizier        Dummkopf        ViceArschloch   Arschloch       
 GreedyHighest  97              487             1631            3635            6506            7644            

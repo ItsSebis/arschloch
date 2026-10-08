@@ -14,7 +14,7 @@ use crate::args::{FixedStrategy, StrategyArg};
 
 /// The committed baseline champion, built in so `cli play` works from a
 /// release archive without any file.
-const BUILT_IN_CHAMPION: &str = include_str!("../../docs/baselines/neat-v1/champion.json");
+const BUILT_IN_CHAMPION: &str = include_str!("../../docs/baselines/neat-v2/champion.json");
 
 /// Play against the models in the browser.
 #[derive(Parser, Debug)]
@@ -94,9 +94,9 @@ pub fn build_catalog(models: &[PathBuf]) -> anyhow::Result<Vec<CatalogEntry>> {
     }
     let champion = GenomeFile::from_json(BUILT_IN_CHAMPION).context("built-in champion")?;
     catalog.push(CatalogEntry::model(
-        "model:champion-v1",
-        "Neat(champion-v1)",
-        Arc::new(NeatStrategy::new("Neat(champion-v1)", &champion.genome)?),
+        "model:champion-v2",
+        "Neat(champion-v2)",
+        Arc::new(NeatStrategy::new("Neat(champion-v2)", &champion.genome)?),
     ));
     for (index, path) in models.iter().enumerate() {
         let mut label = model_label(path);
@@ -146,7 +146,7 @@ mod tests {
             "card-counter",
             "endgame-denial",
             "adaptive:reading,tempo,bully",
-            "model:champion-v1",
+            "model:champion-v2",
         ] {
             assert!(ids.contains(&expected), "{expected} in {ids:?}");
         }

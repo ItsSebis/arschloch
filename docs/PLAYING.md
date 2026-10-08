@@ -13,7 +13,7 @@ target/release/cli play
 ```
 
 Open the printed address (`http://127.0.0.1:8090/`). The page listens on your
-own machine only. A trained champion (`Neat(champion-v1)`, the committed
+own machine only. A trained champion (`Neat(champion-v2)`, the committed
 baseline) is built in, so this works from a release download too. To play
 against your own models, add them:
 
@@ -28,7 +28,9 @@ target/release/cli play --model runs/first --model runs/second/gen-0042.json
 ## Setting up a game
 
 Choose the table size (3-6), the deck (single or double, with the duplicate
-rule for the double deck), how many rounds make a match (default 8), your seat
+rule for the double deck), whether a pass ends your part in the trick (the
+rules, default) or you may still play later in it (the old simulator
+behaviour), how many rounds make a match (default 8), your seat
 (or random) and, for every other seat, an opponent: a trained model or a
 hand-written strategy. A match runs for the chosen number of rounds with the
 roles carried over, exactly like a simulated match.
@@ -43,7 +45,9 @@ roles carried over, exactly like a simulated match.
   your hand says why it is not (wrong number of cards, not higher, mixed ranks).
   Enter plays, Esc clears. You may play any cards of one rank that beat the
   table, not just the weakest or strongest.
-- **Pass** is allowed when you do not lead the trick.
+- **Pass** is allowed when you do not lead the trick. Under the default rule a
+  pass is final for the trick: you sit out until it ends (the seat boxes show
+  who is out of the trick).
 - **The exchange**: if you hold a lower role you choose which cards to give
   (as many as the role asks for); a higher role automatically hands back its
   lowest cards. The log tells you what you gave and received.
@@ -64,7 +68,7 @@ Finished matches are appended to the records file, one JSON line each. *Your
 record* shows your mean role score (+1 = always President, 0 = even, -1 = always
 last) per opponent and per table, how often you finished first and last, and the
 latest games. For reference, the built-in champion scores about +0.6 against the
-hand-written strategies (`docs/baselines/neat-v1`); the same scale applies to
+hand-written strategies (`docs/baselines/neat-v2`); the same scale applies to
 you.
 
 ## Security

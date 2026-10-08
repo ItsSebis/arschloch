@@ -1,5 +1,11 @@
 # NEAT v1 baseline
 
+> Measured and trained under `--pass-rule free` (the simulator's behaviour before
+> Phase 14). The rules of the game are now `--pass-rule final`; see
+> `../pass-final` for these measurements under it and `../neat-v2` for the champion
+> retrained under it. The scripts here reproduce the recorded summaries with
+> `PASS_RULE=free` (their default).
+
 The first evolved champion, committed so later work can be compared
 against it the way `docs/baselines/pre-neat` records the hand-written
 strategies. Nothing here changes the pre-NEAT numbers.

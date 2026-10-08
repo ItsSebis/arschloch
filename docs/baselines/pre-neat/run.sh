@@ -10,6 +10,10 @@ SEED=1000
 MATCHES=2000
 ROUNDS=10
 THREADS=4
+# These baselines were measured before the pass rule existed: `free` is the
+# behaviour they were recorded under. Set PASS_RULE=final (and another outdir)
+# to measure the rules of the game, see docs/baselines/pass-final.
+PASS_RULE=${PASS_RULE:-free}
 mkdir -p "$OUT"
 cargo build --release -p cli >/dev/null
 CLI=target/release/cli
@@ -28,7 +32,7 @@ run() { # name player_count spec...
   local args=()
   for s in "$@"; do args+=(--strategy "$s"); done
   "$CLI" --player-count "$n" --matches "$MATCHES" --rounds "$ROUNDS" \
-    --seed "$SEED" --threads "$THREADS" --output "$TMP" "${args[@]}" \
+    --seed "$SEED" --pass-rule "$PASS_RULE" --threads "$THREADS" --output "$TMP" "${args[@]}" \
     > "$OUT/${name}_${n}p.txt"
 }
 

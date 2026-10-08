@@ -1,4 +1,4 @@
-5 players, Single deck, FirstDealtWins, 600 matches x 8 rounds per cell, seed 99
+5 players, Single deck, FirstDealtWins, pass rule free, 600 matches x 8 rounds per cell, seed 99
 score: +1 always President .. -1 always last; 0 is even
 
 opponent                                           champion

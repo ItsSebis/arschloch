@@ -2,6 +2,7 @@
   "deck_variant": "Single",
   "duplicate_rule": "FirstDealtWins",
   "matches": 600,
+  "pass_rule": "free",
   "player_count": 6,
   "results": [
     {

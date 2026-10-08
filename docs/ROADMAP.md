@@ -256,6 +256,9 @@ and what they can see, so every item needs the Phase 10 discipline: a spec
 note, a frozen comparison against `docs/baselines/neat-v1`, and a measured
 result before it becomes the default.
 
+- **Who is still in the trick:** under the pass rule `final` a seat that has
+  passed is out until the trick ends. The neat inputs do not yet say who that is
+  (`FEATURE_SET_VERSION` bump), and the strategies' `TurnContext` could carry it.
 - **Predict the other players' cards:** nudge the network towards modelling
   hidden hands. Options to try, cheapest first: add inputs derived from the
   known information (an estimate of each opponent's likely holdings from the
@@ -282,28 +285,33 @@ result before it becomes the default.
   is whether a single genome loses to the specialised ones; the baselines for
   3-6 players already exist in `docs/baselines/neat-v1`.
 
-## Phase 14 — Rule change: a pass ends your part in the trick
+## Phase 14 — Rule change: a pass ends your part in the trick (done)
 
-From `docs/Notes.md` ("once you pass in a trick you are out and cannot rejoin
-the trick"). This is a **rule variant**, not a tweak: today `docs/RULES.md`
-says passing is always legal and a player who passed may play again when the
-turn comes round to them in the same trick. Changing it affects the engine, the
-strategies and every number measured so far, so it is its own phase:
+From `docs/Notes.md` ("once you pass in a trick you are out and cannot rejoin the
+trick"). `docs/RULES.md` now says a pass is final for the trick, and that is the
+default everywhere (`--pass-rule final`); the older behaviour, where a passed player
+could still play later in the same trick, is kept as `--pass-rule free` so earlier
+results can be reproduced.
 
-- Make it a selectable rule (`--pass-rule free|final`, default `free` so all
-  existing results and genome files stay valid), implemented in
-  `engine::trick` (a passed seat is skipped for the rest of the trick and the
-  trick ends when only the last player to play remains) and in
-  `Round::legal_moves`, with RULES.md updated and the state-machine tests
-  extended (including the double deck and 3-6 seats).
-- Strategies and hand reading: under `final` a pass is far stronger
-  information (the seat can no longer play a beater later), and `PassCeilings`'
-  refutation logic becomes unnecessary; the strategies' behaviour under the new
-  rule needs checking, not just compiling.
-- Re-baseline: run the pre-NEAT baseline and the neat-v1 comparison under
-  `final`, retrain (the evolved players were trained under `free` and will not
-  be optimal), and record both rule sets side by side. The web play page and
-  `cli play` gain the rule as a setup option.
+- Engine: `engine::PassRule` in the trick bookkeeping (`Round::with_pass_rule`;
+  `Round::new` plays by the rules of the game), tested with scripted tricks, a
+  random-round property test for 3-6 seats and both decks, and a mutation check.
+- The rule is a field of `MatchConfig`, `TableSpec`, `TrainConfig` and the play
+  session, and an option of every CLI mode and the play page. Old run directories
+  carry no rule and resume as `free`; `--resume` cannot change it.
+- Re-baselined: the pre-neat and neat-v1 scripts now state `--pass-rule free`
+  explicitly and still reproduce their committed summaries (apart from the header
+  line); `docs/baselines/pass-final` re-measures both under the new rule, and
+  `docs/baselines/neat-v2` is the champion retrained under it (built into
+  `cli play`).
+- Finding: the rule only changes games where someone passes while holding a beating
+  play. Most hand-written strategies never do (their results are byte-identical
+  under both rules); the evolved players do occasionally. The retrained champion is
+  not measurably stronger than v1. `PassCeilings` hand reading is unchanged: a pass
+  still proves the seat held no beater, and a later play in a later trick still
+  refutes a dishonest pass.
+- Not done (Phase 13): neat inputs for "who is still in this trick", which the new
+  rule makes meaningful.
 
 ## Idea — GPU (CUDA / ROCm) training
 

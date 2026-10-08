@@ -58,7 +58,7 @@ function setStatus(ok) {
 }
 
 // -------------------------------------------------------------------- setup
-const DEFAULT_OPPONENTS = ["model:champion-v1", "endgame-denial", "adaptive:reading,tempo,bully", "lowest-legal", "card-counter"];
+const DEFAULT_OPPONENTS = ["model:champion-v2", "endgame-denial", "adaptive:reading,tempo,bully", "lowest-legal", "card-counter"];
 
 function optionsFor(selectedId) {
   const group = (kind, title) => {
@@ -462,7 +462,7 @@ async function loadRecords() {
     const recent = data.recent.map((r) => `<tr><td>${new Date(r.finished_unix * 1000).toLocaleString()}</td><td>${r.player_count}p vs ${r.opponents.map(esc).join(", ")}</td><td>${formatScore(r.score)}</td></tr>`).join("");
     box.innerHTML = `<h2>Your record</h2>
       ${data.write_error ? `<p class="bad">${esc(data.write_error)} — new games are not being saved.</p>` : ""}
-      <p class="muted">${data.total_games} finished game${data.total_games === 1 ? "" : "s"}. Score: +1 = always President, 0 = even, −1 = always last. For reference the built-in champion scores about +0.6 against the hand-written strategies (docs/baselines/neat-v1).</p>
+      <p class="muted">${data.total_games} finished game${data.total_games === 1 ? "" : "s"}. Score: +1 = always President, 0 = even, −1 = always last. For reference the built-in champion scores about +0.6 against the hand-written strategies (docs/baselines/neat-v2).</p>
       <h3>By opponent</h3><table class="t"><thead><tr><th>Opponent</th><th>Games</th><th>Mean score</th><th></th></tr></thead><tbody>${opp}</tbody></table>
       <h3>By table</h3><table class="t"><thead><tr><th>Players</th><th>Opponents</th><th>Games</th><th>Mean</th><th>President</th><th>Last</th></tr></thead><tbody>${tables}</tbody></table>
       <h3>Recent games</h3><table class="t"><tbody>${recent}</tbody></table>`;
