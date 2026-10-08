@@ -273,6 +273,7 @@ dependencies = [
  "chacha20",
  "getrandom",
  "rand_core",
+ "serde",
 ]
 
 [[package]]

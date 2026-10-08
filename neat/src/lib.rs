@@ -19,5 +19,5 @@ pub use error::NeatError;
 pub use genome::{ConnectionGene, Genome, NodeGene, NodeKind};
 pub use innovation::InnovationTracker;
 pub use network::Network;
-pub use population::{GenerationReport, Population};
+pub use population::{GenerationReport, Population, PopulationState};
 pub use species::SpeciesStats;

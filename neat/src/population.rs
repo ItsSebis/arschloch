@@ -4,14 +4,15 @@
 //! `genomes()` -> evaluate each -> `set_fitness(..)` -> `advance()`.
 //! Higher fitness is better; fitness may be negative.
 //!
-//! Everything random flows through one seeded `StdRng`, and species and
+//! Everything random flows through one seeded `Xoshiro256PlusPlus` (a
+//! generator whose state serializes, which is what makes a run resumable), and species and
 //! genomes are always visited in index order, so a run is a pure
 //! function of `(config, num_inputs, seed, fitness values)`.
 
-use rand::rngs::StdRng;
+use rand::rngs::Xoshiro256PlusPlus;
 use rand::seq::IndexedRandom;
 use rand::{RngExt, SeedableRng};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::config::NeatConfig;
 use crate::crossover::crossover;
@@ -22,7 +23,7 @@ use crate::mutation::mutate;
 use crate::species::{assign, Species, SpeciesStats};
 
 /// Numbers describing the generation that `advance` just consumed.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GenerationReport {
     pub generation: u32,
     pub best_fitness: f64,
@@ -40,9 +41,25 @@ pub struct GenerationReport {
     pub innovation_count: usize,
 }
 
+/// Everything needed to continue a run exactly where it stopped: the
+/// generator state, innovation registry, species bookkeeping and the
+/// current genomes. Taken *between* generations (after `advance`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PopulationState {
+    config: NeatConfig,
+    rng: Xoshiro256PlusPlus,
+    tracker: InnovationTracker,
+    genomes: Vec<Genome>,
+    species: Vec<Species>,
+    next_species_id: u32,
+    threshold: f64,
+    generation: u32,
+    best: Option<(Genome, f64)>,
+}
+
 pub struct Population {
     config: NeatConfig,
-    rng: StdRng,
+    rng: Xoshiro256PlusPlus,
     tracker: InnovationTracker,
     genomes: Vec<Genome>,
     fitness: Option<Vec<f64>>,
@@ -72,7 +89,7 @@ impl Population {
                 "num_inputs must be at least 1".into(),
             ));
         }
-        let mut rng = StdRng::seed_from_u64(seed);
+        let mut rng = Xoshiro256PlusPlus::seed_from_u64(seed);
         let mut tracker =
             InnovationTracker::new(u32::try_from(num_inputs).expect("input count fits u32") + 2);
         let genomes = (0..config.population_size)
@@ -89,6 +106,69 @@ impl Population {
             next_species_id: 0,
             generation: 0,
             best: None,
+        })
+    }
+
+    /// Captures the population between generations; see `PopulationState`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if fitness has been recorded but not yet consumed by
+    /// `advance`: that half-finished generation cannot be resumed.
+    #[must_use]
+    pub fn snapshot(&self) -> PopulationState {
+        assert!(
+            self.fitness.is_none(),
+            "snapshot between generations: fitness is pending"
+        );
+        PopulationState {
+            config: self.config.clone(),
+            rng: self.rng.clone(),
+            tracker: self.tracker.clone(),
+            genomes: self.genomes.clone(),
+            species: self.species.clone(),
+            next_species_id: self.next_species_id,
+            threshold: self.threshold,
+            generation: self.generation,
+            best: self.best.clone(),
+        }
+    }
+
+    /// Rebuilds a population from a snapshot (for example one read back
+    /// from JSON), checking it is internally consistent.
+    ///
+    /// # Errors
+    ///
+    /// Returns `NeatError::InvalidConfig` if the config is invalid or the
+    /// genome count differs from `population_size`, and
+    /// `NeatError::InvalidGenome` if the genomes disagree on their input
+    /// count.
+    pub fn restore(state: PopulationState) -> Result<Self, NeatError> {
+        state.config.validate()?;
+        if state.genomes.len() != state.config.population_size {
+            return Err(NeatError::InvalidConfig(format!(
+                "snapshot holds {} genomes but population_size is {}",
+                state.genomes.len(),
+                state.config.population_size
+            )));
+        }
+        let inputs = state.genomes[0].num_inputs();
+        if state.genomes.iter().any(|g| g.num_inputs() != inputs) {
+            return Err(NeatError::InvalidGenome(
+                "snapshot genomes disagree on their input count".into(),
+            ));
+        }
+        Ok(Self {
+            config: state.config,
+            rng: state.rng,
+            tracker: state.tracker,
+            genomes: state.genomes,
+            fitness: None,
+            species: state.species,
+            next_species_id: state.next_species_id,
+            threshold: state.threshold,
+            generation: state.generation,
+            best: state.best,
         })
     }
 
@@ -640,6 +720,33 @@ mod tests {
     }
 
     #[test]
+    fn default_config_forms_several_species_within_the_first_generations() {
+        // Random initial weights put genomes ~0.3 apart; a threshold far
+        // above that would hold the whole population in one species for
+        // dozens of generations, with no protection for new structure.
+        let probe = [0.3, -0.7, 0.1, 0.9, -0.2, 0.5, -0.4, 0.8, 0.0, -0.6];
+        let mut population = Population::new(10, NeatConfig::default(), 21).unwrap();
+        let mut scratch = Vec::new();
+        let mut species_at_generation_14 = 0;
+        for generation in 0..15 {
+            let fitness: Vec<f64> = population
+                .genomes()
+                .iter()
+                .map(|g| crate::Network::compile(g).activate(&probe, &mut scratch))
+                .collect();
+            population.set_fitness(fitness);
+            let report = population.advance();
+            if generation == 14 {
+                species_at_generation_14 = report.species.len();
+            }
+        }
+        assert!(
+            species_at_generation_14 >= 3,
+            "only {species_at_generation_14} species after 15 generations"
+        );
+    }
+
+    #[test]
     fn default_config_keeps_the_species_count_stable() {
         // Fitness is a network's output on a fixed probe input: smooth,
         // deterministic, and it rewards drifting weights, so the
@@ -665,6 +772,56 @@ mod tests {
                 );
             }
         }
+    }
+
+    fn run_generations(population: &mut Population, from: u32, to: u32) {
+        for generation in from..to {
+            let fitness = (0..30)
+                .map(|i| f64::from((i * 7 + generation) % 11))
+                .collect();
+            population.set_fitness(fitness);
+            population.advance();
+        }
+    }
+
+    #[test]
+    fn a_restored_snapshot_continues_exactly_like_the_original() {
+        let mut straight = Population::new(2, tiny_config(), 5).unwrap();
+        run_generations(&mut straight, 0, 8);
+
+        let mut first_half = Population::new(2, tiny_config(), 5).unwrap();
+        run_generations(&mut first_half, 0, 4);
+        // Through JSON, as a checkpoint file would be.
+        let json = serde_json::to_string(&first_half.snapshot()).unwrap();
+        let mut resumed = Population::restore(serde_json::from_str(&json).unwrap()).unwrap();
+        assert_eq!(resumed.generation(), 4);
+        run_generations(&mut resumed, 4, 8);
+
+        assert_eq!(
+            serde_json::to_string(&resumed.snapshot()).unwrap(),
+            serde_json::to_string(&straight.snapshot()).unwrap()
+        );
+        assert_eq!(
+            serde_json::to_string(resumed.genomes()).unwrap(),
+            serde_json::to_string(straight.genomes()).unwrap()
+        );
+    }
+
+    #[test]
+    fn restore_rejects_a_snapshot_that_does_not_fit_its_config() {
+        let population = Population::new(2, tiny_config(), 1).unwrap();
+        let mut value = serde_json::to_value(population.snapshot()).unwrap();
+        value["genomes"].as_array_mut().unwrap().pop();
+        let state = serde_json::from_value(value).unwrap();
+        assert!(Population::restore(state).is_err());
+    }
+
+    #[test]
+    #[should_panic(expected = "fitness is pending")]
+    fn snapshotting_mid_generation_panics() {
+        let mut population = Population::new(2, tiny_config(), 1).unwrap();
+        population.set_fitness(vec![0.0; 30]);
+        let _ = population.snapshot();
     }
 
     #[test]

@@ -4,7 +4,7 @@
 
 use rand::seq::IndexedRandom;
 use rand::Rng;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::config::NeatConfig;
 use crate::genome::Genome;
@@ -63,7 +63,7 @@ fn count_unmatched(innovation: u32, other_max: Option<u32>, disjoint: &mut u32, 
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct Species {
     pub id: u32,
     pub representative: Genome,
@@ -75,7 +75,7 @@ pub(crate) struct Species {
 }
 
 /// Public per-species numbers for one evaluated generation.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SpeciesStats {
     pub id: u32,
     pub size: usize,

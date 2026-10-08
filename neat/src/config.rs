@@ -41,6 +41,9 @@ pub struct NeatConfig {
     pub disjoint_coefficient: f64,
     pub weight_difference_coefficient: f64,
     /// Starting speciation threshold; adapted to hold `target_species`.
+    /// Distances here are small (random initial weights in `[-1, 1]` put
+    /// two genomes about 0.3 apart), so a threshold of 3.0 would keep a
+    /// whole run in one species for dozens of generations.
     pub compatibility_threshold: f64,
     pub min_compatibility_threshold: f64,
     /// How far the threshold moves per generation toward `target_species`.
@@ -76,8 +79,8 @@ impl Default for NeatConfig {
             excess_coefficient: 1.0,
             disjoint_coefficient: 1.0,
             weight_difference_coefficient: 0.4,
-            compatibility_threshold: 3.0,
-            min_compatibility_threshold: 0.3,
+            compatibility_threshold: 0.5,
+            min_compatibility_threshold: 0.1,
             threshold_step: 0.05,
             target_species: 8,
             stagnation_limit: 15,
