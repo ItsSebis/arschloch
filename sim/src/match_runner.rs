@@ -7,13 +7,14 @@
 use std::sync::Arc;
 
 use engine::{
-    assign_roles, deal, exchange_with_selection, lowest_card_holder, standard_deck, Card,
-    DuplicateRule, Move, Round, SeatId,
+    assign_roles, deal, exchange_with_selection, lowest_card_holder, standard_deck, Card, Move,
+    Round, SeatId,
 };
 use rand::seq::SliceRandom;
 use rand::SeedableRng;
 use rayon::prelude::*;
 
+use crate::hand_reading::PassTracker;
 use crate::match_config::MatchConfig;
 use crate::match_result::MatchResult;
 use crate::strategy::{OpponentHand, Strategy, TurnContext};
@@ -30,14 +31,10 @@ fn turn_context_for<'a>(
     seat: SeatId,
     player_count: u8,
     round_deck: &[Card],
-    duplicate_rule: DuplicateRule,
+    tracker: &mut PassTracker,
 ) -> TurnContext<'a> {
-    let all_ceilings = crate::hand_reading::read_pass_ceilings(
-        usize::from(player_count),
-        round.play_history(),
-        round.pass_history(),
-        duplicate_rule,
-    );
+    tracker.update(round.play_history(), round.pass_history());
+    let all_ceilings = tracker.ceilings();
 
     let opponents: Vec<OpponentHand> = (0..player_count)
         .filter(|&s| s != seat)
@@ -49,17 +46,23 @@ fn turn_context_for<'a>(
         })
         .collect();
 
-    let mut unseen_cards = round_deck.to_vec();
+    // Every card of the round has its own `deal_index` (run_match numbers
+    // the deck), so "seen" is a bit per index; the unseen cards keep the
+    // deck's order.
+    let mut seen = [false; 256];
     for card in round.hand(seat).iter().chain(
         round
             .play_history()
             .iter()
             .flat_map(|(_, combo)| combo.cards()),
     ) {
-        if let Some(pos) = unseen_cards.iter().position(|c| c == card) {
-            unseen_cards.remove(pos);
-        }
+        seen[usize::from(card.deal_index)] = true;
     }
+    let unseen_cards: Vec<Card> = round_deck
+        .iter()
+        .filter(|card| !seen[usize::from(card.deal_index)])
+        .copied()
+        .collect();
 
     TurnContext {
         seat,
@@ -133,6 +136,7 @@ pub fn run_match(config: &MatchConfig, strategies: &[Arc<dyn Strategy>]) -> Matc
         let mut round = Round::new(hands, config.duplicate_rule, leader)
             .expect("player_count/leader are always valid for a supported table size");
 
+        let mut tracker = PassTracker::new(usize::from(config.player_count), config.duplicate_rule);
         while !round.is_complete() {
             let seat = round.seat_to_move().expect("round is not complete");
             if round.current_combo().is_none() {
@@ -140,13 +144,8 @@ pub fn run_match(config: &MatchConfig, strategies: &[Arc<dyn Strategy>]) -> Matc
             }
             let legal_moves = round.legal_moves();
 
-            let context = turn_context_for(
-                &round,
-                seat,
-                config.player_count,
-                &round_deck,
-                config.duplicate_rule,
-            );
+            let context =
+                turn_context_for(&round, seat, config.player_count, &round_deck, &mut tracker);
 
             let chosen = strategies[usize::from(seat)].choose_play(
                 &legal_moves,

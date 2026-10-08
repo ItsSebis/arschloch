@@ -123,6 +123,91 @@ pub fn read_pass_ceilings(
     ceilings
 }
 
+/// `read_pass_ceilings`, computed incrementally: the match loop reads
+/// the ceilings before every turn, and re-sweeping the whole history each
+/// time made that the largest cost of simulating a game. The tracker
+/// ingests each play and pass once, in the order they happened, keeping
+/// per seat only the passes not (yet) refuted; a play by a seat refutes
+/// its earlier passes at the same or a smaller size that it topped.
+/// Always equal to `read_pass_ceilings` on the same history (tested move
+/// by move on random rounds).
+#[derive(Debug, Clone)]
+pub struct PassTracker {
+    duplicate_rule: DuplicateRule,
+    plays_seen: usize,
+    passes_seen: usize,
+    /// Per seat: `(size, top card)` of every pass not refuted so far.
+    open: Vec<Vec<(usize, Card)>>,
+    ceilings: Vec<PassCeilings>,
+}
+
+impl PassTracker {
+    #[must_use]
+    pub fn new(player_count: usize, duplicate_rule: DuplicateRule) -> Self {
+        Self {
+            duplicate_rule,
+            plays_seen: 0,
+            passes_seen: 0,
+            open: vec![Vec::new(); player_count],
+            ceilings: vec![PassCeilings::default(); player_count],
+        }
+    }
+
+    /// Takes in whatever was added to the round's histories since the
+    /// last call (both slices are the round's complete histories).
+    pub fn update(
+        &mut self,
+        play_history: &[(SeatId, Combo)],
+        pass_history: &[(SeatId, Combo, usize)],
+    ) {
+        let rule = self.duplicate_rule;
+        loop {
+            // A pass tagged `plays_before` happened after that many plays
+            // and before the next one.
+            let next_pass = pass_history
+                .get(self.passes_seen)
+                .filter(|(_, _, plays_before)| *plays_before <= self.plays_seen);
+            if let Some((seat, combo, _)) = next_pass {
+                let seat = usize::from(*seat);
+                self.open[seat].push((combo.size(), combo.top_card(rule)));
+                self.refresh(seat);
+                self.passes_seen += 1;
+            } else if let Some((seat, combo)) = play_history.get(self.plays_seen) {
+                let (size, top) = (combo.size(), combo.top_card(rule));
+                let seat = usize::from(*seat);
+                let before = self.open[seat].len();
+                self.open[seat].retain(|&(pass_size, pass_top)| {
+                    !(pass_size <= size && top.compare(&pass_top, rule) == Ordering::Greater)
+                });
+                if self.open[seat].len() != before {
+                    self.refresh(seat);
+                }
+                self.plays_seen += 1;
+            } else {
+                break;
+            }
+        }
+    }
+
+    fn refresh(&mut self, seat: usize) {
+        let rule = self.duplicate_rule;
+        let mut ceilings = PassCeilings::default();
+        for &(size, top) in &self.open[seat] {
+            let slot = &mut ceilings.by_size[size - 1];
+            if slot.is_none_or(|c| top.compare(&c, rule) == Ordering::Less) {
+                *slot = Some(top);
+            }
+        }
+        self.ceilings[seat] = ceilings;
+    }
+
+    /// One `PassCeilings` per seat, as of the histories last `update`d.
+    #[must_use]
+    pub fn ceilings(&self) -> &[PassCeilings] {
+        &self.ceilings
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -134,6 +219,56 @@ mod tests {
 
     fn combo(cards: Vec<Card>) -> Combo {
         Combo::new(cards).unwrap()
+    }
+
+    /// Plays whole rounds with random legal moves (so many passes, and
+    /// passes that later turn out dishonest) and checks, after every
+    /// move, that the incremental tracker equals the reverse sweep.
+    #[test]
+    fn the_tracker_equals_the_reverse_sweep_after_every_move() {
+        use engine::{deal, lowest_card_holder, standard_deck, DeckVariant, Move, Round};
+        use rand::seq::SliceRandom;
+        use rand::{RngExt, SeedableRng};
+
+        let mut rng = rand::rngs::StdRng::seed_from_u64(11);
+        for (variant, rule) in [
+            (DeckVariant::Single, DuplicateRule::FirstDealtWins),
+            (DeckVariant::Double, DuplicateRule::LastDealtWins),
+        ] {
+            for players in 3..=6u8 {
+                for _ in 0..40 {
+                    let mut deck = standard_deck(variant);
+                    deck.shuffle(&mut rng);
+                    for (i, c) in deck.iter_mut().enumerate() {
+                        c.deal_index = u8::try_from(i).unwrap();
+                    }
+                    let hands = deal(deck, players).unwrap();
+                    let leader = lowest_card_holder(&hands, rule).unwrap();
+                    let mut round = Round::new(hands, rule, leader).unwrap();
+                    let mut tracker = PassTracker::new(usize::from(players), rule);
+                    while !round.is_complete() {
+                        tracker.update(round.play_history(), round.pass_history());
+                        let expected = read_pass_ceilings(
+                            usize::from(players),
+                            round.play_history(),
+                            round.pass_history(),
+                            rule,
+                        );
+                        assert_eq!(tracker.ceilings(), &expected[..]);
+                        let seat = round.seat_to_move().unwrap();
+                        let moves = round.legal_moves();
+                        // Passing a lot makes refutable passes common.
+                        let pass = moves.contains(&Move::Pass) && rng.random_bool(0.5);
+                        let chosen = if pass {
+                            Move::Pass
+                        } else {
+                            moves[rng.random_range(0..moves.len())].clone()
+                        };
+                        round.submit_move(seat, chosen).unwrap();
+                    }
+                }
+            }
+        }
     }
 
     #[test]

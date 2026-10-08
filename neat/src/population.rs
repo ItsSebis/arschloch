@@ -197,7 +197,7 @@ impl Population {
             )));
         }
         let mut population = Self::restore(PopulationState {
-            config: config.clone(),
+            config,
             ..state
         })?;
         population.generation = 0;
