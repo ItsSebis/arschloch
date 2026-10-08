@@ -255,14 +255,18 @@ function renderFitness() {
 
 function renderOpponents() {
   const events = state.events;
-  const names = events.length ? events[events.length - 1].opponents.map((o) => o.name) : [];
-  lineChart("opponents-chart", "opponents-readout", {
-    xs: events.map((e) => e.generation), ref: 0, signed: true,
-    series: names.map((name, k) => ({
-      name, color: `var(--s${(k % 6) + 1})`,
-      values: events.map((e) => e.opponents.find((o) => o.name === name)?.score.mean ?? null),
-    })),
-  });
+  // Names from every generation (not just the last), so an opponent that
+  // left the pool keeps its line and colour.
+  const names = [];
+  for (const e of events) for (const o of e.opponents) if (!names.includes(o.name)) names.push(o.name);
+  const series = names.map((name, k) => ({
+    name, color: `var(--s${(k % 6) + 1})`,
+    values: events.map((e) => e.opponents.find((o) => o.name === name)?.score.mean ?? null),
+  }));
+  if (events.some((e) => e.hall_score)) {
+    series.push({ name: "hall of fame (past champions)", color: "var(--s6)", dashed: true, values: events.map((e) => (e.hall_score ? e.hall_score.mean : null)) });
+  }
+  lineChart("opponents-chart", "opponents-readout", { xs: events.map((e) => e.generation), ref: 0, signed: true, series });
 }
 
 function renderSpecies() {
@@ -417,7 +421,7 @@ async function showNetwork() {
     if (generation !== state.networkGeneration) return; // the user moved on
     renderNetwork($("network"), file, { showDisabled: state.showDisabled });
     $("network-note").textContent = event
-      ? `Champion of generation ${generation}: ${event.champion.hidden_nodes} hidden nodes, ${event.champion.enabled_connections} enabled connections, fixed-match score ${fmt(event.champion.reeval.mean, 3, true)}${event.champion.is_new_best ? " (new best)" : ""}.`
+      ? `Champion of generation ${generation}: ${event.champion.hidden_nodes} hidden nodes, ${event.champion.enabled_connections} enabled connections, fixed-match score ${fmt(event.champion.reeval.mean, 3, true)}${event.champion.is_new_best ? " (new best)" : ""}${event.champion.training_rank > 0 ? `; the fixed matches preferred it to ${event.champion.training_rank} genome(s) that looked better in training` : ""}.`
       : "";
   } catch (error) {
     $("network").innerHTML = `<p class="muted">no genome for generation ${generation} yet</p>`;
