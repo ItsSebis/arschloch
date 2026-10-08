@@ -196,10 +196,7 @@ impl Population {
                 config.population_size
             )));
         }
-        let mut population = Self::restore(PopulationState {
-            config,
-            ..state
-        })?;
+        let mut population = Self::restore(PopulationState { config, ..state })?;
         population.generation = 0;
         population.best = None;
         population.rng = Xoshiro256PlusPlus::seed_from_u64(seed);
