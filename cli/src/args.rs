@@ -28,6 +28,13 @@ pub struct Args {
     #[arg(long, value_parser = clap::value_parser!(engine::PassRule), default_value_t = engine::PassRule::Final)]
     pub pass_rule: engine::PassRule,
 
+    /// Whether the lower role of an exchange pair must give its highest cards
+    /// (`forced`, the rules of the game) or may choose which cards to give
+    /// (`free`, how the simulator behaved before Phase 15; also lets strategies
+    /// that keep pairs together use their own choice).
+    #[arg(long, value_parser = clap::value_parser!(engine::ExchangeRule), default_value_t = engine::ExchangeRule::Forced)]
+    pub exchange_rule: engine::ExchangeRule,
+
     /// How many independent matches to simulate.
     #[arg(long, value_parser = clap::builder::RangedI64ValueParser::<usize>::new().range(1..))]
     pub matches: usize,
@@ -262,6 +269,7 @@ mod tests {
             deck_variant: DeckVariantArg::Single,
             duplicate_rule: DuplicateRuleArg::FirstDealtWins,
             pass_rule: engine::PassRule::default(),
+            exchange_rule: engine::ExchangeRule::default(),
             matches: 1,
             rounds: 1,
             strategies: vec![StrategyArg::Fixed(FixedStrategy::LowestLegal); strategy_count],

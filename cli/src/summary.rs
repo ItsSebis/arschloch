@@ -17,8 +17,8 @@ pub fn render_summary(args: &Args, statistics: &sim::Statistics) -> String {
     let duplicate_rule = format!("{:?}", args.duplicate_rule);
     let _ = writeln!(
         out,
-        "{} players, {deck_variant} deck, {duplicate_rule}, pass rule {}, {} matches x {} rounds, seed {}, {} threads",
-        args.player_count, args.pass_rule, args.matches, args.rounds, args.seed, args.threads
+        "{} players, {deck_variant} deck, {duplicate_rule}, pass rule {}, exchange rule {}, {} matches x {} rounds, seed {}, {} threads",
+        args.player_count, args.pass_rule, args.exchange_rule, args.matches, args.rounds, args.seed, args.threads
     );
     let _ = writeln!(out);
 
@@ -136,6 +136,7 @@ mod tests {
             deck_variant: DeckVariantArg::Single,
             duplicate_rule: DuplicateRuleArg::FirstDealtWins,
             pass_rule: engine::PassRule::default(),
+            exchange_rule: engine::ExchangeRule::default(),
             matches: 10,
             rounds: 2,
             strategies: vec![

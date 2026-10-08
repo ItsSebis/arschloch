@@ -70,6 +70,13 @@ pub struct EvaluateArgs {
     #[arg(long, value_parser = clap::value_parser!(engine::PassRule), default_value_t = engine::PassRule::Final)]
     pub pass_rule: engine::PassRule,
 
+    /// Whether the lower role of an exchange pair must give its highest cards
+    /// (`forced`, the rules of the game) or may choose which cards to give
+    /// (`free`, how the simulator behaved before Phase 15; also lets strategies
+    /// that keep pairs together use their own choice).
+    #[arg(long, value_parser = clap::value_parser!(engine::ExchangeRule), default_value_t = engine::ExchangeRule::Forced)]
+    pub exchange_rule: engine::ExchangeRule,
+
     /// Rounds per match.
     #[arg(long, default_value_t = 8, value_parser = clap::builder::RangedI64ValueParser::<usize>::new().range(1..))]
     pub rounds: usize,
@@ -231,6 +238,7 @@ pub fn run(raw_args: impl Iterator<Item = String>) -> anyhow::Result<()> {
         duplicate_rule: args.duplicate_rule.into(),
         rounds: args.rounds,
         pass_rule: args.pass_rule,
+        exchange_rule: args.exchange_rule,
     };
     // A seed stream that training (generation streams, fixed and held-out
     // sets) never uses.
@@ -263,11 +271,12 @@ pub fn run(raw_args: impl Iterator<Item = String>) -> anyhow::Result<()> {
         .collect();
 
     println!(
-        "{} players, {:?} deck, {:?}, pass rule {}, {} matches x {} rounds per cell, seed {}",
+        "{} players, {:?} deck, {:?}, pass rule {}, exchange rule {}, {} matches x {} rounds per cell, seed {}",
         args.player_count,
         args.deck_variant,
         args.duplicate_rule,
         args.pass_rule,
+        args.exchange_rule,
         args.matches,
         args.rounds,
         args.seed
@@ -280,6 +289,7 @@ pub fn run(raw_args: impl Iterator<Item = String>) -> anyhow::Result<()> {
             "deck_variant": format!("{:?}", args.deck_variant),
             "duplicate_rule": format!("{:?}", args.duplicate_rule),
             "pass_rule": args.pass_rule.to_string(),
+            "exchange_rule": args.exchange_rule.to_string(),
             "rounds": args.rounds,
             "matches": args.matches,
             "seed": args.seed,

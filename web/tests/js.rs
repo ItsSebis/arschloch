@@ -30,6 +30,7 @@ fn real_run() -> PathBuf {
         deck: DeckChoice::Single,
         duplicate_rule: DuplicateChoice::FirstDealtWins,
         pass_rule: sim::PassRule::default(),
+        exchange_rule: sim::ExchangeRule::default(),
         rounds_per_match: 3,
         matches_per_genome: 6,
         reeval_matches: 8,

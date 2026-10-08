@@ -1,7 +1,7 @@
 //! The settings of a training run, saved with it so a run can be resumed
 //! (and later understood) without remembering the command line.
 
-use engine::{DeckVariant, DuplicateRule, PassRule};
+use engine::{DeckVariant, DuplicateRule, ExchangeRule, PassRule};
 use neat::NeatConfig;
 use serde::{Deserialize, Serialize};
 
@@ -31,6 +31,10 @@ pub struct TrainConfig {
     /// the rule existed carry no value and were played under `free`.
     #[serde(default = "legacy_pass_rule")]
     pub pass_rule: PassRule,
+    /// Whether the lower role of an exchange pair must give its highest
+    /// cards. Runs written before the rule existed were played under `free`.
+    #[serde(default = "legacy_exchange_rule")]
+    pub exchange_rule: ExchangeRule,
     /// Rounds per evaluation match (role carry-over between rounds).
     pub rounds_per_match: usize,
     /// Matches each genome plays per generation. Every genome plays the
@@ -67,6 +71,11 @@ fn legacy_pass_rule() -> PassRule {
     PassRule::Free
 }
 
+/// The exchange rule every run before the rule existed was played under.
+fn legacy_exchange_rule() -> ExchangeRule {
+    ExchangeRule::Free
+}
+
 fn one() -> usize {
     1
 }
@@ -88,6 +97,7 @@ impl TrainConfig {
                 DuplicateChoice::LastDealtWins => DuplicateRule::LastDealtWins,
             },
             pass_rule: self.pass_rule,
+            exchange_rule: self.exchange_rule,
             rounds: self.rounds_per_match,
         }
     }
@@ -141,6 +151,7 @@ pub(crate) mod test_support {
             deck: DeckChoice::Single,
             duplicate_rule: DuplicateChoice::FirstDealtWins,
             pass_rule: PassRule::default(),
+            exchange_rule: ExchangeRule::default(),
             rounds_per_match: 4,
             matches_per_genome: 6,
             reeval_matches: 8,
@@ -178,6 +189,7 @@ mod tests {
                 TrainConfig {
                     player_count: 2,
                     pass_rule: engine::PassRule::default(),
+                    exchange_rule: engine::ExchangeRule::default(),
                     ..sample()
                 },
                 "player_count",
@@ -186,6 +198,7 @@ mod tests {
                 TrainConfig {
                     rounds_per_match: 0,
                     pass_rule: engine::PassRule::default(),
+                    exchange_rule: engine::ExchangeRule::default(),
                     ..sample()
                 },
                 "rounds_per_match",
@@ -194,6 +207,7 @@ mod tests {
                 TrainConfig {
                     matches_per_genome: 0,
                     pass_rule: engine::PassRule::default(),
+                    exchange_rule: engine::ExchangeRule::default(),
                     ..sample()
                 },
                 "matches_per_genome",
@@ -202,6 +216,7 @@ mod tests {
                 TrainConfig {
                     reeval_matches: 0,
                     pass_rule: engine::PassRule::default(),
+                    exchange_rule: engine::ExchangeRule::default(),
                     ..sample()
                 },
                 "reeval_matches",
@@ -210,6 +225,7 @@ mod tests {
                 TrainConfig {
                     generations: 0,
                     pass_rule: engine::PassRule::default(),
+                    exchange_rule: engine::ExchangeRule::default(),
                     ..sample()
                 },
                 "generations",
@@ -218,6 +234,7 @@ mod tests {
                 TrainConfig {
                     opponent_specs: vec![],
                     pass_rule: engine::PassRule::default(),
+                    exchange_rule: engine::ExchangeRule::default(),
                     ..sample()
                 },
                 "pool is empty",
@@ -226,6 +243,7 @@ mod tests {
                 TrainConfig {
                     champion_candidates: 0,
                     pass_rule: engine::PassRule::default(),
+                    exchange_rule: engine::ExchangeRule::default(),
                     ..sample()
                 },
                 "champion_candidates",
@@ -234,6 +252,7 @@ mod tests {
                 TrainConfig {
                     champion_candidates: 99,
                     pass_rule: engine::PassRule::default(),
+                    exchange_rule: engine::ExchangeRule::default(),
                     ..sample()
                 },
                 "champion_candidates",
@@ -242,6 +261,7 @@ mod tests {
                 TrainConfig {
                     hall_of_fame_interval: 0,
                     pass_rule: engine::PassRule::default(),
+                    exchange_rule: engine::ExchangeRule::default(),
                     ..sample()
                 },
                 "hall_of_fame_interval",
@@ -281,6 +301,7 @@ mod tests {
             deck: DeckChoice::Double,
             duplicate_rule: DuplicateChoice::LastDealtWins,
             pass_rule: engine::PassRule::default(),
+            exchange_rule: engine::ExchangeRule::default(),
             ..sample()
         }
         .table();
@@ -306,5 +327,21 @@ mod tests {
             PassRule::Final,
             "new runs use the rules of the game"
         );
+    }
+
+    #[test]
+    fn a_config_written_before_the_exchange_rule_existed_reads_as_free() {
+        let mut value = serde_json::to_value(sample()).unwrap();
+        value.as_object_mut().unwrap().remove("exchange_rule");
+        let old: TrainConfig = serde_json::from_value(value).unwrap();
+        assert_eq!(old.exchange_rule, ExchangeRule::Free);
+        assert_eq!(
+            sample().exchange_rule,
+            ExchangeRule::Forced,
+            "new runs use the rules of the game"
+        );
+        let again: TrainConfig =
+            serde_json::from_str(&serde_json::to_string(&sample()).unwrap()).unwrap();
+        assert_eq!(again.exchange_rule, ExchangeRule::Forced);
     }
 }

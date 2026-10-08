@@ -17,9 +17,9 @@ use std::fmt;
 use std::sync::Arc;
 
 use engine::{
-    assign_roles, deal, exchange_counts_for_player_count, exchange_with_selection,
-    lowest_card_holder, roles_for_player_count, standard_deck, Card, Combo, DeckVariant,
-    DuplicateRule, Move, PassRule, Rank, Role, Round, SeatId, Suit,
+    assign_roles, deal, exchange_counts_for_player_count, exchange_with_rule, lowest_card_holder,
+    roles_for_player_count, standard_deck, Card, Combo, DeckVariant, DuplicateRule, ExchangeRule,
+    Move, PassRule, Rank, Role, Round, SeatId, Suit,
 };
 use rand::seq::SliceRandom;
 use rand::SeedableRng;
@@ -37,6 +37,7 @@ pub struct SessionConfig {
     pub deck_variant: DeckVariant,
     pub duplicate_rule: DuplicateRule,
     pub pass_rule: PassRule,
+    pub exchange_rule: ExchangeRule,
     pub rounds: usize,
     pub seed: u64,
     pub human_seat: u8,
@@ -282,6 +283,7 @@ pub struct View {
     pub rounds: usize,
     pub player_count: u8,
     pub pass_rule: PassRule,
+    pub exchange_rule: ExchangeRule,
     pub human_seat: SeatId,
     pub hand: Vec<CardView>,
     pub seats: Vec<SeatView>,
@@ -461,6 +463,10 @@ impl Session {
     /// How many cards the human must choose to give (0 when they are not
     /// a lower role, or their pair exchanges nothing).
     fn human_give_count(&self, roles: &[Role]) -> usize {
+        // Under the forced rule there is nothing to choose.
+        if self.config.exchange_rule == ExchangeRule::Forced {
+            return 0;
+        }
         let player_count = self.config.player_count;
         let (Some(order), Some(counts)) = (
             roles_for_player_count(player_count),
@@ -491,10 +497,11 @@ impl Session {
         let ai = &self.ai;
         let rng = &mut self.rng;
         let mut selection = human_selection.clone();
-        exchange_with_selection(
+        exchange_with_rule(
             &mut hands,
             roles,
             rule,
+            self.config.exchange_rule,
             |seat, hand, count, rule| match &ai[seat] {
                 Some(ai) => ai.strategy.choose_exchange_cards(hand, count, rule, rng),
                 None => selection
@@ -959,6 +966,7 @@ impl Session {
             rounds: self.config.rounds,
             player_count: self.config.player_count,
             pass_rule: self.config.pass_rule,
+            exchange_rule: self.config.exchange_rule,
             human_seat: human,
             hand: views(&self.ids, &hand),
             seats,
@@ -1046,6 +1054,7 @@ mod tests {
             deck_variant: deck,
             duplicate_rule: DuplicateRule::FirstDealtWins,
             pass_rule: PassRule::default(),
+            exchange_rule: ExchangeRule::default(),
             rounds,
             seed: 7,
             human_seat,
@@ -1164,6 +1173,7 @@ mod tests {
                     rounds: 6,
                     seed: 7,
                     pass_rule: engine::PassRule::default(),
+                    exchange_rule: engine::ExchangeRule::default(),
                 },
                 &strategies,
             );
@@ -1343,9 +1353,10 @@ mod tests {
     #[test]
     fn the_human_as_a_lower_role_chooses_the_cards_to_give() {
         // Play round 1 out; find a seed where the human ends lower and the
-        // second round opens in the exchange phase.
+        // second round opens in the exchange phase (free exchange rule).
         for seed in 0..300 {
             let mut cfg = config(4, DeckVariant::Single, 3, 0);
+            cfg.exchange_rule = ExchangeRule::Free;
             cfg.seed = seed;
             let mut session = Session::new(cfg, ai(3)).unwrap();
             // Finish round 1 with the scripted human.
@@ -1396,6 +1407,7 @@ mod tests {
     fn the_exchange_view_shows_a_fresh_table_not_the_last_round() {
         for seed in 0..300 {
             let mut cfg = config(4, DeckVariant::Single, 3, 0);
+            cfg.exchange_rule = ExchangeRule::Free;
             cfg.seed = seed;
             let mut session = Session::new(cfg, ai(3)).unwrap();
             while session.phase() == Phase::Playing {
@@ -1424,6 +1436,72 @@ mod tests {
             return;
         }
         panic!("the human never ended lower in 300 seeds");
+    }
+
+    #[test]
+    fn under_the_forced_rule_the_human_as_a_lower_role_gives_the_highest_cards_without_choosing() {
+        for seed in 0..300 {
+            let mut cfg = config(4, DeckVariant::Single, 3, 0);
+            cfg.exchange_rule = ExchangeRule::Forced;
+            cfg.seed = seed;
+            let mut session = Session::new(cfg, ai(3)).unwrap();
+            while session.phase() == Phase::Playing {
+                match scripted_move(&session) {
+                    Move::Pass => session.pass().unwrap(),
+                    Move::Play(c) => {
+                        let ids: Vec<u8> = c.cards().iter().map(|c| c.deal_index).collect();
+                        session.play(&ids).unwrap();
+                    }
+                }
+            }
+            let role = session.view().roles_history[0][0];
+            session.next_round().unwrap();
+            assert_ne!(
+                session.phase(),
+                Phase::Exchange,
+                "nothing to choose when forced"
+            );
+            if !matches!(role, Role::ViceArschloch | Role::Arschloch) {
+                continue;
+            }
+            let (gave, received) = session
+                .events_since(0)
+                .iter()
+                .find_map(|e| match e {
+                    GameEvent::ExchangeYours { gave, received } => {
+                        Some((gave.clone(), received.clone()))
+                    }
+                    _ => None,
+                })
+                .expect("a lower role still sees what was taken and received");
+            let count = if role == Role::Arschloch { 2 } else { 1 };
+            assert_eq!(gave.len(), count);
+            assert_eq!(received.len(), count);
+            // What was given is at least as high as anything kept (rank order).
+            let kept_max = session
+                .view()
+                .hand
+                .iter()
+                .filter(|c| {
+                    !gave.iter().any(|g| g.id == c.id) && !received.iter().any(|r| r.id == c.id)
+                })
+                .map(|c| (c.rank, c.suit))
+                .max();
+            let given_min = gave.iter().map(|c| (c.rank, c.suit)).min().unwrap();
+            if let Some(kept) = kept_max {
+                assert!(
+                    given_min >= kept,
+                    "seed {seed}: gave {gave:?} but kept a higher card"
+                );
+            }
+            // And what came back is from the president's low end.
+            assert!(
+                received.iter().all(|c| c.rank <= 6),
+                "received {received:?}"
+            );
+            return;
+        }
+        panic!("the human never ended in a lower role in 300 seeds");
     }
 
     #[test]

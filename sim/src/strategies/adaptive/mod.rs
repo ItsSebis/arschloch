@@ -155,6 +155,7 @@ mod tests {
                 rounds: 5,
                 seed,
                 pass_rule: engine::PassRule::default(),
+                exchange_rule: engine::ExchangeRule::default(),
             })
             .collect()
     }

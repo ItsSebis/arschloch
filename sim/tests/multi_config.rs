@@ -93,6 +93,7 @@ fn every_table_size_and_deck_variant_plays_to_completion_with_valid_roles() {
                     rounds,
                     seed,
                     pass_rule: engine::PassRule::default(),
+                    exchange_rule: engine::ExchangeRule::default(),
                 })
                 .collect();
             let results = run_batch(&configs, &baseline_strategies(player_count));

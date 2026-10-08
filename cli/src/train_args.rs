@@ -50,7 +50,7 @@ pub struct TrainArgs {
     #[arg(
         long,
         conflicts_with_all = [
-            "player_count", "deck_variant", "duplicate_rule", "pass_rule", "rounds", "population",
+            "player_count", "deck_variant", "duplicate_rule", "pass_rule", "exchange_rule", "rounds", "population",
             "matches_per_genome", "reeval_matches", "seed", "opponent", "target_species",
             "champion_candidates", "hall_of_fame", "hall_interval", "weight_power", "runs"
         ]
@@ -89,6 +89,13 @@ pub struct TrainArgs {
     /// results.
     #[arg(long, value_parser = clap::value_parser!(engine::PassRule), default_value_t = engine::PassRule::Final)]
     pub pass_rule: engine::PassRule,
+
+    /// Whether the lower role of an exchange pair must give its highest cards
+    /// (`forced`, the rules of the game) or may choose which cards to give
+    /// (`free`, how the simulator behaved before Phase 15; also lets strategies
+    /// that keep pairs together use their own choice).
+    #[arg(long, value_parser = clap::value_parser!(engine::ExchangeRule), default_value_t = engine::ExchangeRule::Forced)]
+    pub exchange_rule: engine::ExchangeRule,
 
     /// Rounds per evaluation match (role carry-over between rounds).
     #[arg(long, default_value_t = 8, value_parser = clap::builder::RangedI64ValueParser::<usize>::new().range(1..))]
@@ -215,6 +222,22 @@ mod tests {
         );
         assert!(parse(&["--out", "d", "--pass-rule", "sometimes"]).is_err());
         assert!(parse(&["--out", "d", "--resume", "--pass-rule", "free"]).is_err());
+    }
+
+    #[test]
+    fn the_exchange_rule_defaults_to_forced_and_cannot_change_on_resume() {
+        assert_eq!(
+            parse(&["--out", "d"]).unwrap().exchange_rule,
+            engine::ExchangeRule::Forced
+        );
+        assert_eq!(
+            parse(&["--out", "d", "--exchange-rule", "free"])
+                .unwrap()
+                .exchange_rule,
+            engine::ExchangeRule::Free
+        );
+        assert!(parse(&["--out", "d", "--exchange-rule", "sometimes"]).is_err());
+        assert!(parse(&["--out", "d", "--resume", "--exchange-rule", "free"]).is_err());
     }
 
     #[test]

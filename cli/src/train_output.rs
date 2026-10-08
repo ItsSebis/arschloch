@@ -44,11 +44,12 @@ pub fn render_banner(start: &RunStart, out: &std::path::Path) -> String {
     let mut text = String::new();
     let _ = writeln!(
         text,
-        "training: {} players, {:?} deck, {:?}, pass rule {} | population {}, {} generations | {} matches x {} rounds per genome, seed {}",
+        "training: {} players, {:?} deck, {:?}, pass rule {}, exchange rule {} | population {}, {} generations | {} matches x {} rounds per genome, seed {}",
         config.player_count,
         config.deck,
         config.duplicate_rule,
         config.pass_rule,
+        config.exchange_rule,
         config.neat.population_size,
         config.generations,
         config.matches_per_genome,
@@ -514,6 +515,7 @@ mod tests {
             hall_of_fame_size: 0,
             hall_of_fame_interval: 5,
             pass_rule: sim::PassRule::default(),
+            exchange_rule: sim::ExchangeRule::default(),
         }
     }
 }

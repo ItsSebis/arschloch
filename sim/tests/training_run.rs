@@ -38,6 +38,7 @@ fn config(generations: u32) -> TrainConfig {
         deck: DeckChoice::Single,
         duplicate_rule: DuplicateChoice::FirstDealtWins,
         pass_rule: engine::PassRule::default(),
+        exchange_rule: engine::ExchangeRule::default(),
         rounds_per_match: 4,
         matches_per_genome: 8,
         reeval_matches: 12,
@@ -317,6 +318,7 @@ fn invalid_setups_are_refused_before_anything_is_written() {
     let bad = TrainConfig {
         matches_per_genome: 0,
         pass_rule: engine::PassRule::default(),
+        exchange_rule: engine::ExchangeRule::default(),
         ..config(1)
     };
     assert!(matches!(
@@ -491,6 +493,7 @@ fn a_hall_of_fame_fills_every_interval_and_keeps_only_the_newest() {
         hall_of_fame_size: 2,
         hall_of_fame_interval: 2,
         pass_rule: engine::PassRule::default(),
+        exchange_rule: engine::ExchangeRule::default(),
         ..config(8)
     };
     Trainer::new(config, opponents(), &run)
@@ -534,6 +537,7 @@ fn resuming_with_a_hall_of_fame_still_equals_never_stopping() {
         hall_of_fame_size: 2,
         hall_of_fame_interval: 2,
         pass_rule: engine::PassRule::default(),
+        exchange_rule: engine::ExchangeRule::default(),
         ..config(generations)
     };
     let straight = dir("hall-straight");
@@ -607,6 +611,7 @@ fn the_champion_is_chosen_among_the_top_candidates_by_the_fixed_matches() {
     let config = TrainConfig {
         champion_candidates: 6,
         pass_rule: engine::PassRule::default(),
+        exchange_rule: engine::ExchangeRule::default(),
         ..config(6)
     };
     Trainer::new(config, opponents(), &several)
@@ -638,6 +643,7 @@ fn candidate_selection_never_picks_a_worse_champion_than_the_training_best() {
     let wide = TrainConfig {
         champion_candidates: 8,
         pass_rule: engine::PassRule::default(),
+        exchange_rule: engine::ExchangeRule::default(),
         ..config(1)
     };
     Trainer::new(wide, opponents(), &many)
@@ -661,6 +667,7 @@ fn candidate_selection_costs_its_own_matches_and_is_accounted_for() {
     let config = TrainConfig {
         champion_candidates: 4,
         pass_rule: engine::PassRule::default(),
+        exchange_rule: engine::ExchangeRule::default(),
         ..config(1)
     };
     Trainer::new(config, opponents(), &run)
