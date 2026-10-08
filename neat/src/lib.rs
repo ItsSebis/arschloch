@@ -25,3 +25,7 @@ pub mod crossover;
 pub mod network;
 
 pub use network::Network;
+
+pub mod species;
+
+pub use species::SpeciesStats;
