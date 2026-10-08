@@ -43,14 +43,16 @@ pub struct Args {
     /// `player_count`.
     ///
     /// Each value is a spec, `SPEC := FIXED | "adaptive" | "adaptive:"
-    /// OPTIONS`: either one of the six fixed strategy names
+    /// OPTIONS | "neat:" PATH`: either one of the six fixed strategy names
     /// (`lowest-legal`, `greedy-highest`, `random-legal`,
     /// `hold-back-pairs`, `card-counter`, `endgame-denial`), or
     /// `adaptive` (defaults — see `sim::AdaptiveConfig::default`), or
     /// `adaptive:OPTIONS` where `OPTIONS` is a comma-separated modifier
     /// list parsed by `sim::AdaptiveConfig`'s `FromStr` (e.g.
-    /// `counting`, `reading,deception=0.2`, `none`). For example, a
-    /// three-seat table: `--strategy lowest-legal --strategy
+    /// `counting`, `reading,deception=0.2`, `none`), or
+    /// `neat:PATH`, a trained genome file (see `sim::GenomeFile`),
+    /// reported in results as `Neat(<file name without extension>)`. For
+    /// example, a three-seat table: `--strategy lowest-legal --strategy
     /// adaptive:counting --strategy adaptive:reading,deception=0.2`.
     #[arg(long = "strategy", required = true, value_name = "SPEC")]
     pub strategies: Vec<StrategyArg>,
@@ -118,6 +120,22 @@ pub enum FixedStrategy {
 pub enum StrategyArg {
     Fixed(FixedStrategy),
     Adaptive(sim::AdaptiveConfig),
+    Neat(NeatSpec),
+}
+
+/// A `neat:PATH` spec. The genome file is loaded and checked while the
+/// argument is parsed, so a missing, malformed or stale file is reported
+/// as an argument error before any simulation starts.
+#[derive(Clone, Debug)]
+pub struct NeatSpec {
+    path: PathBuf,
+    strategy: Arc<sim::NeatStrategy>,
+}
+
+impl PartialEq for NeatSpec {
+    fn eq(&self, other: &Self) -> bool {
+        self.path == other.path
+    }
 }
 
 impl std::str::FromStr for StrategyArg {
@@ -135,16 +153,28 @@ impl std::str::FromStr for StrategyArg {
                 Some(o) => o.parse().map(Self::Adaptive).map_err(|e| e.to_string()),
             };
         }
+        if head == "neat" {
+            let path = options
+                .map(str::trim)
+                .filter(|p| !p.is_empty())
+                .ok_or("`neat` needs a genome file: neat:PATH")?;
+            let path = PathBuf::from(path);
+            let strategy = sim::NeatStrategy::from_file(&path).map_err(|e| e.to_string())?;
+            return Ok(Self::Neat(NeatSpec {
+                path,
+                strategy: Arc::new(strategy),
+            }));
+        }
         if options.is_some() {
             return Err(format!(
-                "strategy `{head}` takes no options (only `adaptive:` does)"
+                "strategy `{head}` takes no options (only `adaptive:` and `neat:` do)"
             ));
         }
         <FixedStrategy as clap::ValueEnum>::from_str(head, false)
             .map(Self::Fixed)
             .map_err(|_| {
                 format!(
-                    "unknown strategy `{head}`; expected one of: {}, adaptive[:OPTIONS]",
+                    "unknown strategy `{head}`; expected one of: {}, adaptive[:OPTIONS], neat:PATH",
                     fixed_strategy_names(),
                 )
             })
@@ -175,6 +205,7 @@ impl StrategyArg {
             Self::Fixed(FixedStrategy::CardCounter) => Arc::new(sim::CardCounter),
             Self::Fixed(FixedStrategy::EndgameDenial) => Arc::new(sim::EndgameDenial),
             Self::Adaptive(config) => Arc::new(sim::Adaptive::new(config)),
+            Self::Neat(spec) => spec.strategy,
         }
     }
 }
@@ -313,6 +344,62 @@ mod tests {
         let arg: StrategyArg = "adaptive:reading,deception=0.2".parse().unwrap();
         let strategy = arg.build();
         assert!(strategy.name().starts_with("Adaptive("));
+    }
+
+    fn genome_file(name: &str) -> PathBuf {
+        let mut population = neat::Population::new(
+            sim::FEATURE_COUNT,
+            neat::NeatConfig {
+                population_size: 4,
+                ..neat::NeatConfig::default()
+            },
+            1,
+        )
+        .unwrap();
+        let genome = population.genomes()[0].clone();
+        population.set_fitness(vec![0.0; 4]);
+        let path = std::env::temp_dir().join(format!("{name}-{}.json", std::process::id()));
+        sim::GenomeFile::new(genome).unwrap().save(&path).unwrap();
+        path
+    }
+
+    #[test]
+    fn parses_a_neat_spec_and_names_the_player_after_the_file() {
+        let path = genome_file("champ");
+        let arg: StrategyArg = format!("neat:{}", path.display()).parse().unwrap();
+        std::fs::remove_file(&path).unwrap();
+        assert!(matches!(arg, StrategyArg::Neat(_)));
+        assert!(arg.build().name().starts_with("Neat(champ-"));
+    }
+
+    #[test]
+    fn a_neat_spec_without_a_path_is_rejected() {
+        for spec in ["neat", "neat:", "neat:   "] {
+            let error = spec.parse::<StrategyArg>().unwrap_err();
+            assert!(error.contains("neat:PATH"), "{spec}: {error}");
+        }
+    }
+
+    #[test]
+    fn a_missing_genome_file_is_an_argument_error_naming_the_path() {
+        let error = "neat:/nonexistent/champ.json"
+            .parse::<StrategyArg>()
+            .unwrap_err();
+        assert!(error.contains("/nonexistent/champ.json"), "{error}");
+    }
+
+    #[test]
+    fn a_stale_genome_file_is_refused_at_parse_time() {
+        let path = genome_file("stale");
+        let mut value: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        value["feature_names"][0] = serde_json::json!("renamed_feature");
+        std::fs::write(&path, value.to_string()).unwrap();
+        let error = format!("neat:{}", path.display())
+            .parse::<StrategyArg>()
+            .unwrap_err();
+        std::fs::remove_file(&path).unwrap();
+        assert!(error.contains("does not fit this build"), "{error}");
     }
 
     #[test]
