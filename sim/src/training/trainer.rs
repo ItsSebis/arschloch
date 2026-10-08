@@ -16,6 +16,7 @@ use neat::{Genome, Population};
 use rayon::prelude::*;
 
 use super::config::TrainConfig;
+use super::decisions::record_decisions;
 use super::evaluate::{evaluate, match_seed, Opponents, Score};
 use super::events::{
     ChampionStats, Complexity, Event, FitnessStats, GenerationEvent, OpponentStat, RunEnd,
@@ -56,6 +57,9 @@ pub struct Trainer {
 /// Genomes are evaluated in this many parallel batches, with a progress
 /// callback between batches.
 const PROGRESS_STEPS: usize = 10;
+
+/// Decisions recorded for each new best champion.
+const DECISIONS_PER_BEST: usize = 12;
 
 /// Training matches of `generation`: different every generation, so a
 /// genome cannot be tuned to one set of deals.
@@ -347,6 +351,25 @@ impl Trainer {
         (mixed, per_opponent)
     }
 
+    /// A few real decisions of the champion (for the dashboard's decision
+    /// inspector), from one held-out match.
+    fn sample_decisions(
+        &self,
+        generation: u32,
+        champion: &Genome,
+    ) -> super::decisions::DecisionFile {
+        let pool: Vec<Arc<dyn Strategy>> =
+            self.opponents.iter().map(|o| o.strategy.clone()).collect();
+        record_decisions(
+            champion,
+            &self.config.table(),
+            &pool,
+            heldout_seeds(&self.config)[0],
+            DECISIONS_PER_BEST,
+            generation,
+        )
+    }
+
     /// The champion's score on the held-out matches (see `heldout_seeds`).
     fn confirm(&self, champion: &Genome) -> Score {
         let pool: Vec<Arc<dyn Strategy>> =
@@ -384,6 +407,8 @@ impl Trainer {
         let heldout = if is_new_best {
             self.dir.write_best(&champion)?;
             let heldout = self.confirm(&champion);
+            self.dir
+                .write_decisions(&self.sample_decisions(generation, &champion))?;
             self.best = Some(BestRecord {
                 generation,
                 reeval: reeval.clone().into(),

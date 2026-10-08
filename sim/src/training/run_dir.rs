@@ -18,6 +18,7 @@ use neat::{Genome, PopulationState};
 use serde::{Deserialize, Serialize};
 
 use super::config::TrainConfig;
+use super::decisions::DecisionFile;
 use super::events::{Event, ScoreStat, SCHEMA_VERSION};
 use crate::GenomeFile;
 
@@ -235,6 +236,22 @@ impl RunDir {
         let name = format!("gen-{generation:04}.json");
         self.write_genome(&name, genome)?;
         Ok(name)
+    }
+
+    /// Writes `decisions/gen-NNNN.json`.
+    ///
+    /// # Errors
+    ///
+    /// `TrainError::Io` on write failure.
+    pub fn write_decisions(&self, decisions: &DecisionFile) -> Result<(), TrainError> {
+        let directory = self.path("decisions");
+        fs::create_dir_all(&directory).map_err(|e| io_error(&directory, &e))?;
+        let text =
+            serde_json::to_string(decisions).map_err(|e| TrainError::Config(e.to_string()))?;
+        self.write_atomically(
+            &format!("decisions/gen-{:04}.json", decisions.generation),
+            &text,
+        )
     }
 
     /// # Errors

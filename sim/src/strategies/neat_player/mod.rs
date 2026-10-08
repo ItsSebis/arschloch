@@ -76,6 +76,47 @@ fn tie_break(a: &Move, b: &Move, duplicate_rule: DuplicateRule) -> Ordering {
     }
 }
 
+/// One legal move with the network's opinion of it, for explaining a
+/// decision (see `NeatStrategy::score_candidates`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ScoredCandidate {
+    pub candidate: Move,
+    pub features: [f64; FEATURE_COUNT],
+    /// The output node's sum before `tanh`: what decisions are made on.
+    pub raw_score: f64,
+    /// `tanh(raw_score)`.
+    pub activation: f64,
+}
+
+impl NeatStrategy {
+    /// Every legal move with its feature vector and score, in the order
+    /// given. `choose_play` picks the highest `raw_score` (ties: a play
+    /// over a pass, then the smaller combo, then the first listed).
+    #[must_use]
+    pub fn score_candidates(
+        &self,
+        legal_moves: &[Move],
+        duplicate_rule: DuplicateRule,
+        context: &TurnContext<'_>,
+    ) -> Vec<ScoredCandidate> {
+        let summary = TurnSummary::new(context, duplicate_rule);
+        let mut scratch = Vec::new();
+        legal_moves
+            .iter()
+            .map(|candidate| {
+                let features = summary.features(candidate);
+                let raw_score = self.network.score(&features, &mut scratch);
+                ScoredCandidate {
+                    candidate: candidate.clone(),
+                    features,
+                    raw_score,
+                    activation: raw_score.tanh(),
+                }
+            })
+            .collect()
+    }
+}
+
 impl Strategy for NeatStrategy {
     fn name(&self) -> &str {
         &self.name

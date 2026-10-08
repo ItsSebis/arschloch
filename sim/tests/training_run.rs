@@ -149,6 +149,12 @@ fn a_short_run_leaves_every_artifact_and_notifies_the_observer() {
 
     assert!(NeatStrategy::from_file(&run.join("best.json")).is_ok());
     assert!(NeatStrategy::from_file(&run.join("gen-0002.json")).is_ok());
+    // A new best also records some of the champion's real decisions.
+    let decisions: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(run.join("decisions/gen-0000.json")).unwrap())
+            .unwrap();
+    assert_eq!(decisions["generation"], 0);
+    assert!(!decisions["decisions"].as_array().unwrap().is_empty());
     fs::remove_dir_all(&run).unwrap();
 }
 
