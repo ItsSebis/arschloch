@@ -1,6 +1,7 @@
 """Summarises the experiment runs: mean score of each configuration's best
-champion against the opponents it trained on and against opponents it never
-saw, from the `*.eval.json` files written by run_experiments.sh."""
+champion against the opponents it trained on, strong opponents it never saw
+and weak ones it never saw, from the `*.eval.json` files written by
+run_experiments.sh."""
 import json
 import os
 import statistics as st
@@ -8,6 +9,8 @@ import sys
 
 OUT = sys.argv[1] if len(sys.argv) > 1 else "/tmp/neat-experiments"
 TRAINED = ["LowestLegal", "EndgameDenial", "Adaptive(reading,tempo,bully)"]
+STRONG = ["Adaptive(counting,reading)", "Adaptive(reading,deception=0.2,tempo,bully)"]
+WEAK = ["HoldBackPairs", "GreedyHighest", "RandomLegal"]
 LABELS = {
     "base": "baseline (1 candidate, no hall, power 0.5)",
     "topk": "top-5 champion selection",
@@ -27,9 +30,12 @@ def cells(name, seed):
 
 def summary(name, seed):
     c = cells(name, seed)
-    trained = st.mean(c[n] for n in TRAINED)
-    unseen = st.mean(v for n, v in c.items() if n not in TRAINED and not n.startswith("mixed"))
-    return trained, unseen, c["mixed (all opponents)"]
+    return (
+        st.mean(c[n] for n in TRAINED),
+        st.mean(c[n] for n in STRONG),
+        st.mean(c[n] for n in WEAK),
+        c["mixed (all opponents)"],
+    )
 
 
 for name, label in LABELS.items():
@@ -37,7 +43,7 @@ for name, label in LABELS.items():
     if not rows:
         continue
     parts = []
-    for i, what in enumerate(("trained-3", "unseen-3", "mixed")):
+    for i, what in enumerate(("trained-3", "stronger-unseen-2", "weak-unseen-3", "mixed-8")):
         values = [r[i] for r in rows]
         spread = st.stdev(values) if len(values) > 1 else 0.0
         parts.append(f"{what} {st.mean(values):+.3f} (sd {spread:.3f})")

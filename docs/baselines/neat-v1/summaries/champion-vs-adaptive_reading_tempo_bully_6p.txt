@@ -1,20 +1,20 @@
 6 players, Single deck, FirstDealtWins, 2000 matches x 10 rounds, seed 1000, 4 threads
 
 Strategy                       President       Vize            Offizier        Dummkopf        ViceArschloch   Arschloch       
-Adaptive(reading,tempo,bully)  12241           13776           16666           18391           19251           19675           
-Neat(champion)                 7759            6224            3334            1609            749             325             
+Adaptive(reading,tempo,bully)  12223           13672           16730           18398           19263           19714           
+Neat(champion)                 7777            6328            3270            1602            737             286             
 
-Voluntary pass rate: 1.29%
+Voluntary pass rate: 1.50%
 
 Voluntary pass rate by strategy:
   Adaptive(reading,tempo,bully)  0.00%
-  Neat(champion)                 12.92%
+  Neat(champion)                 14.96%
 
 President retention (stayed President the very next round):
-  Adaptive(reading,tempo,bully)  45.95% (5087/11070)
-  Neat(champion)                 58.85% (4078/6930)
+  Adaptive(reading,tempo,bully)  46.06% (5084/11038)
+  Neat(champion)                 58.46% (4070/6962)
 
 First-round placement variance (lower = more skill-driven, higher = more luck-driven):
-  Adaptive(reading,tempo,bully)  2.82
-  Neat(champion)                 1.90
+  Adaptive(reading,tempo,bully)  2.81
+  Neat(champion)                 1.85
 

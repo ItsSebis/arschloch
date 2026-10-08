@@ -20,7 +20,7 @@ trap 'rm -f "$TMP"' EXIT
 for n in 3 4 5 6; do
   # One champion against n-1 copies of each opponent. (The champion sits in
   # every seat in turn: sim rotates the seating across the batch.)
-  for opponent in lowest-legal endgame-denial "adaptive:reading,tempo,bully"; do
+  for opponent in lowest-legal card-counter endgame-denial "adaptive:reading,tempo,bully"; do
     specs=("neat:$GENOME")
     for ((i = 1; i < n; i++)); do specs+=("$opponent"); done
     args=()
@@ -33,4 +33,16 @@ for n in 3 4 5 6; do
   # whole battery including opponents it never trained against.
   "$CLI" evaluate --genome "$GENOME" --player-count "$n" --matches 600 --seed 99 \
     --threads "$THREADS" --json "$OUT/evaluate_${n}p.json" > "$OUT/evaluate_${n}p.txt"
+done
+
+# The design spec's mixed-field lineup (section 9): the champion and three
+# different hand-written strategies at one table, over four independent seed
+# bases. (Seat rotation in the simulator keeps neighbour order, so a mixed
+# field carries a table-position bias; the champion's margin here is far
+# larger than that effect, see docs/baselines/pre-neat/README.md.)
+for base in 1000 2000 3000 4000; do
+  "$CLI" --player-count 4 --matches "$MATCHES" --rounds "$ROUNDS" \
+    --seed "$base" --threads "$THREADS" --output "$TMP" \
+    --strategy "neat:$GENOME" --strategy card-counter --strategy endgame-denial \
+    --strategy "adaptive:reading,tempo,bully" > "$OUT/mixed-field_4p_seed${base}.txt"
 done

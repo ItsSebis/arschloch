@@ -382,31 +382,42 @@ shell may assume NEAT-specific data.
 
 ## 7d. As built in Phase 10e
 
-- **Learning options** (`cli train`): `--champion-candidates N` re-scores
-  the N genomes with the best training fitness on the fixed matches and
-  takes the best as the generation's champion (default 5; the event's
-  `training_rank` says where it ranked by training fitness: in the v1 run
-  it was not the training best in 75 of 120 generations);
-  `--hall-of-fame N --hall-interval K` keeps frozen past champions as extra
-  training opponents (default off; persisted in the checkpoint, resumable;
-  per-opponent reporting stays on the fixed pool and a `hall_score`
-  reports the champion against the hall); `--weight-power P` is the size of
-  a weight perturbation (default 0.2).
+- **Learning options** (`cli train`): `--champion-candidates N` ranks the N
+  genomes with the best training fitness on their own fixed matches and takes
+  the best as the generation's champion (default 5; the event's
+  `training_rank` says where it ranked by training fitness: in the v1 run it
+  was not the training best in 79 of 120 generations); the champion's reported
+  score is then measured on *other* fixed matches, so selection does not
+  inflate it. Evolution itself runs on training fitness, so this changes which
+  genome is *recorded*, not which genomes breed. `--hall-of-fame N
+  --hall-interval K` keeps frozen past champions as extra training opponents
+  (default off; persisted in the checkpoint, resumable; per-opponent reporting
+  stays on the fixed pool, a `hall_score` reports the champion against the
+  hall, and the training-fitness curves jump when the hall admits a member
+  because the opponent mix changes); `--weight-power P` is the size of a
+  weight perturbation (default 0.2).
 - **`cli evaluate`**: the baseline-comparison protocol (section 9) as a
   command: genomes against any opponents on a seed stream training never
-  uses, one row per opponent plus a mixed row, optional JSON. Genomes can
-  face each other with `neat:PATH` opponents.
-- **Evidence:** `docs/baselines/neat-v1/experiments.md`: five
-  configurations over three seeds and a 5-seed comparison of the combined
-  options. All configurations generalize to opponents never trained
-  against (+0.90 to +0.92); the combined options are better by about 0.016
-  (1.3 standard errors) and became the defaults; the hall of fame showed no
-  benefit against this pool.
-- **Baseline comparison** (`docs/baselines/neat-v1/`): the first
-  committed champion and the recorded comparison with the pre-NEAT
-  strategies at 3-6 players (success criteria of section 9 met: it beats
-  `lowest-legal`, `endgame-denial` and `adaptive:reading,tempo,bully` with
-  differences far outside the seed-to-seed spread).
+  uses, one row per opponent plus a mixed row, optional JSON (which records
+  the table). The default battery is the three training opponents, two
+  stronger adaptive variants training never sees, and three weak strategies
+  as a sanity floor. Genomes can face each other with `neat:PATH` opponents.
+- **Evidence:** `docs/baselines/neat-v1/experiments.md`: six configurations
+  over three to five seeds. Champions score about the same against strong
+  opponents they never trained against as against the ones they trained
+  against (no sign of overfitting to the pool). The combined options are
+  better by about 0.016 (1.3 standard errors; two of five seeds negative)
+  and became the defaults on grounds of cost and principle, not proof; the
+  hall of fame showed no benefit against this pool.
+- **Baseline comparison** (`docs/baselines/neat-v1/`): a committed champion
+  and its recorded comparison with the pre-NEAT strategies at 3-6 players
+  and in the section-9 mixed-field lineup over four seed bases. The champion
+  beats `lowest-legal`, `card-counter` (which plays identically to
+  `lowest-legal`), `endgame-denial` and `adaptive:reading,tempo,bully`, in
+  the mixed field too, by margins far outside the seed-to-seed spread
+  (President in about 56% of rounds where chance gives 25%). The spec's
+  "four independent seed bases" is met by the mixed field (seeds 1000-4000);
+  the other rows use one base.
 - **Not built:** a weak-to-strong opponent curriculum and matches growing
   over generations (the champion already beats every opponent, so neither
   has a measured need), complexity pressure in ties, the role feature and

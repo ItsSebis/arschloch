@@ -1,4 +1,6 @@
 {
+  "deck_variant": "Single",
+  "duplicate_rule": "FirstDealtWins",
   "matches": 600,
   "player_count": 5,
   "results": [
@@ -6,94 +8,120 @@
       "cells": [
         {
           "matches": 600,
-          "mean": 0.5447916666666667,
+          "mean": 0.5564583333333334,
           "opponent": "LowestLegal",
           "placements": [
-            2250,
-            1347,
-            722,
-            345,
-            136
+            2270,
+            1392,
+            683,
+            320,
+            135
           ],
-          "std_error": 0.012930736565685044
+          "std_error": 0.012845798348905318
         },
         {
           "matches": 600,
-          "mean": 0.6426041666666666,
+          "mean": 0.6533333333333333,
           "opponent": "EndgameDenial",
           "placements": [
-            2545,
-            1412,
-            575,
-            203,
-            65
+            2591,
+            1408,
+            551,
+            182,
+            68
           ],
-          "std_error": 0.010030797350725833
+          "std_error": 0.009814627969776706
         },
         {
           "matches": 600,
-          "mean": 0.5915625,
+          "mean": 0.5948958333333333,
           "opponent": "Adaptive(reading,tempo,bully)",
           "placements": [
-            2334,
-            1468,
-            635,
-            269,
-            94
+            2346,
+            1445,
+            666,
+            260,
+            83
           ],
-          "std_error": 0.010972542044881099
+          "std_error": 0.01042421036666359
         },
         {
           "matches": 600,
-          "mean": 0.8807291666666667,
+          "mean": 0.66,
+          "opponent": "Adaptive(counting,reading)",
+          "placements": [
+            2618,
+            1387,
+            566,
+            171,
+            58
+          ],
+          "std_error": 0.009863865382768115
+        },
+        {
+          "matches": 600,
+          "mean": 0.5536458333333333,
+          "opponent": "Adaptive(reading,deception=0.2,tempo,bully)",
+          "placements": [
+            2147,
+            1520,
+            736,
+            295,
+            102
+          ],
+          "std_error": 0.010797650792232783
+        },
+        {
+          "matches": 600,
+          "mean": 0.8811458333333333,
           "opponent": "HoldBackPairs",
           "placements": [
-            3914,
-            683,
+            3901,
+            704,
             157,
-            36,
-            10
+            29,
+            9
           ],
-          "std_error": 0.004750073144615437
+          "std_error": 0.0048218812063701225
         },
         {
           "matches": 600,
-          "mean": 0.9273958333333333,
+          "mean": 0.9298958333333334,
           "opponent": "GreedyHighest",
           "placements": [
-            4206,
-            505,
-            76,
+            4227,
+            487,
+            73,
             12,
             1
           ],
-          "std_error": 0.0033835360075304775
+          "std_error": 0.0032870780967261663
         },
         {
           "matches": 600,
-          "mean": 0.8263541666666666,
+          "mean": 0.8332291666666667,
           "opponent": "RandomLegal",
           "placements": [
-            3639,
-            804,
-            234,
-            97,
-            26
+            3652,
+            809,
+            245,
+            74,
+            20
           ],
-          "std_error": 0.006370156837521545
+          "std_error": 0.005735840575773857
         },
         {
           "matches": 600,
-          "mean": 0.6740625,
+          "mean": 0.648125,
           "opponent": "mixed (all opponents)",
           "placements": [
-            2721,
-            1303,
-            541,
-            196,
-            39
+            2551,
+            1437,
+            562,
+            183,
+            67
           ],
-          "std_error": 0.009767211369482264
+          "std_error": 0.010257121950601739
         }
       ],
       "genome": "docs/baselines/neat-v1/champion.json"

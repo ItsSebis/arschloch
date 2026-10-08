@@ -1,11 +1,13 @@
 6 players, Single deck, FirstDealtWins, 600 matches x 8 rounds per cell, seed 99
 score: +1 always President .. -1 always last; 0 is even
 
-opponent                             champion
-LowestLegal                     +0.421 ±0.016
-EndgameDenial                   +0.586 ±0.011
-Adaptive(reading,tempo,bully)   +0.555 ±0.012
-HoldBackPairs                   +0.838 ±0.006
-GreedyHighest                   +0.895 ±0.005
-RandomLegal                     +0.744 ±0.008
-mixed (all opponents)           +0.596 ±0.012
+opponent                                           champion
+LowestLegal                                   +0.443 ±0.015
+EndgameDenial                                 +0.596 ±0.011
+Adaptive(reading,tempo,bully)                 +0.570 ±0.011
+Adaptive(counting,reading)                    +0.594 ±0.011
+Adaptive(reading,deception=0.2,tempo,bully)   +0.541 ±0.012
+HoldBackPairs                                 +0.838 ±0.006
+GreedyHighest                                 +0.896 ±0.004
+RandomLegal                                   +0.758 ±0.008
+mixed (all opponents)                         +0.609 ±0.011
