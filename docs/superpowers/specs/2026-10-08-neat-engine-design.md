@@ -380,6 +380,38 @@ shell may assume NEAT-specific data.
   retention rates), mutation counts by kind, and a WebSocket/SSE channel
   (polling once a second is enough and trivially robust).
 
+## 7d. As built in Phase 10e
+
+- **Learning options** (`cli train`): `--champion-candidates N` re-scores
+  the N genomes with the best training fitness on the fixed matches and
+  takes the best as the generation's champion (default 5; the event's
+  `training_rank` says where it ranked by training fitness: in the v1 run
+  it was not the training best in 75 of 120 generations);
+  `--hall-of-fame N --hall-interval K` keeps frozen past champions as extra
+  training opponents (default off; persisted in the checkpoint, resumable;
+  per-opponent reporting stays on the fixed pool and a `hall_score`
+  reports the champion against the hall); `--weight-power P` is the size of
+  a weight perturbation (default 0.2).
+- **`cli evaluate`**: the baseline-comparison protocol (section 9) as a
+  command: genomes against any opponents on a seed stream training never
+  uses, one row per opponent plus a mixed row, optional JSON. Genomes can
+  face each other with `neat:PATH` opponents.
+- **Evidence:** `docs/baselines/neat-v1/experiments.md`: five
+  configurations over three seeds and a 5-seed comparison of the combined
+  options. All configurations generalize to opponents never trained
+  against (+0.90 to +0.92); the combined options are better by about 0.016
+  (1.3 standard errors) and became the defaults; the hall of fame showed no
+  benefit against this pool.
+- **Baseline comparison** (`docs/baselines/neat-v1/`): the first
+  committed champion and the recorded comparison with the pre-NEAT
+  strategies at 3-6 players (success criteria of section 9 met: it beats
+  `lowest-legal`, `endgame-denial` and `adaptive:reading,tempo,bully` with
+  differences far outside the seed-to-seed spread).
+- **Not built:** a weak-to-strong opponent curriculum and matches growing
+  over generations (the champion already beats every opponent, so neither
+  has a measured need), complexity pressure in ties, the role feature and
+  evolving the exchange step.
+
 ## 8. Determinism and performance
 
 - A run is fully determined by `(config, seed)`: per-genome evaluation

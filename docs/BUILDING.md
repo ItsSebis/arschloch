@@ -44,6 +44,16 @@ ends, until Ctrl-C), or, from another terminal or afterwards,
 run use an SSH tunnel (`ssh -L 8080:127.0.0.1:8080 host`). The page
 needs no internet access.
 
+Compare genomes (or a genome against hand-written strategies) with
+`cli evaluate --genome runs/first/best.json` (a table of mean finishing-role
+scores against a default battery of opponents; add `--opponent SPEC` to
+choose them, repeat `--genome` to compare several). Learning options:
+`--champion-candidates` (default 5), `--hall-of-fame` (default off) and
+`--weight-power` (default 0.2); the evidence for the defaults is in
+`docs/baselines/neat-v1/experiments.md`, and `docs/baselines/neat-v1`
+holds a committed champion with its comparison against the pre-NEAT
+strategies.
+
 `cli train --help` lists every option. A run is reproducible from
 `--seed`, resumable after any interruption, and independent of
 `--threads`.

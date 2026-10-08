@@ -192,7 +192,7 @@ sitting; a phase that grows beyond that should be split.
   terminal progress line and a JSONL event log. 10d (done): live browser
   dashboard, the first part of the `web` crate, which Phase 11 extends
   (fitness/species/complexity charts, champion network visualization,
-  decision inspector). 10e: opponent pool, hall of
+  decision inspector). 10e (done): opponent pool, hall of
   fame, tuning and baseline comparison.
 
 ## Phase 11 — Web interface

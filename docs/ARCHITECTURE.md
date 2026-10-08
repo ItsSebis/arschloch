@@ -202,7 +202,8 @@ per legal move (including pass), scores each with the compiled network
 and plays the highest. `GenomeFile` stores a genome with the feature
 names it was trained on.
 
-`sim::training` (Phase 10c) holds fitness evaluation (`evaluate`,
+`cli evaluate` (Phase 10e) scores genomes against any opponents with
+`sim::training::evaluate`. `sim::training` (Phase 10c) holds fitness evaluation (`evaluate`,
 common random numbers), the run's files (`RunDir`: atomic checkpoints,
 `events.jsonl`, champion genome files), the event schema (`Event`) and
 the resumable generational loop (`Trainer`, reporting through the
