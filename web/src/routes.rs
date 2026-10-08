@@ -242,7 +242,10 @@ mod tests {
             .collect();
         assert_eq!(generations, vec![1, 2]);
         let none = json_of(&app.handle("GET", "/api/events?since=2"));
-        assert!(none["events"].as_array().unwrap().is_empty());
+        assert_eq!(
+            *none["events"].as_array().unwrap(),
+            [] as [serde_json::Value; 0]
+        );
         assert_eq!(
             all["epoch"],
             json_of(&app.handle("GET", "/api/state"))["epoch"]
@@ -271,7 +274,10 @@ mod tests {
         assert_eq!(best.status, 200);
         let decisions = json_of(&app.handle("GET", "/api/decisions/0"));
         assert_eq!(decisions["generation"], 0);
-        assert!(!decisions["decisions"].as_array().unwrap().is_empty());
+        assert_ne!(
+            *decisions["decisions"].as_array().unwrap(),
+            [] as [serde_json::Value; 0]
+        );
     }
 
     #[test]

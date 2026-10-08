@@ -157,7 +157,7 @@ mod tests {
             (4, 150, 8)
         );
         assert_eq!(args.generations, None);
-        assert!(args.opponent.is_empty());
+        assert_eq!(args.opponent, [] as [String; 0]);
         assert!(!args.resume && !args.quiet);
     }
 

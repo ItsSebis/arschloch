@@ -579,7 +579,7 @@ mod tests {
         assert_eq!(top_indices(&values, 3), vec![1, 4, 0]);
         assert_eq!(top_indices(&values, 1), vec![1]);
         assert_eq!(top_indices(&values, 99), vec![1, 4, 0, 2, 3]);
-        assert!(top_indices(&[], 3).is_empty());
+        assert_eq!(top_indices(&[], 3), [] as [usize; 0]);
     }
 
     #[test]

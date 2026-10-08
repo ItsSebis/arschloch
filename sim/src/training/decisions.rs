@@ -282,7 +282,7 @@ mod tests {
             for candidate in &decision.candidates {
                 assert!((candidate.activation - candidate.raw_score.tanh()).abs() < 1e-12);
             }
-            assert!(!decision.hand.is_empty());
+            assert_ne!(decision.hand, [] as [String; 0]);
         }
     }
 

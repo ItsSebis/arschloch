@@ -168,7 +168,10 @@ fn watch_serves_a_finished_run_directory() {
         (2.into(), true.into())
     );
     let decisions = json(&get(&address, "/api/decisions/0"));
-    assert!(!decisions["decisions"].as_array().unwrap().is_empty());
+    assert_ne!(
+        *decisions["decisions"].as_array().unwrap(),
+        [] as [serde_json::Value; 0]
+    );
     assert!(get(&address, "/api/genome/999").starts_with("HTTP/1.1 404"));
     drop(server);
     std::fs::remove_dir_all(&out).unwrap();

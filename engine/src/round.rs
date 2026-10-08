@@ -502,7 +502,7 @@ mod tests {
         ];
         let round = Round::new(hands, DuplicateRule::FirstDealtWins, 0).unwrap();
         let moves = round.legal_moves();
-        assert!(!moves.is_empty());
+        assert_ne!(moves, []);
         assert!(!moves.contains(&Move::Pass));
     }
 
@@ -522,7 +522,7 @@ mod tests {
             card(Rank::Seven, Suit::Diamonds),
         ]));
         assert_eq!(round.submit_move(0, play), Ok(()));
-        assert!(round.hand(0).is_empty());
+        assert_eq!(round.hand(0), []);
     }
 
     #[test]

@@ -160,7 +160,10 @@ fn a_short_run_leaves_every_artifact_and_notifies_the_observer() {
         serde_json::from_str(&fs::read_to_string(run.join("decisions/gen-0000.json")).unwrap())
             .unwrap();
     assert_eq!(decisions["generation"], 0);
-    assert!(!decisions["decisions"].as_array().unwrap().is_empty());
+    assert_ne!(
+        *decisions["decisions"].as_array().unwrap(),
+        [] as [serde_json::Value; 0]
+    );
     fs::remove_dir_all(&run).unwrap();
 }
 
