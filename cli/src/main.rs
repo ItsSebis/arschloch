@@ -5,6 +5,9 @@
 mod args;
 mod output;
 mod summary;
+mod train;
+mod train_args;
+mod train_output;
 
 use std::sync::Arc;
 
@@ -12,6 +15,10 @@ use anyhow::Context;
 use clap::Parser;
 
 fn main() -> anyhow::Result<()> {
+    // `cli train ...` evolves a player; everything else is a simulation run.
+    if std::env::args().nth(1).as_deref() == Some("train") {
+        return train::run(std::env::args().skip(2));
+    }
     let args = args::Args::parse();
     args::validate(&args)?;
 
