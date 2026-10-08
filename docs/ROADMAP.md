@@ -225,6 +225,86 @@ simulation-statistics overview views below.
   against each model can be viewed and compared with the models' own
   scores.
 
+## Phase 12 — Richer scoring and statistics
+
+From `docs/Notes.md`. Today the CLI summary reports mainly President
+retention, and training scores a player by its mean finishing role
+(+1 .. -1). Planned:
+
+- **More numbers in the CLI summary and the output JSON:** average finishing
+  rank per strategy (and per seat), and **useful passes** (a pass that was
+  followed by a better outcome than playing would have given: for example a
+  pass after which the player later led a trick it would have lost by playing
+  early, or a pass that denied an opponent; the exact definition is the first
+  task of the phase and is documented in `RULES.md`/the statistics docs).
+  Existing keys stay; new ones are additive (`docs/BUILDING.md` documents the
+  JSON).
+- **Scores that adapt to how the other players react:** the Notes ask for a
+  score that takes the opponents' behaviour into account instead of one fixed
+  role scale. First step is to settle what this means (candidates: weight a
+  result by the strength of the table, which the existing mixed-table
+  position bias already shows matters; or report a score relative to what each
+  opponent set achieves against a fixed reference). Decide with the user before
+  building; until then nothing changes in `role_score`.
+- Show the same numbers in the dashboards (training dashboard cards, the play
+  page record) once they exist in the output.
+
+## Phase 13 — NEAT: better play and wider training
+
+From `docs/Notes.md`. These change what the evolved players are rewarded for
+and what they can see, so every item needs the Phase 10 discipline: a spec
+note, a frozen comparison against `docs/baselines/neat-v1`, and a measured
+result before it becomes the default.
+
+- **Predict the other players' cards:** nudge the network towards modelling
+  hidden hands. Options to try, cheapest first: add inputs derived from the
+  known information (an estimate of each opponent's likely holdings from the
+  unseen cards and their pass history, building on `PassCeilings`), then, if
+  that helps, an auxiliary training objective (a small prediction head scored
+  against the real hands, used only during training). Measure against the
+  current 20 inputs; a new feature set bumps `FEATURE_SET_VERSION`, which
+  retires old genome files, so batch such changes.
+- **Stable rank over rushing for President:** "retain the highest possible
+  rank, but settle on a lower one if the cards are bad; do not rush for
+  President, stay safe on Vize." Concretely a fitness variant that rewards
+  consistency (for example mean role score minus a penalty on the variance of
+  the roles, or a concave utility that values Vize almost as much as
+  President), selectable like the other training options and compared with the
+  default fitness on the same held-out matches. Report both mean score and
+  spread so the trade-off is visible.
+- **One model for several table sizes and both decks:** train a genome that
+  adapts to the player count and the deck variant instead of one model per
+  setting. Add inputs for the player count (and the deck variant) and let
+  training draw the table size and deck per match from a configured set
+  (`--player-counts 3,4,5,6`, `--decks single,double`); fitness is then
+  averaged over the settings with per-setting columns in the terminal and
+  the dashboard, and `cli evaluate` reports every setting. A first experiment
+  is whether a single genome loses to the specialised ones; the baselines for
+  3-6 players already exist in `docs/baselines/neat-v1`.
+
+## Phase 14 — Rule change: a pass ends your part in the trick
+
+From `docs/Notes.md` ("once you pass in a trick you are out and cannot rejoin
+the trick"). This is a **rule variant**, not a tweak: today `docs/RULES.md`
+says passing is always legal and a player who passed may play again when the
+turn comes round to them in the same trick. Changing it affects the engine, the
+strategies and every number measured so far, so it is its own phase:
+
+- Make it a selectable rule (`--pass-rule free|final`, default `free` so all
+  existing results and genome files stay valid), implemented in
+  `engine::trick` (a passed seat is skipped for the rest of the trick and the
+  trick ends when only the last player to play remains) and in
+  `Round::legal_moves`, with RULES.md updated and the state-machine tests
+  extended (including the double deck and 3-6 seats).
+- Strategies and hand reading: under `final` a pass is far stronger
+  information (the seat can no longer play a beater later), and `PassCeilings`'
+  refutation logic becomes unnecessary; the strategies' behaviour under the new
+  rule needs checking, not just compiling.
+- Re-baseline: run the pre-NEAT baseline and the neat-v1 comparison under
+  `final`, retrain (the evolved players were trained under `free` and will not
+  be optimal), and record both rule sets side by side. The web play page and
+  `cli play` gain the rule as a setup option.
+
 ## Idea — GPU (CUDA / ROCm) training
 
 Measured in Phase 12 (details in `docs/baselines/perf/README.md`): the
