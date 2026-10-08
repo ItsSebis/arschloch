@@ -172,6 +172,40 @@ impl Population {
         })
     }
 
+    /// Starts a *new* run from an earlier one's snapshot: the genomes,
+    /// innovation history, species and threshold carry over, while the
+    /// generation counter, the best-so-far and the random generator start
+    /// afresh (`seed`) and the settings are `config`'s. The population
+    /// size cannot change, because the genomes are kept as they are.
+    ///
+    /// # Errors
+    ///
+    /// `NeatError::InvalidConfig` if `config` fails validation or its
+    /// `population_size` differs from the snapshot's; `InvalidGenome` as
+    /// for `restore`.
+    pub fn warm_start(
+        state: PopulationState,
+        config: NeatConfig,
+        seed: u64,
+    ) -> Result<Self, NeatError> {
+        config.validate()?;
+        if config.population_size != state.genomes.len() {
+            return Err(NeatError::InvalidConfig(format!(
+                "a warm start keeps the snapshot's {} genomes but population_size is {}",
+                state.genomes.len(),
+                config.population_size
+            )));
+        }
+        let mut population = Self::restore(PopulationState {
+            config: config.clone(),
+            ..state
+        })?;
+        population.generation = 0;
+        population.best = None;
+        population.rng = Xoshiro256PlusPlus::seed_from_u64(seed);
+        Ok(population)
+    }
+
     #[must_use]
     pub fn genomes(&self) -> &[Genome] {
         &self.genomes
@@ -829,6 +863,44 @@ mod tests {
             population.set_fitness(fitness);
             population.advance();
         }
+    }
+
+    #[test]
+    fn a_warm_start_keeps_the_genomes_but_restarts_the_counters() {
+        let mut pop = Population::new(2, tiny_config(), 5).unwrap();
+        run_generations(&mut pop, 0, 3);
+        let genomes_before = pop.genomes().to_vec();
+        let warm = Population::warm_start(pop.snapshot(), tiny_config(), 99).unwrap();
+        assert_eq!(warm.generation(), 0);
+        assert!(warm.best().is_none());
+        assert_eq!(warm.genomes(), &genomes_before[..]);
+    }
+
+    #[test]
+    fn a_warm_start_with_another_population_size_is_refused() {
+        let pop = Population::new(2, tiny_config(), 1).unwrap();
+        let bigger = NeatConfig {
+            population_size: 31,
+            ..NeatConfig::default()
+        };
+        assert!(matches!(
+            Population::warm_start(pop.snapshot(), bigger, 1),
+            Err(NeatError::InvalidConfig(_))
+        ));
+    }
+
+    #[test]
+    fn a_warm_start_is_deterministic_in_its_seed_and_differs_between_seeds() {
+        let mut pop = Population::new(2, tiny_config(), 5).unwrap();
+        run_generations(&mut pop, 0, 3);
+        let state = pop.snapshot();
+        let advance = |seed| {
+            let mut warm = Population::warm_start(state.clone(), tiny_config(), seed).unwrap();
+            run_generations(&mut warm, 0, 2);
+            serde_json::to_string(&warm.snapshot()).unwrap()
+        };
+        assert_eq!(advance(7), advance(7));
+        assert_ne!(advance(7), advance(8));
     }
 
     #[test]
