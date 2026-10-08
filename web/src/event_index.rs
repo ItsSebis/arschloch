@@ -104,6 +104,21 @@ impl EventIndex {
         }
     }
 
+    /// Points the index at another run's log (a set moved on to its next
+    /// run). Everything cached is dropped and the epoch bumps, so clients
+    /// discard what they hold; the same path again changes nothing.
+    pub fn set_path(&mut self, path: PathBuf) {
+        if path != self.path {
+            self.path = path;
+            self.identity = None;
+            self.offset = 0;
+            self.generations.clear();
+            self.run_start = None;
+            self.finished = false;
+            self.epoch += 1;
+        }
+    }
+
     /// Reads whatever was appended since the last call. A missing or
     /// unreadable file simply means "nothing (yet)".
     pub fn refresh(&mut self) {

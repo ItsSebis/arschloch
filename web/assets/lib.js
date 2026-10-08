@@ -227,3 +227,18 @@ export function extent(values) {
 export function shouldRedraw({ first, newEvents, epochChanged, finishedChanged, reconnected, runChanged }) {
   return first || newEvents > 0 || epochChanged || finishedChanged || reconnected || runChanged;
 }
+
+/**
+ * Seconds left for a whole set of runs: the current run's own estimate plus
+ * the runs after it at the finished runs' average time (or, before any has
+ * finished, this run's projected total). Mirrors `set_eta` in
+ * sim/src/training/set.rs; `null` while the current run has no estimate.
+ */
+export function setEta(finishedSecs, totalRuns, currentRunEta, currentRunElapsed) {
+  if (currentRunEta === null || currentRunEta === undefined) return null;
+  const remaining = Math.max(0, totalRuns - finishedSecs.length - 1);
+  const perRun = finishedSecs.length
+    ? finishedSecs.reduce((a, b) => a + b, 0) / finishedSecs.length
+    : currentRunElapsed + currentRunEta;
+  return currentRunEta + remaining * perRun;
+}

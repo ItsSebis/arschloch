@@ -238,3 +238,36 @@ fn a_busy_port_fails_before_any_run_state_is_created() {
         String::from_utf8_lossy(&nothing.stderr)
     );
 }
+
+#[test]
+fn train_serve_follows_a_set_through_its_runs() {
+    let out = run_dir("serve-set");
+    let mut args = vec![
+        "train",
+        "--out",
+        out.to_str().unwrap(),
+        "--runs",
+        "2",
+        "--serve",
+        "0",
+        "--quiet",
+    ];
+    args.extend(SMALL);
+    let server = Server::spawn(&args);
+    let address = server.address();
+    server.next_line_containing("dashboard stays up");
+    let state = json(&get(&address, "/api/state"));
+    assert_eq!(state["set"]["total_runs"], 2);
+    assert_eq!(state["set"]["finished_secs"].as_array().unwrap().len(), 2);
+    assert_eq!(state["finished"], true);
+    assert_eq!(
+        state["run_start"]["config"]["seed"], 1,
+        "the page shows the last run (seed 0 + 1)"
+    );
+    assert_eq!(
+        json(&get(&address, "/api/genome/best"))["format_version"],
+        1
+    );
+    drop(server);
+    std::fs::remove_dir_all(&out).unwrap();
+}

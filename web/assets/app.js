@@ -3,14 +3,14 @@
 // escaped; charts are inline SVG built from the pure helpers in lib.js.
 import {
   bandPath, divergingColor, edgeWidth, fmt, formatDuration, forwardPass, histogramOpacities,
-  extent, layoutNetwork, linePath, linearScale, nearestIndex, niceScale, shouldRedraw, speciesColor, stackSpecies,
+  extent, layoutNetwork, linePath, linearScale, nearestIndex, niceScale, setEta, shouldRedraw, speciesColor, stackSpecies,
 } from "/lib.js";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 const state = {
-  events: [], runStart: null, runKey: null, rendered: false, epoch: 0, finished: false, connected: false, lastChange: Date.now(),
+  events: [], runStart: null, set: null, runKey: null, rendered: false, epoch: 0, finished: false, connected: false, lastChange: Date.now(),
   follow: true, showDisabled: false, networkGeneration: null,
   genomes: new Map(), decisions: new Map(),
   decisionGeneration: null, decisionIndex: 0, candidateIndex: null,
@@ -48,7 +48,7 @@ async function poll() {
     for (const e of incoming) byGeneration.set(e.generation, e);
     state.events = [...byGeneration.values()].sort((a, b) => a.generation - b.generation);
     if (incoming.length > 0) state.lastChange = Date.now();
-    const runKey = JSON.stringify(info.run_start);
+    const runKey = JSON.stringify([info.run_start, info.set?.current_run ?? null]);
     flags = {
       first: !state.rendered,
       newEvents: incoming.length,
@@ -59,6 +59,7 @@ async function poll() {
     };
     state.runKey = runKey;
     state.runStart = info.run_start;
+    state.set = info.set ?? null;
     state.finished = info.finished;
     state.connected = true;
   } catch (error) {
@@ -89,6 +90,11 @@ function bestEvent() {
   return [...state.events].reverse().find((e) => e.champion.is_new_best) ?? null;
 }
 
+// A finished run is not the end while the set still has runs to go.
+function setHasMoreRuns() {
+  return Boolean(state.set) && state.set.finished_secs.length < state.set.total_runs;
+}
+
 function renderStatus() {
   const pill = $("status");
   const last = state.events[state.events.length - 1];
@@ -97,8 +103,11 @@ function renderStatus() {
   if (!state.connected) {
     text = "disconnected, retrying…";
     cls = "pill warn";
+  } else if (state.finished && setHasMoreRuns()) {
+    text = `run ${state.set.current_run} of ${state.set.total_runs} finished, next run starting…`;
+    cls = "pill live";
   } else if (state.finished) {
-    text = "finished";
+    text = state.set ? `set finished (${state.set.total_runs} runs)` : "finished";
     cls = "pill done";
   } else if (last) {
     const quiet = (Date.now() - state.lastChange) / 1000;
@@ -127,9 +136,21 @@ function renderSummary() {
   const recent = state.events.slice(-10);
   const average = recent.length ? recent.reduce((s, e) => s + e.generation_secs, 0) / recent.length : null;
   const remaining = total !== null && last ? Math.max(0, total - (last.generation + 1)) : null;
-  const eta = average !== null && remaining !== null ? formatDuration(average * remaining) : "–";
+  const runEta = average !== null && remaining !== null ? average * remaining : null;
+  const eta = runEta !== null ? formatDuration(runEta) : "–";
+  let etaText = last ? `ETA ${state.finished ? "done" : eta}` : "";
+  if (last && state.set) {
+    const done = state.finished && !setHasMoreRuns();
+    // Between runs the finished run is already counted in finished_secs.
+    const between = state.finished && !done;
+    const finishedSecs = state.set.finished_secs;
+    const mean = finishedSecs.length ? finishedSecs.reduce((a, b) => a + b, 0) / finishedSecs.length : null;
+    const setLeft = done ? 0 : between ? (mean === null ? null : (state.set.total_runs - finishedSecs.length) * mean)
+      : setEta(finishedSecs, state.set.total_runs, runEta, last.elapsed_secs);
+    etaText = `${state.finished ? "run done" : `run ETA ${eta}`} · set ${done ? "done" : setLeft === null ? "–" : formatDuration(setLeft)} · run ${state.set.current_run}/${state.set.total_runs}`;
+  }
   const cards = [
-    kpi("Generation", last ? `${last.generation + 1}${total ? ` / ${total}` : ""}` : "–", last ? `ETA ${state.finished ? "done" : eta}` : ""),
+    kpi("Generation", last ? `${last.generation + 1}${total ? ` / ${total}` : ""}` : "–", etaText),
     kpi("Best champion (held-out)", best?.champion.heldout ? fmt(best.champion.heldout.mean, 3, true) : "–", best?.champion.heldout ? `±${fmt(best.champion.heldout.std_error, 3)} · generation ${best.generation}` : ""),
     kpi("Latest champion", last ? fmt(last.champion.reeval.mean, 3, true) : "–", last ? `±${fmt(last.champion.reeval.std_error, 3)} on fixed matches` : ""),
     kpi("Population mean", last ? fmt(last.fitness.mean, 3, true) : "–", last ? `best ${fmt(last.fitness.best, 3, true)}` : ""),

@@ -69,3 +69,34 @@ pub fn sample_events() -> Vec<String> {
         .map(str::to_owned)
         .collect()
 }
+
+/// A set directory: `run-01` is the finished fixture run, `run-02` has only
+/// its start and first generation; `set.json` says run 2 of 3 is current.
+pub fn fixture_set_dir(name: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("arschloch-web-set-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let source = fixture_run_dir();
+    for run in ["run-01", "run-02"] {
+        std::fs::create_dir_all(dir.join(run).join("decisions")).unwrap();
+        std::fs::copy(source.join("best.json"), dir.join(run).join("best.json")).unwrap();
+    }
+    let lines = sample_events();
+    std::fs::write(dir.join("run-01/events.jsonl"), lines.join("\n") + "\n").unwrap();
+    std::fs::write(
+        dir.join("run-02/events.jsonl"),
+        lines[..2].join("\n") + "\n",
+    )
+    .unwrap();
+    write_set(&dir, 2, &[10.0]);
+    dir
+}
+
+pub fn write_set(dir: &std::path::Path, current_run: u32, finished_secs: &[f64]) {
+    let set = sim::training::SetFile {
+        total_runs: 3,
+        current_run,
+        finished_secs: finished_secs.to_vec(),
+        from: None,
+    };
+    set.write(dir).unwrap();
+}

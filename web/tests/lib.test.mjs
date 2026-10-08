@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   bandPath, divergingColor, edgeWidth, fmt, forwardPass, formatDuration, histogramOpacities,
-  extent, layoutNetwork, linePath, linearScale, nearestIndex, niceScale, shouldRedraw, speciesColor, stackSpecies,
+  extent, layoutNetwork, linePath, linearScale, nearestIndex, niceScale, setEta, shouldRedraw, speciesColor, stackSpecies,
 } from "../assets/lib.js";
 
 const node = (id, kind) => ({ id, kind });
@@ -155,4 +155,18 @@ test("shouldRedraw redraws only when something the page shows has changed", () =
     assert.equal(shouldRedraw({ ...idle, [key]: true }), true, key);
   }
   assert.equal(shouldRedraw({ ...idle, newEvents: 1 }), true);
+});
+
+// The same vectors as sim::training::set (Rust), so terminal and page agree.
+test("setEta projects the first run, then uses the finished runs' pace", () => {
+  assert.equal(setEta([], 3, 100, 100), 100 + 2 * 200);
+  assert.equal(setEta([60, 80], 5, 30, 10), 30 + 2 * 70);
+  assert.equal(setEta([60, 80], 3, 30, 10), 30);
+});
+
+test("setEta has no answer without a current-run estimate and never goes negative", () => {
+  assert.equal(setEta([], 3, null, 0), null);
+  assert.equal(setEta([10], 3, undefined, 5), null);
+  assert.equal(setEta([10, 10, 10], 2, 4, 1), 4);
+  assert.equal(setEta([], 0, 4, 1), 4);
 });

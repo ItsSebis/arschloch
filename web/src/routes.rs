@@ -7,11 +7,11 @@
 //! - `GET /api/genome/N|best`: a champion genome file;
 //! - `GET /api/decisions/N`: the recorded decisions of a new-best champion.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Mutex;
 
 use serde_json::json;
-use sim::training::SCHEMA_VERSION;
+use sim::training::{run_dir_name, SetFile, SCHEMA_VERSION};
 
 use crate::event_index::EventIndex;
 
@@ -44,7 +44,8 @@ impl Response {
 }
 
 pub struct App {
-    run_dir: PathBuf,
+    /// The directory given on the command line: a run, or a set of runs.
+    root: PathBuf,
     index: Mutex<EventIndex>,
 }
 
@@ -66,14 +67,23 @@ fn query_value<'a>(query: &'a str, key: &str) -> Option<&'a str> {
 
 impl App {
     #[must_use]
-    pub fn new(run_dir: PathBuf) -> Self {
-        let index = Mutex::new(EventIndex::new(run_dir.join("events.jsonl")));
-        Self { run_dir, index }
+    pub fn new(root: PathBuf) -> Self {
+        let index = Mutex::new(EventIndex::new(root.join("events.jsonl")));
+        Self { root, index }
+    }
+
+    /// The run being shown: the root itself, or, when the root holds a
+    /// set of runs (`set.json`), the set's current run.
+    fn current(&self) -> (PathBuf, Option<SetFile>) {
+        match SetFile::read(&self.root) {
+            Ok(Some(set)) => (self.root.join(run_dir_name(set.current_run)), Some(set)),
+            _ => (self.root.clone(), None),
+        }
     }
 
     #[must_use]
-    pub fn run_dir(&self) -> &Path {
-        &self.run_dir
+    pub fn run_dir(&self) -> PathBuf {
+        self.current().0
     }
 
     /// Handles one request. `target` is the request target as sent
@@ -115,16 +125,19 @@ impl App {
         }
     }
 
-    fn refreshed<T>(&self, read: impl FnOnce(&EventIndex) -> T) -> T {
+    fn refreshed<T>(&self, read: impl FnOnce(&EventIndex, Option<&SetFile>) -> T) -> T {
+        let (dir, set) = self.current();
         let mut index = self.index.lock().expect("index lock");
+        index.set_path(dir.join("events.jsonl"));
         index.refresh();
-        read(&index)
+        read(&index, set.as_ref())
     }
 
     fn state(&self) -> Response {
-        let value = self.refreshed(|index| {
+        let value = self.refreshed(|index, set| {
             json!({
                 "schema_version": SCHEMA_VERSION,
+                "set": set,
                 "run_start": index.run_start(),
                 "generations_logged": index.generations().len(),
                 "last_generation": index.generations().iter().map(|g| g.generation).max(),
@@ -143,7 +156,7 @@ impl App {
                 None => return Response::error(400, "since must be a generation number"),
             },
         };
-        let value = self.refreshed(|index| {
+        let value = self.refreshed(|index, _| {
             let events: Vec<&sim::training::GenerationEvent> = index
                 .generations()
                 .iter()
@@ -155,7 +168,7 @@ impl App {
     }
 
     fn file(&self, relative: &str) -> Response {
-        match std::fs::read(self.run_dir.join(relative)) {
+        match std::fs::read(self.run_dir().join(relative)) {
             Ok(body) => Response {
                 status: 200,
                 content_type: "application/json; charset=utf-8",
@@ -226,6 +239,52 @@ mod tests {
         assert_eq!(state["finished"], true);
         assert_eq!(state["run_start"]["config"]["player_count"], 4);
         assert_eq!(state["run_start"]["opponents"][0], "LowestLegal");
+    }
+
+    #[test]
+    fn a_plain_run_has_no_set() {
+        let state = json_of(&app().handle("GET", "/api/state"));
+        assert!(state["set"].is_null());
+    }
+
+    #[test]
+    fn state_reports_the_set_and_serves_its_current_run() {
+        let dir = crate::test_fixture::fixture_set_dir("state");
+        let app = App::new(dir.clone());
+        let state = json_of(&app.handle("GET", "/api/state"));
+        assert_eq!(state["set"]["total_runs"], 3);
+        assert_eq!(state["set"]["current_run"], 2);
+        assert_eq!(state["set"]["finished_secs"][0], 10.0);
+        assert_eq!(state["generations_logged"], 1, "run-02 has one generation");
+        assert_eq!(app.handle("GET", "/api/genome/best").status, 200);
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn the_current_run_changing_resets_the_index_and_bumps_the_epoch() {
+        let dir = crate::test_fixture::fixture_set_dir("switch");
+        let app = App::new(dir.clone());
+        let before = json_of(&app.handle("GET", "/api/state"));
+        assert_eq!(before["generations_logged"], 1);
+        crate::test_fixture::write_set(&dir, 1, &[]);
+        let after = json_of(&app.handle("GET", "/api/state"));
+        assert_eq!(after["generations_logged"], 3, "now showing run-01");
+        assert_eq!(after["set"]["current_run"], 1);
+        assert!(after["epoch"].as_u64() > before["epoch"].as_u64());
+        // Same run again: no further reset.
+        let again = json_of(&app.handle("GET", "/api/state"));
+        assert_eq!(again["epoch"], after["epoch"]);
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn a_set_whose_current_run_has_not_started_is_an_idle_state() {
+        let dir = crate::test_fixture::fixture_set_dir("idle");
+        crate::test_fixture::write_set(&dir, 3, &[10.0, 12.0]);
+        let state = json_of(&App::new(dir.clone()).handle("GET", "/api/state"));
+        assert_eq!(state["generations_logged"], 0);
+        assert_eq!(state["set"]["current_run"], 3);
+        std::fs::remove_dir_all(dir).ok();
     }
 
     #[test]
