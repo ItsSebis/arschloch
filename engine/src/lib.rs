@@ -19,6 +19,7 @@ pub use deck::standard_deck;
 pub use exchange::{exchange, exchange_with_selection, ExchangeError};
 pub use role::{assign_roles, exchange_counts_for_player_count, roles_for_player_count, Role};
 pub use round::{Move, MoveError, Round};
+pub use trick::PassRule;
 
 /// A seat's position at the table (0-indexed). Table sizes are 3-6, so
 /// `u8` matches `player_count`'s type used throughout this crate.

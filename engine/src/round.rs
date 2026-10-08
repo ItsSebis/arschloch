@@ -3,7 +3,7 @@
 
 use crate::card::{Card, DuplicateRule};
 use crate::combo::Combo;
-use crate::trick::Trick;
+use crate::trick::{PassRule, Trick};
 use crate::SeatId;
 
 /// A move a seat can submit on its turn.
@@ -42,6 +42,7 @@ pub struct Round {
     finishing_order: Vec<SeatId>,
     current_combo: Option<Combo>,
     trick: Trick,
+    pass_rule: PassRule,
     play_history: Vec<(SeatId, Combo)>,
     pass_history: Vec<(SeatId, Combo, usize)>,
 }
@@ -59,6 +60,18 @@ impl Round {
         duplicate_rule: DuplicateRule,
         first_leader: SeatId,
     ) -> Option<Self> {
+        Self::with_pass_rule(hands, duplicate_rule, PassRule::default(), first_leader)
+    }
+
+    /// Like [`Round::new`] with an explicit [`PassRule`] (`new` plays by the
+    /// rules of the game: a pass ends your part in the trick).
+    #[must_use]
+    pub fn with_pass_rule(
+        hands: Vec<Vec<Card>>,
+        duplicate_rule: DuplicateRule,
+        pass_rule: PassRule,
+        first_leader: SeatId,
+    ) -> Option<Self> {
         if !(3..=6).contains(&hands.len()) {
             return None;
         }
@@ -73,10 +86,16 @@ impl Round {
             duplicate_rule,
             finishing_order: Vec::new(),
             current_combo: None,
-            trick: Trick::new(first_leader),
+            trick: Trick::new(first_leader, pass_rule),
+            pass_rule,
             play_history: Vec::new(),
             pass_history: Vec::new(),
         })
+    }
+
+    #[must_use]
+    pub fn pass_rule(&self) -> PassRule {
+        self.pass_rule
     }
 
     /// The seat that must act next, or `None` if the round is complete.
@@ -261,7 +280,10 @@ impl Round {
         }
 
         let active = self.active_mask();
-        self.trick.record_play(seat, &active);
+        if let Some(new_leader) = self.trick.record_play(seat, &active) {
+            self.current_combo = None;
+            self.trick = Trick::new(new_leader, self.pass_rule);
+        }
     }
 
     fn apply_pass(&mut self, seat: SeatId) {
@@ -272,7 +294,7 @@ impl Round {
         let active = self.active_mask();
         if let Some(new_leader) = self.trick.record_pass(seat, &active) {
             self.current_combo = None;
-            self.trick = Trick::new(new_leader);
+            self.trick = Trick::new(new_leader, self.pass_rule);
         }
     }
 
@@ -579,7 +601,8 @@ mod tests {
             vec![card(Rank::Seven, Suit::Clubs), card(Rank::Six, Suit::Clubs)],
             vec![card(Rank::Nine, Suit::Clubs), card(Rank::Five, Suit::Clubs)],
         ];
-        let mut round = Round::new(hands, DuplicateRule::FirstDealtWins, 0).unwrap();
+        let mut round =
+            Round::with_pass_rule(hands, DuplicateRule::FirstDealtWins, PassRule::Free, 0).unwrap();
         assert_eq!(round.pass_history(), &[]);
 
         let lead = combo(vec![card(Rank::Eight, Suit::Clubs)]);
@@ -601,5 +624,196 @@ mod tests {
             &[(1, lead, 1), (1, second_lead, 3)],
             "each pass is tagged with play_history().len() at that exact moment"
         );
+    }
+
+    // ---- the pass rule -------------------------------------------------
+
+    fn single_hands(ranks: &[&[Rank]]) -> Vec<Vec<Card>> {
+        ranks
+            .iter()
+            .enumerate()
+            .map(|(seat, hand)| {
+                hand.iter()
+                    .enumerate()
+                    .map(|(i, &rank)| {
+                        Card::new(rank, Suit::Clubs, u8::try_from(seat * 10 + i).unwrap())
+                    })
+                    .collect()
+            })
+            .collect()
+    }
+
+    fn play(round: &mut Round, seat: SeatId, rank: Rank) {
+        let card = round
+            .hand(seat)
+            .iter()
+            .copied()
+            .find(|c| c.rank == rank)
+            .expect("the seat holds that rank");
+        round
+            .submit_move(seat, Move::Play(combo(vec![card])))
+            .unwrap();
+    }
+
+    #[test]
+    fn under_the_final_rule_a_seat_that_passed_is_skipped_for_the_rest_of_the_trick() {
+        use Rank::*;
+        // 4 seats: 0 leads 4, 1 passes (out), 2 plays 6, 3 passes (out),
+        // 0 plays 9 -> turn must go to 2 (1 and 3 are out), not to 1.
+        let hands = single_hands(&[
+            &[Four, Nine, Ace],
+            &[Five, Seven],
+            &[Six, Eight],
+            &[Seven, Ten],
+        ]);
+        let mut round =
+            Round::with_pass_rule(hands, DuplicateRule::FirstDealtWins, PassRule::Final, 0)
+                .unwrap();
+        play(&mut round, 0, Four);
+        round.submit_move(1, Move::Pass).unwrap();
+        play(&mut round, 2, Six);
+        round.submit_move(3, Move::Pass).unwrap();
+        assert_eq!(round.seat_to_move(), Some(0));
+        play(&mut round, 0, Nine);
+        assert_eq!(
+            round.seat_to_move(),
+            Some(2),
+            "seats 1 and 3 passed and are out"
+        );
+        assert_eq!(
+            round.submit_move(1, Move::Pass),
+            Err(MoveError::NotYourTurn { expected: 2 })
+        );
+        // Seat 2 passes: nobody is left but seat 0, who wins and leads.
+        round.submit_move(2, Move::Pass).unwrap();
+        assert_eq!(round.current_combo(), None);
+        assert_eq!(round.seat_to_move(), Some(0));
+    }
+
+    #[test]
+    fn the_free_rule_lets_a_passed_seat_play_again_in_the_same_trick() {
+        use Rank::*;
+        let hands = single_hands(&[
+            &[Four, Nine, Ace],
+            &[Five, Seven],
+            &[Six, Eight],
+            &[Seven, Ten],
+        ]);
+        let mut round =
+            Round::with_pass_rule(hands, DuplicateRule::FirstDealtWins, PassRule::Free, 0).unwrap();
+        play(&mut round, 0, Four);
+        round.submit_move(1, Move::Pass).unwrap();
+        play(&mut round, 2, Six);
+        round.submit_move(3, Move::Pass).unwrap();
+        play(&mut round, 0, Nine);
+        assert_eq!(round.seat_to_move(), Some(1), "free: seat 1 is back in");
+        // Seat 1 can act again (here it passes once more) and play goes on.
+        round.submit_move(1, Move::Pass).unwrap();
+        assert_eq!(round.seat_to_move(), Some(2));
+    }
+
+    #[test]
+    fn a_passed_seat_acts_again_in_the_next_trick() {
+        use Rank::*;
+        let hands = single_hands(&[&[Four, Nine], &[Five, Seven], &[Six, Eight]]);
+        let mut round = Round::new(hands, DuplicateRule::FirstDealtWins, 0).unwrap();
+        assert_eq!(round.pass_rule(), PassRule::Final, "the default rule");
+        play(&mut round, 0, Four);
+        round.submit_move(1, Move::Pass).unwrap();
+        round.submit_move(2, Move::Pass).unwrap();
+        // Trick over: seat 0 leads again, and seat 1 may play in the next one.
+        assert_eq!(round.seat_to_move(), Some(0));
+        play(&mut round, 0, Nine);
+        assert_eq!(round.seat_to_move(), Some(1));
+        round.submit_move(1, Move::Pass).unwrap();
+    }
+
+    #[test]
+    fn when_the_winner_goes_out_the_lead_passes_to_the_next_active_seat_under_final() {
+        use Rank::*;
+        // Seat 0 leads its last card; 1 passes; 2 beats it with its last card
+        // and goes out; seat 0 is already out; only seat 1 (passed) is left in
+        // the round with cards? Use 4 seats so someone can still lead.
+        let hands = single_hands(&[&[Four], &[Five, Seven], &[Six], &[Eight, Ten]]);
+        let mut round =
+            Round::with_pass_rule(hands, DuplicateRule::FirstDealtWins, PassRule::Final, 0)
+                .unwrap();
+        play(&mut round, 0, Four); // seat 0 is out
+        round.submit_move(1, Move::Pass).unwrap();
+        play(&mut round, 2, Six); // seat 2 is out, winner of the trick
+        assert_eq!(round.seat_to_move(), Some(3));
+        round.submit_move(3, Move::Pass).unwrap();
+        // 1 and 3 passed, 0 and 2 are out: the trick is over and the next
+        // active seat after the winner (2) leads: that is seat 3.
+        assert_eq!(round.current_combo(), None);
+        assert_eq!(round.seat_to_move(), Some(3));
+    }
+
+    /// Plays random legal rounds with a lot of passing, for every table
+    /// size, both decks and both rules: every round must end, every seat
+    /// must appear once in the finishing order, and (under `Final`) nobody is
+    /// ever asked to move after passing in the same trick.
+    #[test]
+    fn random_rounds_always_finish_under_both_rules() {
+        use crate::card::DeckVariant;
+        use crate::deal::{deal, lowest_card_holder};
+        use crate::deck::standard_deck;
+        use rand::seq::SliceRandom;
+        use rand::{RngExt, SeedableRng};
+
+        let mut rng = rand::rngs::StdRng::seed_from_u64(99);
+        for rule in [PassRule::Free, PassRule::Final] {
+            for variant in [DeckVariant::Single, DeckVariant::Double] {
+                for players in 3..=6u8 {
+                    for _ in 0..150 {
+                        let mut deck = standard_deck(variant);
+                        deck.shuffle(&mut rng);
+                        for (i, c) in deck.iter_mut().enumerate() {
+                            c.deal_index = u8::try_from(i).unwrap();
+                        }
+                        let hands = deal(deck, players).unwrap();
+                        let leader =
+                            lowest_card_holder(&hands, DuplicateRule::FirstDealtWins).unwrap();
+                        let mut round = Round::with_pass_rule(
+                            hands,
+                            DuplicateRule::FirstDealtWins,
+                            rule,
+                            leader,
+                        )
+                        .unwrap();
+                        let mut passed_in_trick: Vec<SeatId> = Vec::new();
+                        let mut steps = 0;
+                        while let Some(seat) = round.seat_to_move() {
+                            steps += 1;
+                            assert!(steps < 10_000, "a round never ended ({rule:?})");
+                            if round.current_combo().is_none() {
+                                passed_in_trick.clear();
+                            }
+                            if rule == PassRule::Final {
+                                assert!(
+                                    !passed_in_trick.contains(&seat),
+                                    "seat {seat} acts again after passing in the same trick"
+                                );
+                            }
+                            let moves = round.legal_moves();
+                            let pass = moves.contains(&Move::Pass) && rng.random_bool(0.5);
+                            let mv = if pass {
+                                Move::Pass
+                            } else {
+                                moves[rng.random_range(0..moves.len())].clone()
+                            };
+                            if mv == Move::Pass {
+                                passed_in_trick.push(seat);
+                            }
+                            round.submit_move(seat, mv).unwrap();
+                        }
+                        let mut order = round.finishing_order().to_vec();
+                        order.sort_unstable();
+                        let expected: Vec<SeatId> = (0..players).collect();
+                        assert_eq!(order, expected, "{rule:?} {variant:?} {players}p");
+                    }
+                }
+            }
+        }
     }
 }
