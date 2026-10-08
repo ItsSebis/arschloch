@@ -178,12 +178,32 @@ sitting; a phase that grows beyond that should be split.
 - `cli`: `adaptive:bully` (combinable with every other modifier, e.g.
   `adaptive:tempo,bully`).
 
-## Phase 10 — Web interface
+## Phase 10 — NEAT training
 
-- A small web frontend (technology choice deferred to when this phase
-  starts) to view running simulations and the Phase 4 statistics as an
-  overview: role outcomes by strategy, variance/luck indicators, strategy
-  comparison charts.
+- Evolve feedforward neural-network players with NEAT and compare them
+  against the hand-written strategies. Full design:
+  `docs/superpowers/specs/2026-10-08-neat-engine-design.md`.
+- The pre-NEAT state is preserved as git tag `baseline-pre-neat` plus
+  frozen result summaries in `docs/baselines/pre-neat/`; existing
+  strategies are not modified by this phase.
+- 10a: generic `neat` crate. 10b: `NeatStrategy` (scores each legal
+  move) and the `neat:<genome.json>` spec. 10c: fitness evaluation and
+  a `train` subcommand with checkpoint/resume, a per-generation
+  terminal progress line and a JSONL event log. 10d: live browser
+  dashboard, the first part of the `web` crate, which Phase 11 extends
+  (fitness/species/complexity charts, champion network visualization,
+  decision inspector). 10e: opponent pool, hall of
+  fame, tuning and baseline comparison.
+
+## Phase 11 — Web interface
+
+- Extends the `web` crate that Phase 10d starts with the NEAT training
+  dashboard (HTTP server, embedded single-page app, JSON API), rather
+  than building a second frontend. Adds the simulation views: a small
+  web frontend to view running simulations and the Phase 4 statistics
+  as an overview — role outcomes by strategy, variance/luck indicators,
+  strategy comparison charts — and can show evolved players next to the
+  hand-written strategies.
 - Reads (or live-drives) `sim`'s existing output types — no changes to
   `engine`/`sim`'s public shape should be needed going in.
 

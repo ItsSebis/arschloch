@@ -177,12 +177,24 @@ JSON results file (every `MatchResult` plus the aggregated `Statistics`,
 `sim`'s existing types with no new schema) and a human-readable summary
 table to stdout.
 
-### `web` (future phase)
+### `neat` (planned, Phase 10)
 
-Not built yet. Reserved so that when the roadmap reaches the web-interface
-phase, it's a new crate reading `sim`'s existing `Statistics`/`MatchResult`
-JSON output (or driving `sim` live), rather than a refactor of the crates
-above.
+A generic NEAT library crate with no game knowledge (genomes,
+speciation, crossover, mutation, feedforward evaluation). `sim` depends
+on it to provide a `NeatStrategy` implementing the existing `Strategy`
+trait; `cli` gains a `train` subcommand, and `web` hosts the live
+training dashboard (Phase 10d), which Phase 11 extends with the
+simulation-statistics views. Dependency direction stays one-way
+(`cli -> web -> sim -> engine`, `sim -> neat`). See
+`docs/superpowers/specs/2026-10-08-neat-engine-design.md`.
+
+### `web` (starts in Phase 10d, extended in Phase 11)
+
+Not built yet. Phase 10d starts it with the NEAT training dashboard
+(server, embedded page, JSON API over a training run directory); Phase 11
+extends the same crate with pages reading `sim`'s existing
+`Statistics`/`MatchResult` JSON output (or driving `sim` live), rather
+than a refactor of the crates above.
 
 ## Threading model
 
