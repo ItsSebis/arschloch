@@ -347,10 +347,12 @@ shell may assume NEAT-specific data.
   process (and keeps serving after the run ends, because the server lives
   there); `cli watch RUN_DIR [--port N]` is a standalone viewer for a run
   in another process or a finished one. It binds to `127.0.0.1` only
-  (use an SSH tunnel to view a remote run) and only reads the run
-  directory.
-- **API:** `GET /api/state`, `/api/events?since=N` (with an `epoch` that
-  changes when the log is rewritten by a resume), `/api/genome/N|best`,
+  (use an SSH tunnel to view a remote run), refuses requests whose `Host`
+  is not `127.0.0.1`/`localhost`/`::1` (DNS rebinding), and only reads the
+  run directory.
+- **API:** `GET /api/state`, `/api/events?since=N` (with an `epoch`
+  identifying the log: unique per server process and bumped when the log
+  is rewritten by a resume, so a client never mixes two runs' data), `/api/genome/N|best`,
   `/api/decisions/N`. The event reader consumes only appended bytes,
   waits for a partial last line, and skips lines that do not parse.
 - **Views:** progress and headline numbers; fitness (selection best,
@@ -359,7 +361,9 @@ shell may assume NEAT-specific data.
   alone; species as stacked areas; the population fitness spread as a
   heat strip; complexity; the champion's network with a generation
   slider, best/latest buttons and a disabled-connections toggle; and the
-  decision inspector.
+  decision inspector. The page polls once a second but redraws only when
+  something changed (an idle tab does no DOM work and keeps the user's
+  hover).
 - **Decision inspector:** for every new best champion the trainer records
   12 real decisions from one held-out match (`decisions/gen-NNNN.json`:
   hand, table, every legal move with its feature vector and score). The

@@ -202,3 +202,28 @@ export function nearestIndex(values, x) {
   });
   return best;
 }
+
+/**
+ * Min and max of an array, skipping null/undefined. A loop, not
+ * `Math.min(...values)`: spreading tens of thousands of numbers throws a
+ * RangeError, which a long run would hit.
+ */
+export function extent(values) {
+  let min = Infinity;
+  let max = -Infinity;
+  for (const v of values) {
+    if (v === null || v === undefined) continue;
+    if (v < min) min = v;
+    if (v > max) max = v;
+  }
+  return { min, max };
+}
+
+/**
+ * Whether a poll's result changes anything the page shows. Redrawing
+ * replaces every chart, which resets the user's hover readout and costs
+ * real CPU in a tab left open for hours, so an idle poll must not.
+ */
+export function shouldRedraw({ first, newEvents, epochChanged, finishedChanged, reconnected, runChanged }) {
+  return first || newEvents > 0 || epochChanged || finishedChanged || reconnected || runChanged;
+}

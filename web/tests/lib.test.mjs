@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   bandPath, divergingColor, edgeWidth, fmt, forwardPass, formatDuration, histogramOpacities,
-  layoutNetwork, linePath, linearScale, nearestIndex, niceScale, speciesColor, stackSpecies,
+  extent, layoutNetwork, linePath, linearScale, nearestIndex, niceScale, shouldRedraw, speciesColor, stackSpecies,
 } from "../assets/lib.js";
 
 const node = (id, kind) => ({ id, kind });
@@ -138,4 +138,21 @@ test("nearestIndex finds the closest generation to a hover position", () => {
   assert.equal(nearestIndex([0, 10, 20], 14), 1);
   assert.equal(nearestIndex([0, 10, 20], 100), 2);
   assert.equal(nearestIndex([], 3), 0);
+});
+
+test("extent finds the min and max without spreading huge arrays", () => {
+  assert.deepEqual(extent([3, -1, 2]), { min: -1, max: 3 });
+  assert.deepEqual(extent([]), { min: Infinity, max: -Infinity });
+  const huge = Array.from({ length: 500000 }, (_, i) => i - 250000);
+  assert.deepEqual(extent(huge), { min: -250000, max: 249999 }); // Math.min(...huge) throws a RangeError
+  assert.deepEqual(extent([null, 4, undefined, 2]), { min: 2, max: 4 }, "null and undefined are skipped");
+});
+
+test("shouldRedraw redraws only when something the page shows has changed", () => {
+  const idle = { first: false, newEvents: 0, epochChanged: false, finishedChanged: false, reconnected: false, runChanged: false };
+  assert.equal(shouldRedraw(idle), false, "nothing new: leave the DOM (and the user's hover) alone");
+  for (const key of ["first", "epochChanged", "finishedChanged", "reconnected", "runChanged"]) {
+    assert.equal(shouldRedraw({ ...idle, [key]: true }), true, key);
+  }
+  assert.equal(shouldRedraw({ ...idle, newEvents: 1 }), true);
 });

@@ -66,14 +66,40 @@ fn reason(status: u16) -> &'static str {
     match status {
         200 => "OK",
         400 => "Bad Request",
+        403 => "Forbidden",
         404 => "Not Found",
         405 => "Method Not Allowed",
         _ => "Internal Server Error",
     }
 }
 
-/// Reads the request head and returns `(method, target)`.
-fn read_request(stream: &mut TcpStream) -> Option<(String, String)> {
+struct Request {
+    method: String,
+    target: String,
+    host: Option<String>,
+}
+
+/// Only requests addressed to this machine are served. A hostile website
+/// can point its own domain name at 127.0.0.1 (DNS rebinding) and make the
+/// victim's browser send requests with that name in `Host`; refusing every
+/// other name keeps the run's files out of its reach. HTTP/1.0 clients may
+/// omit the header.
+fn host_allowed(host: Option<&str>) -> bool {
+    let Some(host) = host else {
+        return true;
+    };
+    let name = match host.strip_prefix('[') {
+        Some(rest) => rest.split(']').next().unwrap_or(""),
+        None => host.split(':').next().unwrap_or(""),
+    };
+    matches!(
+        name.to_ascii_lowercase().as_str(),
+        "127.0.0.1" | "localhost" | "::1"
+    )
+}
+
+/// Reads the request head.
+fn read_request(stream: &mut TcpStream) -> Option<Request> {
     let mut received = Vec::new();
     let mut chunk = [0u8; 1024];
     while !received.windows(4).any(|w| w == b"\r\n\r\n") {
@@ -89,7 +115,17 @@ fn read_request(stream: &mut TcpStream) -> Option<(String, String)> {
     let head = String::from_utf8_lossy(&received);
     let mut parts = head.lines().next()?.split_whitespace();
     let (method, target) = (parts.next()?, parts.next()?);
-    Some((method.to_owned(), target.to_owned()))
+    let host = head.lines().skip(1).find_map(|line| {
+        let (name, value) = line.split_once(':')?;
+        name.trim()
+            .eq_ignore_ascii_case("host")
+            .then(|| value.trim().to_owned())
+    });
+    Some(Request {
+        method: method.to_owned(),
+        target: target.to_owned(),
+        host,
+    })
 }
 
 fn write_response(stream: &mut TcpStream, response: &Response) {
@@ -109,7 +145,12 @@ fn serve_connection(mut stream: TcpStream, app: &App) {
     let _ = stream.set_read_timeout(Some(IO_TIMEOUT));
     let _ = stream.set_write_timeout(Some(IO_TIMEOUT));
     let response = match read_request(&mut stream) {
-        Some((method, target)) => app.handle(&method, &target),
+        Some(request) if !host_allowed(request.host.as_deref()) => Response {
+            status: 403,
+            content_type: "text/plain; charset=utf-8",
+            body: b"this server only answers requests addressed to localhost".to_vec(),
+        },
+        Some(request) => app.handle(&request.method, &request.target),
         None => Response {
             status: 400,
             content_type: "text/plain; charset=utf-8",
@@ -169,6 +210,53 @@ mod tests {
         assert_eq!(declared, body(&reply).len(), "Content-Length is exact");
         let page = get(dashboard.address(), "/");
         assert!(page.contains("text/html") && body(&page).contains("<title>"));
+    }
+
+    #[test]
+    fn a_foreign_host_header_is_refused_to_defeat_dns_rebinding() {
+        // A hostile site can point its own name at 127.0.0.1 and have the
+        // victim's browser talk to this server with that name as Host.
+        let dashboard = Dashboard::start(fixture_run_dir(), 0).unwrap();
+        let address = dashboard.address();
+        let port = address.port();
+        let with_host = |host: &str| {
+            raw_request(
+                address,
+                format!("GET /api/state HTTP/1.1\r\nHost: {host}\r\n\r\n").as_bytes(),
+            )
+        };
+        for hostile in [
+            "evil.example",
+            &format!("evil.example:{port}"),
+            "127.0.0.1.evil.example",
+            "10.0.0.5",
+        ] {
+            let reply = with_host(hostile);
+            assert!(
+                reply.starts_with("HTTP/1.1 403 Forbidden"),
+                "{hostile}: {reply}"
+            );
+            assert!(
+                !reply.contains("generations_logged"),
+                "no data may leak to {hostile}"
+            );
+        }
+        for friendly in [
+            format!("127.0.0.1:{port}"),
+            format!("localhost:{port}"),
+            "localhost".to_owned(),
+            format!("[::1]:{port}"),
+            format!("LOCALHOST:{port}"),
+        ] {
+            assert!(
+                with_host(&friendly).starts_with("HTTP/1.1 200 OK"),
+                "{friendly}"
+            );
+        }
+        // HTTP/1.0 clients may omit Host entirely.
+        assert!(
+            raw_request(address, b"GET /api/state HTTP/1.0\r\n\r\n").starts_with("HTTP/1.1 200 OK")
+        );
     }
 
     #[test]

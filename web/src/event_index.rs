@@ -10,6 +10,7 @@
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::PathBuf;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use sim::training::{Event, GenerationEvent, RunStart};
 
@@ -21,6 +22,15 @@ pub struct EventIndex {
     generations: Vec<GenerationEvent>,
     run_start: Option<RunStart>,
     finished: bool,
+}
+
+/// Milliseconds since the Unix epoch, times 1000 (about 1.7e15, well inside
+/// the 2^53 JavaScript can represent exactly), leaving room for resets.
+fn start_nonce() -> u64 {
+    let millis = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| u64::try_from(d.as_millis()).unwrap_or(0));
+    millis.saturating_mul(1000)
 }
 
 #[cfg(unix)]
@@ -42,14 +52,19 @@ impl EventIndex {
             path,
             offset: 0,
             identity: None,
-            epoch: 0,
+            epoch: start_nonce(),
             generations: Vec::new(),
             run_start: None,
             finished: false,
         }
     }
 
-    /// Bumped whenever previously returned events may no longer be valid.
+    /// Identifies this log as this server process has seen it: the process
+    /// start time in milliseconds times 1000, plus the number of resets.
+    /// A client compares it with the epoch it last saw and discards its
+    /// cached events when it differs. A plain counter would start at 0 in
+    /// every server process, so a server restarted on a *different* run
+    /// would look like the one it replaced.
     #[must_use]
     pub fn epoch(&self) -> u64 {
         self.epoch
@@ -154,12 +169,31 @@ mod tests {
     }
 
     #[test]
+    fn a_restarted_server_never_shares_an_epoch_with_its_predecessor() {
+        // The epoch tells a client whether the events it cached still
+        // belong to this log. A new server process (for example watching a
+        // different run on the same port) must not look like the old one.
+        let first = EventIndex::new(temp_path("epoch-a"));
+        std::thread::sleep(std::time::Duration::from_millis(3));
+        let second = EventIndex::new(temp_path("epoch-b"));
+        assert_ne!(first.epoch(), second.epoch());
+        assert!(
+            second.epoch() > first.epoch(),
+            "later processes have larger epochs"
+        );
+        assert!(
+            second.epoch() < (1u64 << 53),
+            "epochs must stay exactly representable in JavaScript"
+        );
+    }
+
+    #[test]
     fn a_missing_file_is_just_empty() {
         let mut index = EventIndex::new(temp_path("missing"));
         index.refresh();
         assert!(index.generations().is_empty() && index.run_start().is_none());
         assert!(!index.finished());
-        assert_eq!(index.epoch(), 0);
+        assert_eq!(index.epoch() % 1000, 0, "no resets yet");
     }
 
     #[test]
@@ -179,7 +213,7 @@ mod tests {
         index.refresh();
         assert_eq!(index.generations().len(), 2);
         assert!(index.finished(), "the last line is the run end");
-        assert_eq!(index.epoch(), 0, "appends never bump the epoch");
+        assert_eq!(index.epoch() % 1000, 0, "appends never bump the epoch");
         fs::remove_file(path).ok();
     }
 
@@ -234,7 +268,7 @@ mod tests {
         fs::write(&replacement, format!("{}\n{}\n", lines[0], lines[1])).unwrap();
         fs::rename(&replacement, &path).unwrap();
         index.refresh();
-        assert_eq!(index.epoch(), 1);
+        assert_eq!(index.epoch() % 1000, 1);
         assert_eq!(index.generations().len(), 1);
         fs::remove_file(path).ok();
     }
@@ -254,7 +288,11 @@ mod tests {
         .unwrap();
         fs::rename(&replacement, &path).unwrap();
         index.refresh();
-        assert_eq!(index.epoch(), 1, "same-or-longer replacement is a new file");
+        assert_eq!(
+            index.epoch() % 1000,
+            1,
+            "same-or-longer replacement is a new file"
+        );
         assert_eq!(index.generations().len(), 3);
         fs::remove_file(path).ok();
     }

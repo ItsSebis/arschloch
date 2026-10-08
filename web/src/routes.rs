@@ -243,7 +243,10 @@ mod tests {
         assert_eq!(generations, vec![1, 2]);
         let none = json_of(&app.handle("GET", "/api/events?since=2"));
         assert!(none["events"].as_array().unwrap().is_empty());
-        assert_eq!(all["epoch"], 0);
+        assert_eq!(
+            all["epoch"],
+            json_of(&app.handle("GET", "/api/state"))["epoch"]
+        );
         assert_eq!(all["finished"], true);
     }
 

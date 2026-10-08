@@ -3,14 +3,14 @@
 // escaped; charts are inline SVG built from the pure helpers in lib.js.
 import {
   bandPath, divergingColor, edgeWidth, fmt, formatDuration, forwardPass, histogramOpacities,
-  layoutNetwork, linePath, linearScale, nearestIndex, niceScale, speciesColor, stackSpecies,
+  extent, layoutNetwork, linePath, linearScale, nearestIndex, niceScale, shouldRedraw, speciesColor, stackSpecies,
 } from "/lib.js";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 const state = {
-  events: [], runStart: null, epoch: 0, finished: false, connected: false, lastChange: Date.now(),
+  events: [], runStart: null, runKey: null, rendered: false, epoch: 0, finished: false, connected: false, lastChange: Date.now(),
   follow: true, showDisabled: false, networkGeneration: null,
   genomes: new Map(), decisions: new Map(),
   decisionGeneration: null, decisionIndex: 0, candidateIndex: null,
@@ -26,6 +26,7 @@ async function fetchJson(url) {
 
 // ------------------------------------------------------------------ polling
 async function poll() {
+  let flags;
   try {
     const last = state.events.length ? state.events[state.events.length - 1].generation : null;
     const [info, data] = await Promise.all([
@@ -33,8 +34,10 @@ async function poll() {
       fetchJson("/api/events" + (last === null ? "" : `?since=${last}`)),
     ]);
     let incoming = data.events;
-    if (data.epoch !== state.epoch) {
-      // The run's log was rewritten (a resume): everything cached is suspect.
+    const epochChanged = data.epoch !== state.epoch;
+    if (epochChanged) {
+      // This is a different log (a resume rewrote it, or a different server
+      // process took over the port): everything cached is suspect.
       state.epoch = data.epoch;
       state.events = [];
       state.genomes.clear();
@@ -45,14 +48,38 @@ async function poll() {
     for (const e of incoming) byGeneration.set(e.generation, e);
     state.events = [...byGeneration.values()].sort((a, b) => a.generation - b.generation);
     if (incoming.length > 0) state.lastChange = Date.now();
+    const runKey = JSON.stringify(info.run_start);
+    flags = {
+      first: !state.rendered,
+      newEvents: incoming.length,
+      epochChanged,
+      finishedChanged: info.finished !== state.finished,
+      reconnected: !state.connected,
+      runChanged: runKey !== state.runKey,
+    };
+    state.runKey = runKey;
     state.runStart = info.run_start;
     state.finished = info.finished;
     state.connected = true;
-    render();
   } catch (error) {
     state.connected = false;
     renderStatus();
     console.warn("dashboard poll failed:", error);
+    setTimeout(poll, 1000);
+    return;
+  }
+  // A drawing bug must not masquerade as a lost connection, nor stop polling.
+  try {
+    if (shouldRedraw(flags)) {
+      render();
+      state.rendered = true;
+    } else {
+      renderStatus();
+    }
+  } catch (error) {
+    console.error("dashboard render failed:", error);
+    $("status").textContent = "display error (see the browser console)";
+    $("status").className = "pill warn";
   }
   setTimeout(poll, 1000);
 }
@@ -150,7 +177,8 @@ function lineChart(containerId, readoutId, spec) {
     if (s.band) for (const v of [...s.band.lo, ...s.band.hi]) if (v !== null && v !== undefined) values.push(v);
   }
   if (spec.ref !== undefined) values.push(spec.ref);
-  const y = niceScale(Math.min(...values), Math.max(...values));
+  const range = extent(values);
+  const y = niceScale(range.min, range.max);
   const x0 = xs[0];
   const x1 = xs[xs.length - 1];
   const sx = linearScale(x0, x1 === x0 ? x0 + 1 : x1, MARGIN.l, W - MARGIN.r);
@@ -243,7 +271,7 @@ function renderSpecies() {
   if (events.length === 0) { el.innerHTML = '<p class="muted">no data yet</p>'; return; }
   const H = 260;
   const { ids, layers } = stackSpecies(events.map((e) => ({ generation: e.generation, species: e.species })));
-  const top = Math.max(1, ...events.map((e) => e.species.reduce((s, x) => s + x.size, 0)));
+  const top = Math.max(1, extent(events.map((e) => e.species.reduce((s, x) => s + x.size, 0))).max);
   const x0 = events[0].generation;
   const x1 = events[events.length - 1].generation;
   const sx = linearScale(x0, x1 === x0 ? x0 + 1 : x1, MARGIN.l, W - MARGIN.r);
@@ -429,6 +457,7 @@ async function showDecision() {
     $("decision-situation").textContent = `No recorded decisions for generation ${generation}.`;
     return;
   }
+  if (generation !== state.decisionGeneration) return; // the user picked another champion meanwhile
   const list = decisions.decisions;
   const pick = $("decision-pick");
   const wanted = `${generation}:${list.length}`;
