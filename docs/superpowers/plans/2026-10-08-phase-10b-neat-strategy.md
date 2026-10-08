@@ -47,6 +47,7 @@ renders this document, so the plan and what runs cannot drift apart.
 - Every feature is finite for every reachable state (no division by zero when no opponent is active or nothing is unseen) and roughly within `[0, 1]`.
 - Genome files must be loaded with validation: wrong format version, wrong feature names, wrong input count or an invalid genome is an error (`GenomeFileError`), never a panic and never silently accepted.
 - The exchange step uses `strategies::take_highest_naive` (spec: v1 reuses it).
+- Between Task 2 and Task 4 the non-test build reports `dead_code` warnings for items that later tasks start using; those are expected and disappear by Task 4. Any other warning is a defect.
 - Per-task verification is `cargo test -p <crate>`; the full gate (`cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`) runs in Task 7.
 
 ## Review Focus
@@ -2128,7 +2129,7 @@ names it was trained on.
 
 Run: `cargo fmt --check`
 
-Expected: PASS (clean output, no warnings).
+Expected: PASS.
 
 - [ ] **Step 6: Run (expect success)**
 
