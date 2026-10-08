@@ -17,3 +17,5 @@ pub use innovation::InnovationTracker;
 pub mod genome;
 
 pub use genome::{ConnectionGene, Genome, NodeGene, NodeKind};
+
+pub mod mutation;
