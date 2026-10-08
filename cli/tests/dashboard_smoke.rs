@@ -88,7 +88,7 @@ fn get(address: &str, target: &str) -> String {
     stream
         .set_read_timeout(Some(Duration::from_secs(10)))
         .unwrap();
-    write!(stream, "GET {target} HTTP/1.1\r\nHost: x\r\n\r\n").unwrap();
+    write!(stream, "GET {target} HTTP/1.1\r\nHost: {address}\r\n\r\n").unwrap();
     let mut reply = String::new();
     stream.read_to_string(&mut reply).unwrap();
     reply
