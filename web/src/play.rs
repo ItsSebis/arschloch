@@ -95,6 +95,10 @@ struct Games {
 }
 
 pub struct PlayApp {
+    /// Whether a request may fix the deal with `seed`. Off in the real
+    /// server: a known seed lets anyone replay the same deal from another
+    /// seat and read every hand.
+    allow_seed: bool,
     catalog: Vec<CatalogEntry>,
     games: Mutex<Games>,
     records: RecordStore,
@@ -151,10 +155,18 @@ impl PlayApp {
     #[must_use]
     pub fn new(catalog: Vec<CatalogEntry>, records: RecordStore) -> Self {
         Self {
+            allow_seed: false,
             catalog,
             games: Mutex::new(Games::default()),
             records,
         }
+    }
+
+    /// Lets requests fix the deal with a `seed` (for tests and replays).
+    #[must_use]
+    pub fn with_fixed_seeds(mut self) -> Self {
+        self.allow_seed = true;
+        self
     }
 
     fn entry(&self, id: &str) -> Option<&CatalogEntry> {
@@ -243,7 +255,11 @@ impl PlayApp {
             rounds,
             entries,
             human_seat,
-            seed: request["seed"].as_u64().unwrap_or_else(rand::random),
+            seed: if self.allow_seed {
+                request["seed"].as_u64().unwrap_or_else(rand::random)
+            } else {
+                rand::random()
+            },
         })
     }
 
@@ -269,6 +285,7 @@ impl PlayApp {
                 rounds,
                 seed,
                 human_seat,
+                hide_deal_order: true,
             },
             entries
                 .iter()
@@ -528,7 +545,7 @@ mod tests {
             CatalogEntry::model("model:champion", "Neat(champion)", champion()),
         ];
         (
-            PlayApp::new(catalog, RecordStore::new(Some(path.clone()))),
+            PlayApp::new(catalog, RecordStore::new(Some(path.clone()))).with_fixed_seeds(),
             path,
         )
     }
@@ -835,6 +852,28 @@ mod tests {
         assert_eq!(status, 200, "{reply}");
         assert_eq!(percent_decode("a%3Ab%2Fc+d%zz%4"), "a:b/c d%zz%4");
         std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn a_client_cannot_fix_the_deal() {
+        // Otherwise: the same seed from another seat shows that seat's hand.
+        let catalog = vec![CatalogEntry::strategy(
+            "lowest-legal",
+            "LowestLegal",
+            Arc::new(LowestLegal),
+        )];
+        let plain = PlayApp::new(catalog, RecordStore::new(None));
+        let hand = |seat: u32| {
+            let body = json!({"players": 3, "opponents": ["lowest-legal", "lowest-legal"], "seed": 42, "human_seat": seat});
+            let (status, reply) = call(&plain, "POST", "/api/games", &body.to_string());
+            assert_eq!(status, 200);
+            reply["view"]["hand"].to_string()
+        };
+        // With the seed honoured, seat 0 of one game and seat 0 of another
+        // would be identical; ignoring it they differ (13 of 52 cards by chance
+        // is astronomically unlikely to repeat).
+        assert_ne!(hand(0), hand(0));
+        std::fs::remove_file(records_path("noseed")).ok();
     }
 
     #[test]

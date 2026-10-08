@@ -20,6 +20,8 @@ const state = {
   display: null,
   selected: [],
   animating: false,
+  busy: false, // a request is in flight
+  generation: 0, // bumped when a game starts or is left, to cancel a running replay
   hideHand: false,
   removed: new Set(),
   message: "",
@@ -72,6 +74,7 @@ function renderSetup() {
     .map((n) => `<button type="button" data-players="${n}" class="${n === state.players ? "on" : ""}">${n}</button>`)
     .join("");
   $("seat").innerHTML = `<option value="">random</option>${Array.from({ length: state.players }, (_, i) => `<option value="${i}">seat ${i + 1}</option>`).join("")}`;
+  $("seat").value = remembered.human_seat !== undefined && remembered.human_seat < state.players ? String(remembered.human_seat) : "";
   $("opponents").innerHTML = Array.from({ length: state.players - 1 }, (_, i) => {
     const wanted = remembered.opponents?.[i] ?? DEFAULT_OPPONENTS[i % DEFAULT_OPPONENTS.length];
     const id = state.catalog.some((e) => e.id === wanted) ? wanted : state.catalog[0]?.id;
@@ -121,6 +124,8 @@ function resetGameState() {
 }
 
 function enterGame(view, events, { animate }) {
+  state.generation += 1;
+  state.busy = false;
   resetGameState();
   $("setup").hidden = true;
   $("game").hidden = false;
@@ -131,7 +136,7 @@ function enterGame(view, events, { animate }) {
     // Show the table as it stood before the first event, then replay.
     state.display = initialDisplay({ ...view, seats: view.seats.map((s) => ({ ...s, hand_size: 0, place: null })), table: null, to_move: null });
     render();
-    playEvents(events, view);
+    playEvents(events, view, state.generation);
   } else {
     for (const event of events) logEvent(event);
     state.eventsSeen = view.event_count;
@@ -154,6 +159,9 @@ async function continueGame() {
 }
 
 function leaveGame() {
+  state.generation += 1; // stops a replay still running
+  state.animating = false;
+  state.busy = false;
   $("game").hidden = true;
   $("setup").hidden = false;
   state.gameId = null;
@@ -177,10 +185,11 @@ function logEvent(event) {
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** Shows `events` one by one, then settles on the server's final `view`. */
-async function playEvents(events, finalView) {
+async function playEvents(events, finalView, token) {
   state.animating = true;
   const speed = Number($("speed").value);
   for (const event of events) {
+    if (token !== state.generation) return; // another game took over
     logEvent(event);
     state.display = applyEvent(state.display, event);
     if (event.type === "play" && event.seat === finalView.human_seat) {
@@ -192,6 +201,7 @@ async function playEvents(events, finalView) {
     const delay = eventDelay(event, speed);
     if (delay) await sleep(delay);
   }
+  if (token !== state.generation) return;
   state.eventsSeen += events.length;
   state.view = finalView;
   state.display = initialDisplay(finalView);
@@ -199,6 +209,7 @@ async function playEvents(events, finalView) {
   state.hideHand = false;
   state.animating = false;
   state.selected = [];
+  state.message = "";
   state.eventsSeen = finalView.event_count;
   // Advice was about the old position.
   $("advice").textContent = "Ask again for this position.";
@@ -206,23 +217,36 @@ async function playEvents(events, finalView) {
 }
 
 async function act(action, body = {}) {
-  if (state.animating || !state.gameId) return;
+  // One action at a time: a second click or key press while a request is in
+  // flight would be applied to a position the player has not seen.
+  if (state.busy || state.animating || !state.gameId) return;
+  state.busy = true;
+  renderActions();
+  const token = state.generation;
   try {
     const reply = await api("POST", `/api/games/${state.gameId}/${action}`, body);
+    if (token !== state.generation) return;
     state.message = "";
     state.selected = [];
     // The reply carries only this action's events; a gap means another tab
     // moved too, so refetch instead of guessing.
     if (reply.events_from !== state.eventsSeen) {
       const full = await api("GET", `/api/games/${state.gameId}?events_since=${state.eventsSeen}`);
-      await playEvents(full.events, full.view);
+      if (token !== state.generation) return;
+      await playEvents(full.events, full.view, token);
     } else {
-      await playEvents(reply.events, reply.view);
+      await playEvents(reply.events, reply.view, token);
     }
   } catch (error) {
+    if (token !== state.generation) return;
     state.message = error.message;
     state.messageClass = "bad";
     renderMessage();
+  } finally {
+    if (token === state.generation) {
+      state.busy = false;
+      if (state.view) renderActions();
+    }
   }
 }
 
@@ -307,7 +331,7 @@ function renderHand() {
 
 function renderActions() {
   const view = state.view;
-  const busy = state.animating;
+  const busy = state.animating || state.busy;
   const check = currentSelectionState();
   const exchange = view.phase === "exchange";
   document.querySelector(".actions").hidden = view.phase !== "playing" && !exchange;

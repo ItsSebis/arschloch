@@ -10,7 +10,7 @@ use std::sync::Mutex;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sim::training::role_score;
-use sim::Role;
+use sim::{roles_for_player_count, Role};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Record {
@@ -41,6 +41,19 @@ pub struct RecordStore {
     write_error: Mutex<Option<String>>,
     /// Serialises appends so concurrent finishes never interleave a line.
     lock: Mutex<()>,
+}
+
+impl Record {
+    /// Whether the record describes a possible game: a damaged line that
+    /// still parses must not be able to crash the summary.
+    fn is_valid(&self) -> bool {
+        let Some(table) = roles_for_player_count(self.player_count) else {
+            return false;
+        };
+        self.score.is_finite()
+            && !self.roles.is_empty()
+            && self.roles.iter().all(|r| table.contains(r))
+    }
 }
 
 impl RecordStore {
@@ -83,7 +96,8 @@ impl RecordStore {
         std::fs::read_to_string(path)
             .map(|text| {
                 text.lines()
-                    .filter_map(|line| serde_json::from_str(line).ok())
+                    .filter_map(|line| serde_json::from_str::<Record>(line).ok())
+                    .filter(Record::is_valid)
                     .collect()
             })
             .unwrap_or_default()
@@ -218,6 +232,30 @@ mod tests {
         let all = store.read_all();
         assert_eq!(all.len(), 2);
         assert!((all[1].score + 1.0).abs() < f64::EPSILON);
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn a_parseable_but_impossible_record_is_skipped_like_a_damaged_one() {
+        let path = temp("impossible");
+        let store = RecordStore::new(Some(path.clone()));
+        store.append(&record(0.5, vec![Role::President], &["A", "B", "C"]));
+        let mut file = std::fs::OpenOptions::new()
+            .append(true)
+            .open(&path)
+            .unwrap();
+        // A 3-player table has no Vize; 9 players do not exist; no roles at all.
+        let mut bad = record(0.0, vec![Role::Vize], &["A", "B"]);
+        bad.player_count = 3;
+        let mut nine = record(0.0, vec![Role::Vize], &["A"]);
+        nine.player_count = 9;
+        let empty = record(0.0, vec![], &["A", "B", "C"]);
+        for line in [&bad, &nine, &empty] {
+            writeln!(file, "{}", serde_json::to_string(line).unwrap()).unwrap();
+        }
+        drop(file);
+        assert_eq!(store.read_all().len(), 1);
+        assert_eq!(store.summary()["total_games"], 1);
         std::fs::remove_file(path).ok();
     }
 

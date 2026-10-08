@@ -39,6 +39,10 @@ pub struct SessionConfig {
     pub rounds: usize,
     pub seed: u64,
     pub human_seat: u8,
+    /// Number the cards shown to the client in a random order instead of
+    /// their deal position (a card's position reveals which seat it was
+    /// dealt to, and so which cards were exchanged).
+    pub hide_deal_order: bool,
 }
 
 /// A strategy-driven seat.
@@ -136,8 +140,48 @@ impl From<Card> for CardView {
     }
 }
 
-fn views(cards: &[Card]) -> Vec<CardView> {
-    cards.iter().copied().map(CardView::from).collect()
+/// The numbers cards go by on the client side of the session.
+struct IdMap {
+    to_client: Vec<u8>,
+    from_client: Vec<u8>,
+}
+
+impl IdMap {
+    fn identity() -> Self {
+        let ids: Vec<u8> = (0..=255).collect();
+        Self {
+            to_client: ids.clone(),
+            from_client: ids,
+        }
+    }
+
+    fn shuffled(seed: u64) -> Self {
+        let mut to_client: Vec<u8> = (0..=255).collect();
+        // Its own generator: the game's random stream must not change.
+        to_client.shuffle(&mut rand::rngs::StdRng::seed_from_u64(
+            seed ^ 0x9E37_79B9_7F4A_7C15,
+        ));
+        let mut from_client = vec![0u8; 256];
+        for (deal, &client) in to_client.iter().enumerate() {
+            from_client[usize::from(client)] = u8::try_from(deal).expect("256 entries");
+        }
+        Self {
+            to_client,
+            from_client,
+        }
+    }
+}
+
+fn views(ids: &IdMap, cards: &[Card]) -> Vec<CardView> {
+    cards
+        .iter()
+        .copied()
+        .map(|card| {
+            let mut view = CardView::from(card);
+            view.id = ids.to_client[usize::from(card.deal_index)];
+            view
+        })
+        .collect()
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -281,6 +325,7 @@ pub struct Session {
     events: Vec<GameEvent>,
     phase: Phase,
     pending: Option<PendingExchange>,
+    ids: IdMap,
 }
 
 impl Session {
@@ -317,6 +362,11 @@ impl Session {
                 }
             })
             .collect();
+        let ids = if config.hide_deal_order {
+            IdMap::shuffled(config.seed)
+        } else {
+            IdMap::identity()
+        };
         let mut session = Self {
             rng: rand::rngs::StdRng::seed_from_u64(config.seed),
             tracker: PassTracker::new(usize::from(config.player_count), config.duplicate_rule),
@@ -331,6 +381,7 @@ impl Session {
             events: Vec::new(),
             phase: Phase::Playing,
             pending: None,
+            ids,
         };
         session.start_round();
         Ok(session)
@@ -490,10 +541,11 @@ impl Session {
         self.events.push(GameEvent::Exchange { pairs });
         if involved {
             let gave = match human_selection {
-                Some(selection) => views(&selection),
+                Some(selection) => views(&self.ids, &selection),
                 // The human was the higher role: they hand back their lowest
                 // cards, which is whatever left their hand.
                 None => views(
+                    &self.ids,
                     &before
                         .iter()
                         .copied()
@@ -502,6 +554,7 @@ impl Session {
                 ),
             };
             let received = views(
+                &self.ids,
                 &after
                     .iter()
                     .copied()
@@ -585,7 +638,7 @@ impl Session {
                 let hand_left = round.hand_size(seat);
                 self.events.push(GameEvent::Play {
                     seat,
-                    cards: views(combo.cards()),
+                    cards: views(&self.ids, combo.cards()),
                     hand_left,
                 });
             }
@@ -637,15 +690,16 @@ impl Session {
     }
 
     /// Looks `ids` up in `hand`, refusing unknown and repeated ids.
-    fn cards_from(hand: &[Card], ids: &[u8]) -> Result<Vec<Card>, SessionError> {
+    fn cards_from(map: &IdMap, hand: &[Card], ids: &[u8]) -> Result<Vec<Card>, SessionError> {
         let mut cards = Vec::with_capacity(ids.len());
         for &id in ids {
-            if cards.iter().any(|c: &Card| c.deal_index == id) {
+            let deal = map.from_client[usize::from(id)];
+            if cards.iter().any(|c: &Card| c.deal_index == deal) {
                 return Err(SessionError::DuplicateCard(id));
             }
             let card = hand
                 .iter()
-                .find(|c| c.deal_index == id)
+                .find(|c| c.deal_index == deal)
                 .ok_or(SessionError::UnknownCard(id))?;
             cards.push(*card);
         }
@@ -664,7 +718,7 @@ impl Session {
     pub fn play(&mut self, card_ids: &[u8]) -> Result<(), SessionError> {
         self.playing_human()?;
         let round = self.round.as_ref().expect("checked by playing_human");
-        let cards = Self::cards_from(round.hand(self.human()), card_ids)?;
+        let cards = Self::cards_from(&self.ids, round.hand(self.human()), card_ids)?;
         let combo = Combo::new(cards).ok_or_else(|| {
             SessionError::IllegalMove("choose at least one card, all of the same rank".into())
         })?;
@@ -707,7 +761,11 @@ impl Session {
                 pending.give_count
             )));
         }
-        let selection = Self::cards_from(&pending.hands[usize::from(self.human())], card_ids)?;
+        let selection = Self::cards_from(
+            &self.ids,
+            &pending.hands[usize::from(self.human())],
+            card_ids,
+        )?;
         let pending = self.pending.take().expect("checked above");
         let arschloch = self
             .previous_arschloch
@@ -778,7 +836,7 @@ impl Session {
                     raw_score: candidate.raw_score,
                 },
                 Move::Play(combo) => Advice {
-                    cards: views(combo.cards()),
+                    cards: views(&self.ids, combo.cards()),
                     is_pass: false,
                     raw_score: candidate.raw_score,
                 },
@@ -787,6 +845,19 @@ impl Session {
     }
 
     // -------------------------------------------------------------- view
+
+    fn final_view(&self) -> Option<FinalView> {
+        (self.phase == Phase::MatchOver).then(|| {
+            let roles = self.human_roles();
+            #[allow(clippy::cast_precision_loss)] // a handful of rounds
+            let score = roles
+                .iter()
+                .map(|&role| role_score(role, self.config.player_count))
+                .sum::<f64>()
+                / roles.len().max(1) as f64;
+            FinalView { roles, score }
+        })
+    }
 
     /// Everything the human may know right now.
     #[must_use]
@@ -853,7 +924,7 @@ impl Session {
             r.current_combo().and_then(|combo| {
                 r.play_history().last().map(|(seat, _)| TableView {
                     seat: *seat,
-                    cards: views(combo.cards()),
+                    cards: views(&self.ids, combo.cards()),
                 })
             })
         });
@@ -861,20 +932,13 @@ impl Session {
             && to_move == Some(human)
             && round.is_some_and(|r| r.current_combo().is_none());
         let playable = if to_move == Some(human) {
-            round.map_or_else(Vec::new, |r| playable_ranks(&hand, r.current_combo(), rule))
+            round.map_or_else(Vec::new, |r| {
+                playable_ranks(&self.ids, &hand, r.current_combo(), rule)
+            })
         } else {
             Vec::new()
         };
-        let final_result = (self.phase == Phase::MatchOver).then(|| {
-            let roles = self.human_roles();
-            #[allow(clippy::cast_precision_loss)] // a handful of rounds
-            let score = roles
-                .iter()
-                .map(|&role| role_score(role, self.config.player_count))
-                .sum::<f64>()
-                / roles.len().max(1) as f64;
-            FinalView { roles, score }
-        });
+        let final_result = self.final_view();
         View {
             phase: self.phase,
             round: if matches!(self.phase, Phase::RoundOver | Phase::MatchOver) {
@@ -885,7 +949,7 @@ impl Session {
             rounds: self.config.rounds,
             player_count: self.config.player_count,
             human_seat: human,
-            hand: views(&hand),
+            hand: views(&self.ids, &hand),
             seats,
             table,
             to_move,
@@ -902,7 +966,12 @@ impl Session {
 /// The ranks the human can play now. A rank offers a size when its
 /// strongest subset of that size is playable (always on a lead; against a
 /// table combo only the same size, and it must beat it).
-fn playable_ranks(hand: &[Card], current: Option<&Combo>, rule: DuplicateRule) -> Vec<Playable> {
+fn playable_ranks(
+    ids: &IdMap,
+    hand: &[Card],
+    current: Option<&Combo>,
+    rule: DuplicateRule,
+) -> Vec<Playable> {
     engine::rank_groups(hand)
         .into_iter()
         .filter_map(|mut group| {
@@ -919,7 +988,10 @@ fn playable_ranks(hand: &[Card], current: Option<&Combo>, rule: DuplicateRule) -
                 .collect();
             (!sizes.is_empty()).then(|| Playable {
                 rank: group[0].rank as u8,
-                card_ids: group.iter().map(|c| c.deal_index).collect(),
+                card_ids: group
+                    .iter()
+                    .map(|c| ids.to_client[usize::from(c.deal_index)])
+                    .collect(),
                 sizes,
             })
         })
@@ -965,6 +1037,7 @@ mod tests {
             rounds,
             seed: 7,
             human_seat,
+            hide_deal_order: false,
         }
     }
 
@@ -1393,6 +1466,71 @@ mod tests {
             bad(config(4, DeckVariant::Single, 1, 0), 2),
             SessionError::BadConfig(_)
         ));
+    }
+
+    /// Plays a whole match from what the client sees only.
+    fn play_by_view(session: &mut Session) {
+        let mut guard = 0;
+        while session.phase() != Phase::MatchOver {
+            guard += 1;
+            assert!(guard < 10_000);
+            let view = session.view();
+            match view.phase {
+                Phase::Exchange => {
+                    let ids: Vec<u8> = view
+                        .hand
+                        .iter()
+                        .take(view.give_count)
+                        .map(|c| c.id)
+                        .collect();
+                    session.give(&ids).unwrap();
+                }
+                Phase::Playing => match view.playable.first() {
+                    Some(rank) => {
+                        let size = rank.sizes[0];
+                        let ids = &rank.card_ids[rank.card_ids.len() - size..];
+                        session.play(ids).unwrap();
+                    }
+                    None => session.pass().unwrap(),
+                },
+                Phase::RoundOver => session.next_round().unwrap(),
+                Phase::MatchOver => unreachable!(),
+            }
+        }
+    }
+
+    #[test]
+    fn hidden_deal_order_keeps_the_game_playable_and_unrevealing() {
+        // With the deal position as the id, `id % players` is the seat a card
+        // was dealt to. Hidden ids must break that for every seat and still
+        // play identically.
+        let mut revealing = 0;
+        let mut total = 0;
+        for seed in 0..20 {
+            let mut cfg = config(4, DeckVariant::Single, 2, 1);
+            cfg.seed = seed;
+            cfg.hide_deal_order = true;
+            let mut hidden = Session::new(cfg.clone(), ai(3)).unwrap();
+            for card in &hidden.view().hand {
+                total += 1;
+                revealing += usize::from(card.id % 4 == 1);
+            }
+            play_by_view(&mut hidden);
+            cfg.hide_deal_order = false;
+            let mut plain = Session::new(cfg, ai(3)).unwrap();
+            play_by_view(&mut plain);
+            // Same game, only the numbers differ: same roles every round.
+            assert_eq!(
+                hidden.view().roles_history,
+                plain.view().roles_history,
+                "seed {seed}"
+            );
+        }
+        // Dealt round-robin, all 13 of seat 1's cards would be 1 mod 4.
+        assert!(
+            revealing < total / 2,
+            "{revealing} of {total} ids still match the seat"
+        );
     }
 
     fn champion() -> NeatStrategy {
