@@ -411,6 +411,24 @@ mod tests {
     }
 
     #[test]
+    fn json_round_trip_is_bit_exact_for_arbitrary_weights() {
+        // Weights are arbitrary f64s after mutation; a saved champion
+        // must play exactly like the one that was evaluated, so the text
+        // form has to preserve every bit.
+        let config = NeatConfig::default();
+        let mut random = super::test_support::rng(77);
+        for seed in 0..200 {
+            let (mut genome, _) = minimal(5, seed);
+            for _ in 0..3 {
+                crate::mutation::mutate_weights(&mut genome, &config, &mut random);
+            }
+            let json = serde_json::to_string(&genome).unwrap();
+            let restored: Genome = serde_json::from_str(&json).unwrap();
+            assert_eq!(restored, genome, "seed {seed}");
+        }
+    }
+
+    #[test]
     fn json_round_trip_is_lossless() {
         let (genome, _) = minimal(2, 7);
         let json = serde_json::to_string(&genome).unwrap();
