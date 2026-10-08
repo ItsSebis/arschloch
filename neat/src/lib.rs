@@ -21,3 +21,7 @@ pub use genome::{ConnectionGene, Genome, NodeGene, NodeKind};
 pub mod mutation;
 
 pub mod crossover;
+
+pub mod network;
+
+pub use network::Network;
