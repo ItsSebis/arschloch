@@ -658,3 +658,73 @@ fn a_bad_option_leaves_nothing_behind_in_a_set() {
     }
     let _ = std::fs::remove_dir_all(&out);
 }
+
+/// A finished run whose checkpoint claims another feature set.
+fn run_with_foreign_features(base: &Path) -> PathBuf {
+    let source = base.join("foreign");
+    assert!(train(&source, &["--generations", "1"]).status.success());
+    let path = source.join("checkpoint.json");
+    let mut checkpoint: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    checkpoint["feature_count"] = serde_json::json!(3);
+    std::fs::write(&path, checkpoint.to_string()).unwrap();
+    source
+}
+
+#[test]
+fn a_refused_warm_start_leaves_nothing_behind_in_a_set_or_with_a_neat_opponent() {
+    let base = run_dir("warm-foreign");
+    let source = run_with_foreign_features(&base);
+    let genome = base.join("g.json");
+    genome_file(&genome, 1);
+    let spec = format!("neat:{}", genome.display());
+    for (name, extra) in [
+        ("set", vec!["--runs", "2"]),
+        (
+            "neat",
+            vec!["--opponent", spec.as_str(), "--opponent", "lowest-legal"],
+        ),
+    ] {
+        let out = base.join(name);
+        let mut args = vec!["--generations", "1"];
+        args.extend(extra);
+        let result = train_from(&out, &source, &args);
+        assert!(!result.status.success(), "{name}");
+        assert!(!text(&result.stderr).contains("panicked"), "{name}");
+        assert!(!out.exists(), "{name}: a refused start left {out:?} behind");
+    }
+    let _ = std::fs::remove_dir_all(&base);
+}
+
+#[test]
+fn generations_on_a_set_resume_apply_to_every_run_still_to_go() {
+    let out = run_dir("set-generations");
+    assert!(train(&out, &["--runs", "3", "--generations", "2"])
+        .status
+        .success());
+    std::fs::remove_dir_all(out.join("run-02")).unwrap();
+    std::fs::remove_dir_all(out.join("run-03")).unwrap();
+    let mut set = set_json(&out);
+    set["finished_secs"] = serde_json::json!([set["finished_secs"][0].clone()]);
+    set["current_run"] = serde_json::json!(2);
+    std::fs::write(out.join("set.json"), set.to_string()).unwrap();
+    let result = cli(&[
+        "train",
+        "--out",
+        out.to_str().unwrap(),
+        "--resume",
+        "--generations",
+        "4",
+        "--quiet",
+    ]);
+    assert!(result.status.success(), "{}", text(&result.stderr));
+    assert_eq!(generation_means(&out.join("run-01/events.jsonl")).len(), 2);
+    for run in ["run-02", "run-03"] {
+        assert_eq!(
+            generation_means(&out.join(run).join("events.jsonl")).len(),
+            4,
+            "{run}"
+        );
+    }
+    let _ = std::fs::remove_dir_all(&out);
+}

@@ -199,6 +199,14 @@ impl Population {
         let mut population = Self::restore(PopulationState { config, ..state })?;
         population.generation = 0;
         population.best = None;
+        // Each species' record and stagnation were measured on the old run's
+        // fitness; against a different opponent pool they would make every
+        // species look stagnant (or protected) for the wrong reason.
+        for species in &mut population.species {
+            species.best_fitness = f64::NEG_INFINITY;
+            species.stagnation = 0;
+            species.age = 0;
+        }
         population.rng = Xoshiro256PlusPlus::seed_from_u64(seed);
         Ok(population)
     }
@@ -871,6 +879,27 @@ mod tests {
         assert_eq!(warm.generation(), 0);
         assert!(warm.best().is_none());
         assert_eq!(warm.genomes(), &genomes_before[..]);
+    }
+
+    #[test]
+    fn a_warm_start_forgets_the_old_fitness_scale_of_every_species() {
+        let mut pop = Population::new(2, tiny_config(), 5).unwrap();
+        for _ in 0..6 {
+            // A flat fitness never improves a species' best: stagnation builds.
+            pop.set_fitness(vec![1.0; 30]);
+            pop.advance();
+        }
+        let state = pop.snapshot();
+        assert!(
+            pop.species.iter().any(|s| s.stagnation > 0 && s.age > 0),
+            "the source has history to forget"
+        );
+        let warm = Population::warm_start(state, tiny_config(), 1).unwrap();
+        assert!(!warm.species.is_empty());
+        assert!(warm
+            .species
+            .iter()
+            .all(|s| s.stagnation == 0 && s.age == 0 && s.best_fitness == f64::NEG_INFINITY));
     }
 
     #[test]

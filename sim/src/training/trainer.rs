@@ -181,6 +181,44 @@ impl Trainer {
         Self::start(config, opponents, dir, Some(source))
     }
 
+    /// Reads the run in `source` and checks that a warm start of a run
+    /// with `population_size` genomes can be built on it, without writing
+    /// anything. Callers use it to refuse a bad source before creating
+    /// any file.
+    ///
+    /// # Errors
+    ///
+    /// `TrainError::Checkpoint` if `source` holds no usable run,
+    /// `TrainError::Mismatch` for another feature set or population size.
+    pub fn check_warm_source(
+        source: &Path,
+        population_size: usize,
+    ) -> Result<Checkpoint, TrainError> {
+        let checkpoint = RunDir::open_existing(source)?.read_checkpoint()?;
+        if checkpoint.feature_count != FEATURE_COUNT
+            || checkpoint.feature_set_version != FEATURE_SET_VERSION
+        {
+            return Err(TrainError::Mismatch(format!(
+                "{} was trained with {} features (feature-set version {}) but this build has {} (version {}); \
+                 its genomes cannot be built on, though `--resume` can still continue it with the old build",
+                source.display(),
+                checkpoint.feature_count,
+                checkpoint.feature_set_version,
+                FEATURE_COUNT,
+                FEATURE_SET_VERSION
+            )));
+        }
+        let source_size = checkpoint.config.neat.population_size;
+        if source_size != population_size {
+            return Err(TrainError::Mismatch(format!(
+                "{} has a population of {source_size} but this run asks for {population_size}; \
+                 a warm start keeps the genomes it is given",
+                source.display()
+            )));
+        }
+        Ok(checkpoint)
+    }
+
     fn start(
         config: TrainConfig,
         opponents: Vec<Opponent>,
@@ -199,29 +237,7 @@ impl Trainer {
         // Everything that can refuse the source happens before the new
         // directory is touched.
         let (population, warm_started_from) = if let Some(source) = source {
-            let checkpoint = RunDir::open_existing(source)?.read_checkpoint()?;
-            if checkpoint.feature_count != FEATURE_COUNT
-                || checkpoint.feature_set_version != FEATURE_SET_VERSION
-            {
-                return Err(TrainError::Mismatch(format!(
-                    "{} was trained with {} features (feature-set version {}) but this build has {} (version {}); \
-                     its genomes cannot be built on, though `--resume` can still continue it with the old build",
-                    source.display(),
-                    checkpoint.feature_count,
-                    checkpoint.feature_set_version,
-                    FEATURE_COUNT,
-                    FEATURE_SET_VERSION
-                )));
-            }
-            let source_size = checkpoint.config.neat.population_size;
-            if source_size != config.neat.population_size {
-                return Err(TrainError::Mismatch(format!(
-                    "{} has a population of {source_size} but this run asks for {}; \
-                     a warm start keeps the genomes it is given",
-                    source.display(),
-                    config.neat.population_size
-                )));
-            }
+            let checkpoint = Self::check_warm_source(source, config.neat.population_size)?;
             let population =
                 Population::warm_start(checkpoint.population, config.neat.clone(), seed)
                     .map_err(|e| TrainError::Checkpoint(e.to_string()))?;

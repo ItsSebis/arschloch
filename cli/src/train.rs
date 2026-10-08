@@ -128,6 +128,9 @@ fn checked_args(args: &TrainArgs) -> anyhow::Result<(TrainArgs, Vec<String>)> {
             .neat
             .population_size;
     }
+    if let Some(from) = &args.from {
+        Trainer::check_warm_source(from, args.population)?;
+    }
     for spec in &specs {
         spec.parse::<StrategyArg>()
             .map_err(anyhow::Error::msg)
@@ -166,10 +169,18 @@ fn resume_trainer(out: &Path, generations: Option<u32>) -> anyhow::Result<Traine
 
 /// Starts run `index` of a resumed set that had not begun yet: the first
 /// run's settings with this run's seed (and the same warm-start source).
-fn next_set_trainer(set_dir: &Path, index: u32, set: &SetFile) -> anyhow::Result<Trainer> {
+fn next_set_trainer(
+    set_dir: &Path,
+    index: u32,
+    set: &SetFile,
+    generations: Option<u32>,
+) -> anyhow::Result<Trainer> {
     let first = set_dir.join(run_dir_name(1));
     let mut config = load_config(&first)?;
     config.seed += u64::from(index - 1);
+    if let Some(total) = generations {
+        config.generations = total;
+    }
     let out = set_dir.join(run_dir_name(index));
     // The first run froze its neat opponents inside its own directory;
     // every run owns a copy.
@@ -194,17 +205,19 @@ fn run_set(args: &TrainArgs, mut set: SetFile, resuming: bool) -> anyhow::Result
     let first_unfinished = u32::try_from(set.finished_secs.len()).unwrap_or(u32::MAX) + 1;
     for index in first_unfinished..=set.total_runs {
         let out = args.out.join(run_dir_name(index));
-        set.current_run = index;
-        set.write(&args.out)?;
         let mut trainer = if resuming && out.join("checkpoint.json").exists() {
             resume_trainer(&out, args.generations)?
         } else if resuming {
-            next_set_trainer(&args.out, index, &set)?
+            next_set_trainer(&args.out, index, &set, args.generations)?
         } else {
             let mut run_args = args.clone();
             run_args.seed = args.seed + u64::from(index - 1);
             new_trainer(&run_args, &out)?
         };
+        // Recorded only once the run exists, so a run that cannot even be
+        // created leaves no set file behind.
+        set.current_run = index;
+        set.write(&args.out)?;
         let seed = trainer.config().seed;
         if !args.quiet {
             println!("\n{}", render_set_run_banner(index, set.total_runs, seed));

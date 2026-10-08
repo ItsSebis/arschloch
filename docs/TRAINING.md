@@ -152,7 +152,7 @@ target/release/cli train --out runs/b --from runs/a --seed 2 --generations 10 \
 ```
 
 The new run has its own settings, seed and generation counter (it counts
-from 0; the dashboard and `events.jsonl` show a `warm_started_from` entry),
+from 0; `events.jsonl` records a `warm_started_from` entry),
 and the earlier run is only read. Because the genomes are kept as they are,
 the population size is the earlier run's. A source trained on another feature
 set cannot be used: the command says so and leaves nothing behind. To continue
@@ -179,8 +179,8 @@ every run from the same source.
 
 A killed set continues with `--resume` on the set directory: finished runs
 are left alone, the run in progress is resumed from its checkpoint, and runs
-that had not started are started. (`--generations` raises the total of the
-runs still to go.)
+that had not started are started with the first run's settings. (`--generations`
+sets the total for the run in progress and for the runs not yet started.)
 
 ## Stopping and resuming
 
