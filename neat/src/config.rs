@@ -43,6 +43,9 @@ pub struct NeatConfig {
     /// Starting speciation threshold; adapted to hold `target_species`.
     pub compatibility_threshold: f64,
     pub min_compatibility_threshold: f64,
+    /// How far the threshold moves per generation toward `target_species`.
+    /// Must be small against typical distances (a step of 0.3 made the
+    /// species count swing between ~5 and ~60 every generation).
     pub threshold_step: f64,
     pub target_species: usize,
 
@@ -75,7 +78,7 @@ impl Default for NeatConfig {
             weight_difference_coefficient: 0.4,
             compatibility_threshold: 3.0,
             min_compatibility_threshold: 0.3,
-            threshold_step: 0.3,
+            threshold_step: 0.05,
             target_species: 8,
             stagnation_limit: 15,
             survival_fraction: 0.2,

@@ -135,7 +135,11 @@ impl Genome {
     }
 
     fn validate(&self) -> Result<(), NeatError> {
-        let fixed = self.num_inputs + 2;
+        let fixed = self
+            .num_inputs
+            .checked_add(2)
+            .filter(|&count| u32::try_from(count).is_ok())
+            .ok_or_else(|| bad("num_inputs is too large for u32 node ids"))?;
         if self.nodes.len() < fixed {
             return Err(bad("missing input, bias or output nodes"));
         }
@@ -396,6 +400,14 @@ mod tests {
         let ids: Vec<u32> = genome.nodes().iter().map(|n| n.id).collect();
         assert_eq!(ids, vec![0, 1, 2, 5, 7, 9]);
         assert_eq!(genome.hidden_count(), 3);
+    }
+
+    #[test]
+    fn json_with_an_absurd_input_count_is_rejected_not_a_panic() {
+        for count in ["18446744073709551615", "18446744073709551614", "4294967295"] {
+            let json = format!(r#"{{"num_inputs":{count},"nodes":[],"connections":[]}}"#);
+            assert!(serde_json::from_str::<Genome>(&json).is_err(), "{count}");
+        }
     }
 
     #[test]

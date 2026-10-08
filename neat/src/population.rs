@@ -168,6 +168,13 @@ impl Population {
 
         let quotas = self.offspring_quotas(&fitness);
         let next = self.reproduce(&fitness, &quotas);
+        // A species that got no offspring is finished. Keeping it would
+        // let its stale representative capture healthy offspring next
+        // generation (assignment is first-fit), and they would inherit
+        // its stagnation and be culled with it.
+        let mut quota_iter = quotas.iter();
+        self.species
+            .retain(|_| quota_iter.next().is_some_and(|&quota| quota > 0));
         self.adapt_threshold();
         self.genomes = next;
         self.generation += 1;
@@ -598,6 +605,65 @@ mod tests {
                 .collect();
             population.set_fitness(fitness);
             population.advance();
+        }
+    }
+
+    #[test]
+    fn a_culled_species_does_not_survive_to_capture_next_generations_offspring() {
+        let config = NeatConfig {
+            population_size: 30,
+            compatibility_threshold: 0.0001,
+            min_compatibility_threshold: 0.0001,
+            stagnation_limit: 3,
+            ..NeatConfig::default()
+        };
+        let mut population = Population::new(2, config, 4).unwrap();
+        population.set_fitness(vec![1.0; 30]);
+        population.advance();
+        assert!(population.species.len() > 2, "need several species");
+        // Species 1 holds the best fitness (protected). Species 0 is
+        // hopelessly stagnant, and is first in line to capture any
+        // genome near its representative (first-fit assignment), which is
+        // exactly what lets a zombie species swallow healthy offspring.
+        population.species[1].best_fitness = 100.0;
+        population.species[0].best_fitness = 50.0;
+        population.species[0].stagnation = 99;
+        population.species[0].representative = population.genomes()[0].clone();
+        population.species[1].representative = population.genomes()[1].clone();
+        let doomed = population.species[0].id;
+        population.set_fitness(vec![1.0; 30]);
+        population.advance();
+        assert!(
+            population.species.iter().all(|s| s.id != doomed),
+            "a species with no offspring quota must be dropped, not kept as a trap"
+        );
+    }
+
+    #[test]
+    fn default_config_keeps_the_species_count_stable() {
+        // Fitness is a network's output on a fixed probe input: smooth,
+        // deterministic, and it rewards drifting weights, so the
+        // population keeps changing structure like a real run.
+        let probe = [0.3, -0.7, 0.1, 0.9, -0.2, 0.5, -0.4, 0.8, 0.0, -0.6];
+        let config = NeatConfig::default();
+        let target = config.target_species;
+        let mut population = Population::new(10, config, 21).unwrap();
+        let mut scratch = Vec::new();
+        for generation in 0..200 {
+            let fitness: Vec<f64> = population
+                .genomes()
+                .iter()
+                .map(|g| crate::Network::compile(g).activate(&probe, &mut scratch))
+                .collect();
+            population.set_fitness(fitness);
+            let report = population.advance();
+            if generation >= 100 {
+                let count = report.species.len();
+                assert!(
+                    (2..=3 * target).contains(&count),
+                    "generation {generation}: {count} species (target {target})"
+                );
+            }
         }
     }
 
