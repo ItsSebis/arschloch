@@ -206,6 +206,16 @@ sitting; a phase that grows beyond that should be split.
   hand-written strategies.
 - Reads (or live-drives) `sim`'s existing output types — no changes to
   `engine`/`sim`'s public shape should be needed going in.
+- **Play against the models:** a user can sit at a table in the browser
+  and compete against one or several trained models (genome files from
+  `cli train`, for example `docs/baselines/neat-v1/champion.json`), and
+  optionally against hand-written strategies, at any table size 3-6. The
+  server holds the game state and asks a `NeatStrategy` for its move
+  through the same `Strategy` interface the simulator uses; the page shows
+  the human's hand, the table and the other seats' hand sizes, and offers
+  the legal moves. Results (roles per round) are kept so a human's record
+  against each model can be viewed and compared with the models' own
+  scores.
 
 ## Parked — deferred rule variants
 
