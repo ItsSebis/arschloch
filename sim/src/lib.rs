@@ -6,6 +6,7 @@ pub mod hand_reading;
 pub mod match_config;
 pub mod match_result;
 pub mod match_runner;
+pub mod session;
 pub mod statistics;
 pub mod strategies;
 pub mod strategy;

@@ -26,7 +26,7 @@ use crate::strategy::{OpponentHand, Strategy, TurnContext};
 /// combo currently on the table (if any). `round_deck` is the full set
 /// of cards dealt this round (see `run_match`'s `round_deck`), used as
 /// the starting point before subtracting what's now visible.
-fn turn_context_for<'a>(
+pub(crate) fn turn_context_for<'a>(
     round: &'a Round,
     seat: SeatId,
     player_count: u8,
