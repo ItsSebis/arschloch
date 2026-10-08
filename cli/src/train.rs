@@ -106,6 +106,20 @@ pub fn run(raw_args: impl Iterator<Item = String>) -> anyhow::Result<()> {
             .context("failed to configure thread pool")?;
     }
 
+    // Start the dashboard first: a busy port fails before any run state
+    // is created, and the dashboard tolerates a directory that is still
+    // empty.
+    let dashboard = match args.serve {
+        Some(port) => {
+            let dashboard = web::Dashboard::start(args.out.clone(), port).with_context(|| {
+                format!("cannot start the dashboard on port {port} (is it in use? pick another with --serve PORT)")
+            })?;
+            println!("dashboard: {}", dashboard.url());
+            Some(dashboard)
+        }
+        None => None,
+    };
+
     let mut trainer = if args.resume {
         let config = load_config(&args.out)?;
         let opponents = build_opponents(&config.opponent_specs, &args.out)?;
@@ -135,6 +149,15 @@ pub fn run(raw_args: impl Iterator<Item = String>) -> anyhow::Result<()> {
 
     let mut observer = TerminalObserver::new(args.out.clone(), args.quiet);
     trainer.run(&mut observer)?;
+    if let Some(dashboard) = dashboard {
+        // The dashboard lives in this process: exiting now would leave the
+        // browser without the last generations and the "finished" state.
+        println!(
+            "run finished; the dashboard stays up at {} (Ctrl-C to exit)",
+            dashboard.url()
+        );
+        dashboard.wait();
+    }
     Ok(())
 }
 

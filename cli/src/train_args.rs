@@ -95,6 +95,13 @@ pub struct TrainArgs {
     #[arg(long, default_value_t = 0)]
     pub threads: usize,
 
+    /// Serve the live dashboard at http://127.0.0.1:PORT/ (default port
+    /// 8080) while training, and keep serving after the run ends until
+    /// Ctrl-C (the dashboard lives in this process). It only reads the run
+    /// directory, so a slow or closed browser cannot affect the run.
+    #[arg(long, num_args = 0..=1, default_missing_value = "8080", value_name = "PORT")]
+    pub serve: Option<u16>,
+
     /// Print only the final summary (the event log is still written).
     #[arg(long)]
     pub quiet: bool,
@@ -118,6 +125,21 @@ mod tests {
         assert_eq!(args.generations, None);
         assert!(args.opponent.is_empty());
         assert!(!args.resume && !args.quiet);
+    }
+
+    #[test]
+    fn serve_takes_an_optional_port() {
+        assert_eq!(parse(&["--out", "d"]).unwrap().serve, None);
+        assert_eq!(parse(&["--out", "d", "--serve"]).unwrap().serve, Some(8080));
+        assert_eq!(
+            parse(&["--out", "d", "--serve", "9100"]).unwrap().serve,
+            Some(9100)
+        );
+        assert_eq!(
+            parse(&["--out", "d", "--resume", "--serve"]).unwrap().serve,
+            Some(8080)
+        );
+        assert!(parse(&["--out", "d", "--serve", "notaport"]).is_err());
     }
 
     #[test]

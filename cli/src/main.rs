@@ -8,6 +8,7 @@ mod summary;
 mod train;
 mod train_args;
 mod train_output;
+mod watch;
 
 use std::sync::Arc;
 
@@ -15,9 +16,12 @@ use anyhow::Context;
 use clap::Parser;
 
 fn main() -> anyhow::Result<()> {
-    // `cli train ...` evolves a player; everything else is a simulation run.
-    if std::env::args().nth(1).as_deref() == Some("train") {
-        return train::run(std::env::args().skip(2));
+    // `cli train ...` evolves a player and `cli watch ...` shows a run in
+    // the browser; everything else is a simulation run.
+    match std::env::args().nth(1).as_deref() {
+        Some("train") => return train::run(std::env::args().skip(2)),
+        Some("watch") => return watch::run(std::env::args().skip(2)),
+        _ => {}
     }
     let args = args::Args::parse();
     args::validate(&args)?;
