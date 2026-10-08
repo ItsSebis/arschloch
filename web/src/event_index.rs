@@ -40,7 +40,15 @@ fn identity(metadata: &std::fs::Metadata) -> Option<u64> {
     Some(metadata.ino())
 }
 
-#[cfg(not(unix))]
+/// Windows has no inode in std; a replacement file has a new creation time.
+#[cfg(windows)]
+#[allow(clippy::unnecessary_wraps)]
+fn identity(metadata: &std::fs::Metadata) -> Option<u64> {
+    use std::os::windows::fs::MetadataExt;
+    Some(metadata.creation_time())
+}
+
+#[cfg(not(any(unix, windows)))]
 fn identity(_: &std::fs::Metadata) -> Option<u64> {
     None
 }
