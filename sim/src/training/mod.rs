@@ -2,6 +2,8 @@
 //! event stream, and the generational loop. See
 //! docs/superpowers/specs/2026-10-08-neat-engine-design.md, sections 6-8.
 
+pub mod config;
 pub mod evaluate;
 
+pub use config::{DeckChoice, DuplicateChoice, TrainConfig};
 pub use evaluate::{evaluate, match_seed, role_score, Opponents, Score, TableSpec};
