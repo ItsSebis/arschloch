@@ -16,5 +16,13 @@ strategies, which the NEAT work never modifies.
   on the tag must reproduce `summaries/` byte-for-byte apart from the
   header's thread count.
 
+**Caveats found while building Phase 10c.** (1) `CardCounter` plays
+identically to `LowestLegal` (0 of 200 all-same tables differ), so the
+differences between their rows in `mixed-field_*` are *not* skill. (2)
+`run_batch` rotates seats cyclically, which keeps neighbour order, so
+mixed-field rows carry a table-position bias (swapping two identical
+players' seats swaps their results). The `vs-lowest-legal_*` files, where
+one contender faces identical opponents, are the cleaner comparison.
+
 If a baseline strategy ever has to change, create a new tag and a new
 `docs/baselines/<name>/` instead of overwriting this one.

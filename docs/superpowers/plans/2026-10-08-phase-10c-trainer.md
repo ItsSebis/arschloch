@@ -1946,7 +1946,7 @@ impl RunDir {
 
 Run: `cargo fmt -p sim && cargo test -p sim training::run_dir`
 
-Expected: PASS (8 tests: refuses to overwrite a run; missing checkpoint named; round trip without a leftover temp file; corrupt checkpoint is an error; champions are playable genome files; events append as lines and truncation drops the tail; `load_config`).
+Expected: PASS (7 tests: refuses to overwrite a run; missing checkpoint named; round trip without a leftover temp file; corrupt checkpoint is an error; champions are playable genome files; events append as lines and truncation drops the tail; `load_config`).
 
 - [ ] **Step 7: Commit**
 
@@ -3864,6 +3864,8 @@ Save as `scenario1.sh` (anywhere outside the repository, for example the system 
 # into the same -1..+1 score. The two measurements must agree (within
 # noise) and show a clearly better-than-even player.
 set -euo pipefail
+# awk/printf follow the locale's decimal separator; the checks below parse numbers.
+export LC_ALL=C
 CLI=target/release/cli
 OUT=$(mktemp -d)/run
 $CLI train --out "$OUT" --population 80 --generations 30 --matches-per-genome 50 \
@@ -3900,6 +3902,7 @@ Save as `scenario2.sh` (anywhere outside the repository, for example the system 
 # resume it, and require the final state to be byte-identical to a run
 # with the same seed that was never interrupted.
 set -euo pipefail
+export LC_ALL=C
 CLI=target/release/cli
 BASE=$(mktemp -d)
 ARGS=(--population 40 --generations 14 --matches-per-genome 40 --reeval-matches 60 --rounds 6 --seed 5 --threads 3 --quiet)

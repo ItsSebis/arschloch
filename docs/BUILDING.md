@@ -26,6 +26,21 @@ trained on, and a file from a different build is refused with an error
 instead of silently misplaying. Two different genome files with the same
 file name cannot share a table (their results would merge); rename one.
 
+Quick reference for training (a full guide comes later):
+
+```bash
+cargo build --release -p cli
+target/release/cli train --out runs/first --generations 50     # new run
+target/release/cli train --out runs/first --resume --generations 100
+target/release/cli --player-count 4 --matches 1000 \
+  --strategy neat:runs/first/best.json --strategy lowest-legal \
+  --strategy lowest-legal --strategy lowest-legal
+```
+
+`cli train --help` lists every option. A run is reproducible from
+`--seed`, resumable after any interruption, and independent of
+`--threads`.
+
 The `neat` crate has no game dependency: `cargo test -p neat` runs its
 unit tests and the XOR end-to-end evolution test in about a second.
 

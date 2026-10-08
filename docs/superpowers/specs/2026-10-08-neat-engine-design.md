@@ -280,6 +280,46 @@ dashboard code is organised as a generic shell (routing, polling,
 chart helpers, themed layout) plus a `neat` page module; nothing in the
 shell may assume NEAT-specific data.
 
+## 7b. As built in Phase 10c
+
+- **Where:** evaluation, run files, events and the loop live in
+  `sim/src/training/`; `cli train` only parses arguments and prints
+  (`cli/src/train*.rs`). Run directory: `config.json`, `events.jsonl`,
+  `checkpoint.json` (replaced atomically after every generation),
+  `best.json`, `gen-NNNN.json`.
+- **Evaluation:** a genome's score is its mean finishing-role score
+  (+1 President .. -1 last) over `matches_per_genome` matches. Match
+  seeds derive from `(run seed, generation, index)`, so every genome in
+  a generation plays the same deals, seats and opponents. The candidate's
+  seat rotates with the match index, but opponents are *sampled* from the
+  pool per match, not rotated: table position relative to the other
+  players is a large effect (a clone of `LowestLegal` and `LowestLegal`
+  exchange their results exactly when their seats swap), and cyclic
+  rotation keeps neighbour order fixed.
+- **Re-evaluation:** each generation's champion is replayed on fresh
+  seeds against the mixed pool and against every opponent alone; the
+  event carries the score, its standard error and the placement counts.
+  `best.json` follows this fresh score, not the selection fitness.
+- **Default pool:** `lowest-legal`, `endgame-denial`,
+  `adaptive:reading,tempo,bully`. `CardCounter` is omitted: it plays
+  identically to `LowestLegal` in every table tried (0 of 200 all-same
+  tables differ), so it adds nothing.
+- **Deviations from section 7a, deliberately:** the event carries
+  per-opponent placement counts rather than the full Phase 4 statistics
+  (voluntary-pass and retention rates); the dashboard (10d) may add them.
+  No decision samples are stored yet (10d's inspector).
+- **Speciation:** the default compatibility threshold is 0.5 (not 3.0):
+  random initial weights put genomes about 0.3 apart.
+- **Resume:** the population state (including its xoshiro256++ generator)
+  is checkpointed; resuming equals never stopping, also after SIGKILL.
+  A crash between a generation's event and its checkpoint is repaired by
+  trimming the duplicate event on resume.
+- **Measured:** about 23k rounds/s on 4 cores in release; a 30-generation
+  run (population 80, 50 matches x 6 rounds) takes about 35 s and its
+  champion beats three copies of each default opponent with a score of
+  about +0.55 to +0.6 (President in roughly half of all rounds),
+  confirmed through the ordinary simulator.
+
 ## 8. Determinism and performance
 
 - A run is fully determined by `(config, seed)`: per-genome evaluation
