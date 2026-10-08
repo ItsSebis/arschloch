@@ -9,3 +9,7 @@ pub mod error;
 
 pub use config::NeatConfig;
 pub use error::NeatError;
+
+pub mod innovation;
+
+pub use innovation::InnovationTracker;
