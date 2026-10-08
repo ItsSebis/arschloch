@@ -37,6 +37,13 @@ target/release/cli --player-count 4 --matches 1000 \
   --strategy lowest-legal --strategy lowest-legal
 ```
 
+Watch a run in the browser: `cli train --out runs/first --serve` prints
+`dashboard: http://127.0.0.1:8080/` (and keeps serving after the run
+ends, until Ctrl-C), or, from another terminal or afterwards,
+`cli watch runs/first`. It listens on `127.0.0.1` only; to view a remote
+run use an SSH tunnel (`ssh -L 8080:127.0.0.1:8080 host`). The page
+needs no internet access.
+
 `cli train --help` lists every option. A run is reproducible from
 `--seed`, resumable after any interruption, and independent of
 `--threads`.

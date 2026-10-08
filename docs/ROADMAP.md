@@ -189,7 +189,7 @@ sitting; a phase that grows beyond that should be split.
 - 10a (done): generic `neat` crate. 10b (done): `NeatStrategy` (scores each legal
   move) and the `neat:<genome.json>` spec. 10c (done): fitness evaluation and
   a `train` subcommand with checkpoint/resume, a per-generation
-  terminal progress line and a JSONL event log. 10d: live browser
+  terminal progress line and a JSONL event log. 10d (done): live browser
   dashboard, the first part of the `web` crate, which Phase 11 extends
   (fitness/species/complexity charts, champion network visualization,
   decision inspector). 10e: opponent pool, hall of

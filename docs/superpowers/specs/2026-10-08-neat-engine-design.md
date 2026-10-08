@@ -338,6 +338,44 @@ shell may assume NEAT-specific data.
   about +0.55 to +0.6 (President in roughly half of all rounds),
   confirmed through the ordinary simulator.
 
+## 7c. As built in Phase 10d
+
+- **Where:** the server and page live in the `web` crate (std-only HTTP,
+  no async runtime, no new dependencies); the page is embedded in the
+  binary (`web/assets/`, vanilla JS and inline SVG, no CDN, light and
+  dark themes). `cli train --serve [PORT]` runs it inside the training
+  process (and keeps serving after the run ends, because the server lives
+  there); `cli watch RUN_DIR [--port N]` is a standalone viewer for a run
+  in another process or a finished one. It binds to `127.0.0.1` only
+  (use an SSH tunnel to view a remote run) and only reads the run
+  directory.
+- **API:** `GET /api/state`, `/api/events?since=N` (with an `epoch` that
+  changes when the log is rewritten by a resume), `/api/genome/N|best`,
+  `/api/decisions/N`. The event reader consumes only appended bytes,
+  waits for a partial last line, and skips lines that do not parse.
+- **Views:** progress and headline numbers; fitness (selection best,
+  population mean, median, the champion on fixed matches with its
+  standard-error band, held-out dots); the champion against each opponent
+  alone; species as stacked areas; the population fitness spread as a
+  heat strip; complexity; the champion's network with a generation
+  slider, best/latest buttons and a disabled-connections toggle; and the
+  decision inspector.
+- **Decision inspector:** for every new best champion the trainer records
+  12 real decisions from one held-out match (`decisions/gen-NNNN.json`:
+  hand, table, every legal move with its feature vector and score). The
+  browser replays the network on a chosen candidate, colours every node
+  by its activation and checks its own replay against the recorded Rust
+  scores (a real run replayed 700+ candidates with a maximum difference
+  of 0).
+- **Tests:** Rust tests for the event reader, routes and a real socket;
+  Node tests for the helpers; a `cargo test` harness that runs the Node
+  tests (skipped loudly without Node) including a replay of a real run's
+  decisions; and Task 6's real-browser checks, including killing and
+  resuming a run while the page is open.
+- **Not built:** the Phase 4 statistics per champion (voluntary-pass and
+  retention rates), mutation counts by kind, and a WebSocket/SSE channel
+  (polling once a second is enough and trivially robust).
+
 ## 8. Determinism and performance
 
 - A run is fully determined by `(config, seed)`: per-genome evaluation

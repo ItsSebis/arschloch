@@ -209,11 +209,13 @@ the resumable generational loop (`Trainer`, reporting through the
 `TrainObserver` trait). `cli train` prints a row per generation from
 those events; the dashboard (10d) will read the same files.
 
-### `web` (starts in Phase 10d, extended in Phase 11)
+### `web` (Phase 10d; extended in Phase 11)
 
-Not built yet. Phase 10d starts it with the NEAT training dashboard
-(server, embedded page, JSON API over a training run directory); Phase 11
-extends the same crate with pages reading `sim`'s existing
+The training dashboard (Phase 10d): a std-only HTTP server on
+`127.0.0.1`, an embedded single-page app (`web/assets/`) and a JSON API
+over a run directory (`EventIndex` reads `events.jsonl` incrementally;
+routes serve state, events, genomes and recorded decisions). `cli train
+--serve` and `cli watch` start it. Phase 11 extends the same crate with pages reading `sim`'s existing
 `Statistics`/`MatchResult` JSON output (or driving `sim` live), rather
 than a refactor of the crates above.
 
