@@ -9,7 +9,9 @@ workspace = true
 
 [dependencies]
 serde_json = { version = "1.0.151", features = ["float_roundtrip"] }
-sim = { version = "0.2.0", path = "../sim" }
+rand = "0.10.3"
+serde = { version = "1.0.229", features = ["derive"] }
+sim = { version = "0.3.0", path = "../sim" }
 
 [dev-dependencies]
-neat = { version = "0.2.0", path = "../neat" }
+neat = { version = "0.3.0", path = "../neat" }

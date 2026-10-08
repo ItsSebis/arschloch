@@ -4,7 +4,7 @@ members = ["engine", "sim", "cli", "web", "neat"]
 
 [workspace.package]
 edition = "2021"
-version = "0.2.0"
+version = "0.3.0"
 license = "MIT"
 
 # Release builds are what long trainings run on: fat LTO and a single codegen

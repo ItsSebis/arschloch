@@ -6,11 +6,13 @@ pub mod hand_reading;
 pub mod match_config;
 pub mod match_result;
 pub mod match_runner;
+pub mod session;
 pub mod statistics;
 pub mod strategies;
 pub mod strategy;
 pub mod training;
 
+pub use engine::{roles_for_player_count, DeckVariant, DuplicateRule, Role};
 pub use hand_reading::{read_pass_ceilings, PassCeilings};
 pub use match_config::MatchConfig;
 pub use match_result::MatchResult;

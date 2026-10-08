@@ -5,11 +5,15 @@
 //! See docs/superpowers/specs/2026-10-08-neat-engine-design.md, 7a.
 
 mod event_index;
+mod play;
+mod records;
 mod routes;
 mod server;
 #[cfg(test)]
 mod test_fixture;
 
 pub use event_index::EventIndex;
+pub use play::{CatalogEntry, OpponentKind, PlayApp};
+pub use records::{Record, RecordStore};
 pub use routes::{App, Response};
-pub use server::Dashboard;
+pub use server::{Dashboard, Handler, HttpRequest, Server};

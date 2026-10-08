@@ -22,7 +22,7 @@ pub struct Response {
 }
 
 impl Response {
-    fn json(status: u16, value: &serde_json::Value) -> Self {
+    pub(crate) fn json(status: u16, value: &serde_json::Value) -> Self {
         Self {
             status,
             content_type: "application/json; charset=utf-8",
@@ -34,7 +34,7 @@ impl Response {
         Self::json(status, &json!({ "error": message }))
     }
 
-    fn asset(content_type: &'static str, text: &'static str) -> Self {
+    pub(crate) fn asset(content_type: &'static str, text: &'static str) -> Self {
         Self {
             status: 200,
             content_type,

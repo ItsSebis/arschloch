@@ -105,6 +105,8 @@ field names and meanings.
 |---|---|
 | [`docs/RULES.md`](docs/RULES.md) | The authoritative game rules this simulator implements, including house-rule decisions. |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | How the `engine`/`sim`/`cli`/`web` crates fit together. |
+| [`docs/PLAYING.md`](docs/PLAYING.md) | Play against trained models in the browser (`cli play`), ask a model for advice, keep your record. |
+| [`docs/TRAINING.md`](docs/TRAINING.md) | Train and compare NEAT players (`cli train`, `cli watch`, `cli evaluate`). |
 | [`docs/BUILDING.md`](docs/BUILDING.md) | Full build, test, and CLI flag reference; cross-compiling a Windows `.exe`. |
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | What's built, what's planned, what's explicitly out of scope. |
 | [`docs/CODING_GUIDELINES.md`](docs/CODING_GUIDELINES.md) | Conventions for contributing. |
