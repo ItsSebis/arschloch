@@ -1,0 +1,36 @@
+6 players, Single deck, FirstDealtWins, 2000 matches x 10 rounds, seed 1000, 4 threads
+
+Strategy                       President       Vize            Offizier        Dummkopf        ViceArschloch   Arschloch       
+Adaptive(reading,tempo,bully)  5867            4391            3825            2664            1829            1424            
+CardCounter                    5229            5269            4505            2588            1466            943             
+EndgameDenial                  4877            4999            3873            2619            2016            1616            
+GreedyHighest                  138             552             1505            3539            6155            8111            
+HoldBackPairs                  1469            2328            3006            4125            4706            4366            
+LowestLegal                    2420            2461            3286            4465            3828            3540            
+
+Voluntary pass rate: 6.18%
+
+Voluntary pass rate by strategy:
+  Adaptive(reading,tempo,bully)  0.00%
+  CardCounter                    0.00%
+  EndgameDenial                  0.00%
+  GreedyHighest                  0.00%
+  HoldBackPairs                  31.34%
+  LowestLegal                    0.00%
+
+President retention (stayed President the very next round):
+  Adaptive(reading,tempo,bully)  56.67% (3001/5296)
+  CardCounter                    54.19% (2539/4685)
+  EndgameDenial                  51.22% (2217/4328)
+  GreedyHighest                  13.60% (17/125)
+  HoldBackPairs                  31.03% (436/1405)
+  LowestLegal                    48.96% (1058/2161)
+
+First-round placement variance (lower = more skill-driven, higher = more luck-driven):
+  Adaptive(reading,tempo,bully)  2.67
+  CardCounter                    1.92
+  EndgameDenial                  2.58
+  GreedyHighest                  1.53
+  HoldBackPairs                  3.25
+  LowestLegal                    2.39
+

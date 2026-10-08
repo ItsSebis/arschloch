@@ -52,6 +52,16 @@ duplicate-card rule, thread count, and cross-compiling a Windows `.exe`).
 - `endgame-denial` — plays like `lowest-legal`, except it switches to
   `greedy-highest`'s aggressive play whenever an active opponent's hand
   is down to 2 cards or fewer, to deny them an easy trick.
+- `adaptive` — a configurable strategy: `lowest-legal` (or
+  `card-counter`, if enabled) as its base, with card-counting,
+  endgame-denial (optionally sharpened by pass-based hand reading),
+  trick-lead tempo, lead-order bullying, and deception each
+  independently toggleable via a comma-separated option grammar, e.g.
+  `adaptive:reading,deception=0.2,tempo,bully` — see `docs/BUILDING.md`
+  for the full grammar. Trick-lead tempo and lead-order bullying are
+  both validated to beat plain `lowest-legal` outright (not just trade
+  placement for safety) in a clean head-to-head — bullying's edge is
+  the larger of the two.
 
 ### The stdout summary
 

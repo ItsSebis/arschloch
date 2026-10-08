@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NEAT training</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header>
+    <h1>NEAT training</h1>
+    <span id="status" class="pill">connecting…</span>
+  </header>
+  <main>
+    <section class="card" id="summary">
+      <div id="kpis" class="kpis"></div>
+      <div class="progress" aria-label="progress"><div id="progress-bar"></div></div>
+      <div id="run-info" class="muted"></div>
+    </section>
+
+    <section class="card">
+      <h2>Fitness</h2>
+      <p class="muted">Selection fitness is each generation's best genome on that generation's training matches (inflated by selection). The champion line replays the champion on one fixed set of matches, so champions are compared like for like; dots are new bests confirmed on held-out matches.</p>
+      <div id="fitness-chart" class="chart"></div>
+      <div id="fitness-readout" class="readout"></div>
+    </section>
+
+    <section class="card">
+      <h2>Champion against each opponent alone</h2>
+      <p class="muted">Mean finishing-role score, +1 (always President) to −1 (always last), at a table of the champion and copies of one opponent. 0 is an even match.</p>
+      <div id="opponents-chart" class="chart"></div>
+      <div id="opponents-readout" class="readout"></div>
+    </section>
+
+    <section class="card">
+      <h2>Species</h2>
+      <p class="muted">Population split by structural similarity; one colour per species, stacked to the population size.</p>
+      <div id="species-chart" class="chart"></div>
+      <div id="species-readout" class="readout"></div>
+    </section>
+
+    <section class="card">
+      <h2>Population fitness spread</h2>
+      <p class="muted">Each column is a generation: ten buckets from its lowest to its best fitness, darker where more genomes fall.</p>
+      <div id="spread-chart" class="chart"></div>
+    </section>
+
+    <section class="card">
+      <h2>Complexity</h2>
+      <div class="two">
+        <div><h3>Hidden nodes</h3><div id="nodes-chart" class="chart"></div></div>
+        <div><h3>Enabled connections</h3><div id="connections-chart" class="chart"></div></div>
+      </div>
+      <div id="complexity-readout" class="readout"></div>
+    </section>
+
+    <section class="card">
+      <h2>Champion network</h2>
+      <div class="controls">
+        <label>Generation <input id="network-slider" type="range" min="0" max="0" value="0"></label>
+        <output id="network-generation">–</output>
+        <button id="network-best" type="button">best</button>
+        <button id="network-latest" type="button">follow latest</button>
+        <label><input id="show-disabled" type="checkbox"> show disabled connections</label>
+      </div>
+      <div id="network-note" class="muted"></div>
+      <div id="network" class="network"></div>
+      <p class="muted">Blue edges push the move's score up, orange edges push it down; thicker is stronger. Inputs are the features the network sees for each candidate move.</p>
+    </section>
+
+    <section class="card">
+      <h2>Decision inspector</h2>
+      <p class="muted">Real decisions of a new-best champion. Pick a candidate move to replay the network on its features and see every node's activation.</p>
+      <div class="controls">
+        <label>Champion <select id="decision-generation"></select></label>
+        <label>Decision <select id="decision-pick"></select></label>
+      </div>
+      <div id="decision-situation" class="muted"></div>
+      <div id="decision-candidates"></div>
+      <div id="decision-check" class="muted"></div>
+      <div id="decision-network" class="network"></div>
+    </section>
+  </main>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

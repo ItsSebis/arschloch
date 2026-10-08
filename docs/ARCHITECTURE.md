@@ -49,7 +49,11 @@ The rules from `RULES.md`, encoded as types and pure functions:
   tagged with the seat that played it; passes are omitted, since a pass
   never removes a card from a hand) and `hand_size` (a seat's hand size
   without exposing its contents) — Phase 6's strategic-context
-  primitives, used to build `sim::TurnContext`.
+  primitives, used to build `sim::TurnContext`. `Round` also exposes
+  `pass_history` (every pass this round, in order, tagged with the seat,
+  the combo it declined to beat, and `play_history().len()` at that
+  moment) — Phase 7's addition, the raw material `sim::hand_reading`
+  reduces into pass ceilings.
 
 `engine` has no concept of "strategy" or "which move to pick" — it only
 knows how to validate and apply a move it's given.
@@ -73,17 +77,23 @@ legal, never which move to prefer.
   the match runner: this seat's own hand, every opponent's hand size
   (and whether it's still active), and the exact multiset of unseen
   cards — deterministic, since this is a closed-deck game with no draw
-  pile. Three baseline implementations from Phase 2: `LowestLegal`,
-  `RandomLegal`, `GreedyHighest`. A fourth, `HoldBackPairs` (Phase 4),
-  plays identically while leading but deliberately passes rather than
-  split up a same-rank reserve while following, as a diversification
-  comparison point against the three always-play baselines. Two more
-  strategies (Phase 6) use `TurnContext` directly: `CardCounter` plays
-  a legal combo while some unseen card could still beat it, and holds
-  it back once no unseen card can; `EndgameDenial` switches to
-  aggressive, control-retaining play whenever an active opponent's hand
-  size is low enough to be close to finishing, to deny them an easy
-  trick — otherwise it conserves like `LowestLegal`.
+  pile. Phase 7 extends `TurnContext` with `own_pass_ceilings` (this
+  seat's own pass ceilings, as read by anyone else) and each opponent's
+  `pass_ceilings`, plus `current_combo` (the combo on the table, or
+  `None` if this seat must lead). `Strategy::name()` also changes from
+  `&'static str` to `&str` in Phase 7, so a configurable strategy's name
+  can reflect its actual configuration. Three baseline implementations
+  from Phase 2: `LowestLegal`, `RandomLegal`, `GreedyHighest`. A fourth,
+  `HoldBackPairs` (Phase 4), plays identically while leading but
+  deliberately passes rather than split up a same-rank reserve while
+  following, as a diversification comparison point against the three
+  always-play baselines. Two more strategies (Phase 6) use `TurnContext`
+  directly: `CardCounter` plays a legal combo while some unseen card
+  could still beat it, and holds it back once no unseen card can;
+  `EndgameDenial` switches to aggressive, control-retaining play
+  whenever an active opponent's hand size is low enough to be close to
+  finishing, to deny them an easy trick — otherwise it conserves like
+  `LowestLegal`.
   `Strategy::choose_exchange_cards` (Phase 5,
   "smart exchange") now exists and is implemented by all strategies;
   `engine::exchange`'s naive top-N tie-break has been
@@ -98,6 +108,49 @@ legal, never which move to prefer.
   `engine::exchange` was strategy-agnostic and applied the same naive
   top-N selection no matter which strategy occupied the seat.
   `engine::rank_groups` is now public.
+- `hand_reading` (Phase 7): a pure reduction of a round's play/pass
+  history into one `PassCeilings` per seat — the lowest top card that
+  seat is known unable to beat, per combo size, derived from its
+  unrefuted passes (a pass is dropped if that seat later plays a combo
+  of the same or larger size topped above the passed-on card, proof it
+  held a beater at the time — a bluff or a forced pass like
+  `HoldBackPairs`'s is never mistaken for true information). This is
+  what powers `TurnContext`'s pass ceilings; the match runner computes
+  it fresh each turn from `Round::play_history`/`pass_history`.
+  `Adaptive` (Phase 7, extended in Phase 8 and Phase 9): one
+  configurable strategy whose base play selection is `LowestLegal` (or
+  `CardCounter`, if its `counting` modifier is enabled), with four more
+  independently-toggleable modifiers layered on top: endgame denial
+  (either a plain hand-size trigger reproducing `EndgameDenial` exactly,
+  or that same trigger sharpened by pass-based hand reading to spend the
+  *lowest* card that provably locks a close-to-finishing opponent out,
+  rather than a blanket `GreedyHighest` push), trick-lead tempo (Phase
+  8: once this seat's own hand is down to 2 cards, spend the cheapest
+  play that's provably safe against the *whole* active field instead of
+  the base strategy's cheapest-legal instinct, to win the race to lead
+  the next trick rather than risk losing that race to an opponent's
+  re-escalation — empirically validated to beat plain `LowestLegal`
+  outright, the first modifier in this project to do so rather than
+  trade placement for safety), lead-order bullying (Phase 9: while
+  leading, with this hand shaped mostly as same-rank groups, lead the
+  cheapest *whole* group before ever leading a single, banking singles
+  for a free, unconditional finish later — empirically an even larger
+  outright edge than `tempo`'s, monotonic across every role, though its
+  marginal contribution vanishes once `denial`'s `reading` mode is also
+  enabled), and deception (occasionally bluff-passing on a seat's only
+  beating rank, to plant a false pass ceiling in an opponent's hand
+  reading). Denial and tempo share their core proof —
+  `adaptive::safety::cheapest_universally_safe_play` — and every
+  modifier is implemented by direct delegation to the existing
+  `CardCounter`/`GreedyHighest`/`LowestLegal` strategies rather than
+  duplicating their logic. A fully disabled configuration
+  (`AdaptiveConfig::NONE`) never draws from `rng`, making `Adaptive`'s
+  output byte-identical to plain `LowestLegal` for the same seed.
+  `AdaptiveConfig` has a `Display`/`FromStr` grammar (a comma-separated
+  option list — see `docs/BUILDING.md` for the full grammar) so `cli`
+  can parse a per-seat spec from the command line and `Strategy::name()`
+  can render a configuration back out (e.g.
+  `Adaptive(reading,deception=0.2)`).
 - A match runner that drives `engine`'s state machine to completion using
   each seat's `Strategy`.
 - Multi-threading via `rayon`: independent matches have no shared mutable
@@ -124,12 +177,48 @@ JSON results file (every `MatchResult` plus the aggregated `Statistics`,
 `sim`'s existing types with no new schema) and a human-readable summary
 table to stdout.
 
-### `web` (future phase)
+### `neat` (Phase 10; core done in 10a)
 
-Not built yet. Reserved so that when the roadmap reaches the web-interface
-phase, it's a new crate reading `sim`'s existing `Statistics`/`MatchResult`
-JSON output (or driving `sim` live), rather than a refactor of the crates
-above.
+A generic NEAT library crate with no game knowledge (genomes,
+speciation, crossover, mutation, feedforward evaluation). `sim` depends
+on it to provide a `NeatStrategy` implementing the existing `Strategy`
+trait; `cli` gains a `train` subcommand, and `web` hosts the live
+training dashboard (Phase 10d), which Phase 11 extends with the
+simulation-statistics views. Dependency direction stays one-way
+(`cli -> web -> sim -> engine`, `sim -> neat`). See
+`docs/superpowers/specs/2026-10-08-neat-engine-design.md`.
+
+Public surface: `Population` (owns the generational loop; the caller
+evaluates `genomes()`, calls `set_fitness`, then `advance`, which returns
+a `GenerationReport`), `Genome` (validated, JSON-serializable),
+`Network` (immutable, `Send + Sync` feedforward evaluator with a
+caller-supplied scratch buffer), `InnovationTracker`, `NeatConfig` and
+`NeatError`. Randomness comes only from the population's seeded
+`StdRng`.
+
+`sim` depends on `neat` for `NeatStrategy`
+(`sim/src/strategies/neat_player/`): per turn it builds 20 features
+per legal move (including pass), scores each with the compiled network
+and plays the highest. `GenomeFile` stores a genome with the feature
+names it was trained on.
+
+`cli evaluate` (Phase 10e) scores genomes against any opponents with
+`sim::training::evaluate`. `sim::training` (Phase 10c) holds fitness evaluation (`evaluate`,
+common random numbers), the run's files (`RunDir`: atomic checkpoints,
+`events.jsonl`, champion genome files), the event schema (`Event`) and
+the resumable generational loop (`Trainer`, reporting through the
+`TrainObserver` trait). `cli train` prints a row per generation from
+those events; the dashboard (10d) will read the same files.
+
+### `web` (Phase 10d; extended in Phase 11)
+
+The training dashboard (Phase 10d): a std-only HTTP server on
+`127.0.0.1`, an embedded single-page app (`web/assets/`) and a JSON API
+over a run directory (`EventIndex` reads `events.jsonl` incrementally;
+routes serve state, events, genomes and recorded decisions). `cli train
+--serve` and `cli watch` start it. Phase 11 extends the same crate with pages reading `sim`'s existing
+`Statistics`/`MatchResult` JSON output (or driving `sim` live), rather
+than a refactor of the crates above.
 
 ## Threading model
 

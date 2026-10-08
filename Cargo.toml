@@ -1,11 +1,18 @@
 [workspace]
 resolver = "2"
-members = ["engine", "sim", "cli", "web"]
+members = ["engine", "sim", "cli", "web", "neat"]
 
 [workspace.package]
 edition = "2021"
-version = "0.1.0"
+version = "0.2.0"
 license = "MIT"
+
+# Release builds are what long trainings run on: fat LTO and a single codegen
+# unit are about 3.5% faster on the evaluation workload (measured), at the
+# price of a slower release build.
+[profile.release]
+lto = "fat"
+codegen-units = 1
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

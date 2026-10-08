@@ -1,0 +1,20 @@
+4 players, Single deck, FirstDealtWins, 2000 matches x 10 rounds, seed 1000, 4 threads
+
+Strategy       President       Vize            ViceArschloch   Arschloch       
+HoldBackPairs  87              562             3156            16195           
+LowestLegal    19913           19438           16844           3805            
+
+Voluntary pass rate: 25.66%
+
+Voluntary pass rate by strategy:
+  HoldBackPairs  57.13%
+  LowestLegal    0.00%
+
+President retention (stayed President the very next round):
+  HoldBackPairs  6.10% (5/82)
+  LowestLegal    59.79% (10713/17918)
+
+First-round placement variance (lower = more skill-driven, higher = more luck-driven):
+  HoldBackPairs  0.52
+  LowestLegal    0.95
+

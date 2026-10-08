@@ -43,6 +43,7 @@ pub struct Round {
     current_combo: Option<Combo>,
     trick: Trick,
     play_history: Vec<(SeatId, Combo)>,
+    pass_history: Vec<(SeatId, Combo, usize)>,
 }
 
 impl Round {
@@ -74,6 +75,7 @@ impl Round {
             current_combo: None,
             trick: Trick::new(first_leader),
             play_history: Vec::new(),
+            pass_history: Vec::new(),
         })
     }
 
@@ -153,6 +155,15 @@ impl Round {
     #[must_use]
     pub fn play_history(&self) -> &[(SeatId, Combo)] {
         &self.play_history
+    }
+
+    /// Every pass this round, in order, tagged with the combo it declined
+    /// to beat and `play_history().len()` at that moment (so a later
+    /// reduction can tell whether this seat *subsequently* played
+    /// something that would have beaten it — see `sim::hand_reading`).
+    #[must_use]
+    pub fn pass_history(&self) -> &[(SeatId, Combo, usize)] {
+        &self.pass_history
     }
 
     /// All moves currently legal for `self.seat_to_move()`. Empty if the
@@ -254,6 +265,10 @@ impl Round {
     }
 
     fn apply_pass(&mut self, seat: SeatId) {
+        if let Some(combo) = &self.current_combo {
+            self.pass_history
+                .push((seat, combo.clone(), self.play_history.len()));
+        }
         let active = self.active_mask();
         if let Some(new_leader) = self.trick.record_pass(seat, &active) {
             self.current_combo = None;
@@ -487,7 +502,7 @@ mod tests {
         ];
         let round = Round::new(hands, DuplicateRule::FirstDealtWins, 0).unwrap();
         let moves = round.legal_moves();
-        assert!(!moves.is_empty());
+        assert_ne!(moves, []);
         assert!(!moves.contains(&Move::Pass));
     }
 
@@ -507,7 +522,7 @@ mod tests {
             card(Rank::Seven, Suit::Diamonds),
         ]));
         assert_eq!(round.submit_move(0, play), Ok(()));
-        assert!(round.hand(0).is_empty());
+        assert_eq!(round.hand(0), []);
     }
 
     #[test]
@@ -555,5 +570,36 @@ mod tests {
             .submit_move(0, Move::Play(combo(vec![card(Rank::Eight, Suit::Clubs)])))
             .unwrap();
         assert_eq!(round.hand_size(0), 1);
+    }
+
+    #[test]
+    fn pass_history_records_the_combo_and_play_count_at_pass_time() {
+        let hands = vec![
+            vec![card(Rank::Eight, Suit::Clubs), card(Rank::Ten, Suit::Clubs)],
+            vec![card(Rank::Seven, Suit::Clubs), card(Rank::Six, Suit::Clubs)],
+            vec![card(Rank::Nine, Suit::Clubs), card(Rank::Five, Suit::Clubs)],
+        ];
+        let mut round = Round::new(hands, DuplicateRule::FirstDealtWins, 0).unwrap();
+        assert_eq!(round.pass_history(), &[]);
+
+        let lead = combo(vec![card(Rank::Eight, Suit::Clubs)]);
+        round.submit_move(0, Move::Play(lead.clone())).unwrap(); // play_history now len 1
+        round.submit_move(1, Move::Pass).unwrap();
+        assert_eq!(round.pass_history(), &[(1, lead.clone(), 1)]);
+
+        let beat = combo(vec![card(Rank::Nine, Suit::Clubs)]);
+        round.submit_move(2, Move::Play(beat)).unwrap(); // play_history now len 2
+                                                         // Trick resolves (both non-leaders acted); seat 0 leads again with
+                                                         // its remaining card.
+        let second_lead = combo(vec![card(Rank::Ten, Suit::Clubs)]);
+        round
+            .submit_move(0, Move::Play(second_lead.clone()))
+            .unwrap(); // len 3
+        round.submit_move(1, Move::Pass).unwrap();
+        assert_eq!(
+            round.pass_history(),
+            &[(1, lead, 1), (1, second_lead, 3)],
+            "each pass is tagged with play_history().len() at that exact moment"
+        );
     }
 }

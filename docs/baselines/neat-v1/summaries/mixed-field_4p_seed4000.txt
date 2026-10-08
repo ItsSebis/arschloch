@@ -1,0 +1,28 @@
+4 players, Single deck, FirstDealtWins, 2000 matches x 10 rounds, seed 4000, 4 threads
+
+Strategy                       President       Vize            ViceArschloch   Arschloch       
+Adaptive(reading,tempo,bully)  3644            5350            5686            5320            
+CardCounter                    2411            3752            6271            7566            
+EndgameDenial                  2679            4506            6278            6537            
+Neat(champion)                 11266           6392            1765            577             
+
+Voluntary pass rate: 9.21%
+
+Voluntary pass rate by strategy:
+  Adaptive(reading,tempo,bully)  0.00%
+  CardCounter                    0.00%
+  EndgameDenial                  0.00%
+  Neat(champion)                 50.95%
+
+President retention (stayed President the very next round):
+  Adaptive(reading,tempo,bully)  54.32% (1773/3264)
+  CardCounter                    52.48% (1162/2214)
+  EndgameDenial                  50.83% (1232/2424)
+  Neat(champion)                 72.80% (7351/10098)
+
+First-round placement variance (lower = more skill-driven, higher = more luck-driven):
+  Adaptive(reading,tempo,bully)  1.20
+  CardCounter                    1.12
+  EndgameDenial                  1.11
+  Neat(champion)                 0.77
+

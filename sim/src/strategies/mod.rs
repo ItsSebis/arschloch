@@ -1,17 +1,24 @@
+mod adaptive;
 mod card_counter;
 mod endgame_denial;
 mod greedy_highest;
 mod hold_back_pairs;
 mod lowest_legal;
+mod neat_player;
 mod random_legal;
 
 use engine::{Card, DuplicateRule};
 
+pub use adaptive::{Adaptive, AdaptiveConfig, DenialMode};
 pub use card_counter::CardCounter;
 pub use endgame_denial::EndgameDenial;
 pub use greedy_highest::GreedyHighest;
 pub use hold_back_pairs::HoldBackPairs;
 pub use lowest_legal::LowestLegal;
+pub use neat_player::{
+    GenomeFile, GenomeFileError, NeatStrategy, ScoredCandidate, TurnSummary, FEATURE_COUNT,
+    FEATURE_NAMES, FEATURE_SET_VERSION, FORMAT_VERSION,
+};
 pub use random_legal::RandomLegal;
 
 /// The naive "give up your highest `count` cards" behavior from Phase 1

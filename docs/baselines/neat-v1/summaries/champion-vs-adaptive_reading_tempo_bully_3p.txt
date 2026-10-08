@@ -1,0 +1,20 @@
+3 players, Single deck, FirstDealtWins, 2000 matches x 10 rounds, seed 1000, 4 threads
+
+Strategy                       President       Dorftrottel     Arschloch       
+Adaptive(reading,tempo,bully)  8796            13108           18096           
+Neat(champion)                 11204           6892            1904            
+
+Voluntary pass rate: 21.65%
+
+Voluntary pass rate by strategy:
+  Adaptive(reading,tempo,bully)  0.00%
+  Neat(champion)                 66.46%
+
+President retention (stayed President the very next round):
+  Adaptive(reading,tempo,bully)  44.98% (3555/7903)
+  Neat(champion)                 67.65% (6831/10097)
+
+First-round placement variance (lower = more skill-driven, higher = more luck-driven):
+  Adaptive(reading,tempo,bully)  0.63
+  Neat(champion)                 0.46
+

@@ -1,0 +1,61 @@
+:root {
+  --bg: #f6f7f9; --card: #ffffff; --text: #1d2330; --muted: #5b6475; --line: #d9dde5;
+  --accent: #2d6cdf; --pos: #2d6cdf; --neg: #e07a1f;
+  --s1: #2d6cdf; --s2: #d4572a; --s3: #2a9d6f; --s4: #8a5cd0; --s5: #c9a227; --s6: #6b7280;
+  --grid: #e7eaf0; --band: rgba(45, 108, 223, 0.18);
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11151c; --card: #1a202b; --text: #e6e9ef; --muted: #98a2b3; --line: #2c3544;
+    --accent: #6ea0ff; --pos: #6ea0ff; --neg: #f0963f;
+    --s1: #6ea0ff; --s2: #f08a5d; --s3: #52c79b; --s4: #b895f0; --s5: #e3c14e; --s6: #9aa3b2;
+    --grid: #262e3b; --band: rgba(110, 160, 255, 0.2);
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+header { display: flex; align-items: center; gap: 16px; padding: 14px 16px; border-bottom: 1px solid var(--line); background: var(--card); position: sticky; top: 0; z-index: 2; }
+h1 { font-size: 18px; margin: 0; }
+h2 { font-size: 16px; margin: 0 0 6px; }
+h3 { font-size: 13px; margin: 0 0 4px; color: var(--muted); font-weight: 600; }
+main { max-width: 1000px; margin: 0 auto; padding: 16px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.card { min-width: 0; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+.muted { color: var(--muted); font-size: 13px; }
+.pill { font-size: 12px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+.pill.live { color: #fff; background: var(--s3); border-color: var(--s3); }
+.pill.done { color: #fff; background: var(--accent); border-color: var(--accent); }
+.pill.warn { color: #fff; background: var(--neg); border-color: var(--neg); }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 12px; }
+.kpi .label { font-size: 12px; color: var(--muted); }
+.kpi .value { font-size: 22px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.kpi .sub { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.progress { height: 8px; background: var(--grid); border-radius: 999px; overflow: hidden; margin-bottom: 8px; }
+#progress-bar { height: 100%; width: 0; background: var(--accent); transition: width .4s; }
+.chart, .network { overflow-x: auto; }
+/* On a narrow screen keep the drawing legible and scroll sideways instead of shrinking it. */
+.chart svg { width: 100%; min-width: 600px; height: auto; display: block; }
+.chart text { fill: var(--muted); font-size: 11px; }
+.chart .grid { stroke: var(--grid); stroke-width: 1; }
+.chart .axis { stroke: var(--line); }
+.chart .cursor { stroke: var(--muted); stroke-dasharray: 3 3; }
+.chart .ref { stroke: var(--muted); stroke-dasharray: 4 4; opacity: .7; }
+.readout { min-height: 20px; font-size: 13px; font-variant-numeric: tabular-nums; color: var(--text); }
+.readout .item { display: inline-block; margin-right: 14px; }
+.readout .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin: 0 4px 0 0; vertical-align: -1px; }
+.two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+.two > div { min-width: 0; }
+@media (max-width: 700px) { .two { grid-template-columns: minmax(0, 1fr); } main { padding: 12px 16px; } }
+.controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 8px 0; }
+.controls input[type=range] { width: 260px; max-width: 60vw; }
+button, select { font: inherit; color: var(--text); background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 3px 10px; }
+button:hover { border-color: var(--accent); cursor: pointer; }
+.network svg { width: 100%; min-width: 760px; height: auto; display: block; }
+.network text { fill: var(--text); font-size: 11px; }
+.network .dim { fill: var(--muted); }
+table.candidates { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; margin: 8px 0; }
+table.candidates th, table.candidates td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--line); font-size: 13px; }
+table.candidates tr.pick { cursor: pointer; }
+table.candidates tr.pick:hover { background: var(--grid); }
+table.candidates tr.selected { background: var(--band); }
+.ok { color: var(--s3); } .bad { color: var(--neg); }

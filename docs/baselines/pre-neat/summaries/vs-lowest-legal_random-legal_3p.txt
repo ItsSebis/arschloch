@@ -1,0 +1,20 @@
+3 players, Single deck, FirstDealtWins, 2000 matches x 10 rounds, seed 1000, 4 threads
+
+Strategy     President       Dorftrottel     Arschloch       
+LowestLegal  19247           15734           5019            
+RandomLegal  753             4266            14981           
+
+Voluntary pass rate: 14.87%
+
+Voluntary pass rate by strategy:
+  LowestLegal  0.00%
+  RandomLegal  31.79%
+
+President retention (stayed President the very next round):
+  LowestLegal  62.92% (10897/17319)
+  RandomLegal  14.10% (96/681)
+
+First-round placement variance (lower = more skill-driven, higher = more luck-driven):
+  LowestLegal  0.45
+  RandomLegal  0.33
+

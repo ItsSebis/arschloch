@@ -124,8 +124,11 @@ mod tests {
                 seat: 1,
                 hand_size: 5,
                 active: true,
+                pass_ceilings: crate::hand_reading::PassCeilings::default(),
             }],
             unseen_cards,
+            own_pass_ceilings: crate::hand_reading::PassCeilings::default(),
+            current_combo: None,
         }
     }
 

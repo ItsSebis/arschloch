@@ -1,0 +1,20 @@
+6 players, Single deck, FirstDealtWins, 2000 matches x 10 rounds, seed 1000, 4 threads
+
+Strategy        President       Vize            Offizier        Dummkopf        ViceArschloch   Arschloch       
+CardCounter     13024           14691           16203           17808           18842           19432           
+Neat(champion)  6976            5309            3797            2192            1158            568             
+
+Voluntary pass rate: 2.13%
+
+Voluntary pass rate by strategy:
+  CardCounter     0.00%
+  Neat(champion)  18.57%
+
+President retention (stayed President the very next round):
+  CardCounter     45.82% (5401/11787)
+  Neat(champion)  57.40% (3566/6213)
+
+First-round placement variance (lower = more skill-driven, higher = more luck-driven):
+  CardCounter     2.86
+  Neat(champion)  2.44
+

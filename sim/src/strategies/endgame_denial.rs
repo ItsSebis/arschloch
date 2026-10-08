@@ -89,8 +89,11 @@ mod tests {
                 seat: 1,
                 hand_size,
                 active,
+                pass_ceilings: crate::hand_reading::PassCeilings::default(),
             }],
             unseen_cards: vec![],
+            own_pass_ceilings: crate::hand_reading::PassCeilings::default(),
+            current_combo: None,
         }
     }
 
