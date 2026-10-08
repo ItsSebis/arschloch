@@ -18,6 +18,10 @@ pub struct EventIndex {
     path: PathBuf,
     offset: u64,
     identity: Option<u64>,
+    /// The last complete line consumed: the bytes just before `offset`,
+    /// compared on every refresh so a log rewritten in place (or replaced
+    /// where the platform gives no file identity) is noticed by content.
+    tail: Vec<u8>,
     epoch: u64,
     generations: Vec<GenerationEvent>,
     run_start: Option<RunStart>,
@@ -60,6 +64,7 @@ impl EventIndex {
             path,
             offset: 0,
             identity: None,
+            tail: Vec::new(),
             epoch: start_nonce(),
             generations: Vec::new(),
             run_start: None,
@@ -96,6 +101,7 @@ impl EventIndex {
     fn reset(&mut self) {
         let had_content = self.offset > 0 || !self.generations.is_empty();
         self.offset = 0;
+        self.tail.clear();
         self.generations.clear();
         self.run_start = None;
         self.finished = false;
@@ -111,6 +117,7 @@ impl EventIndex {
         if path != self.path {
             self.path = path;
             self.identity = None;
+            self.tail.clear();
             self.offset = 0;
             self.generations.clear();
             self.run_start = None;
@@ -134,6 +141,9 @@ impl EventIndex {
             self.reset();
         }
         self.identity = current;
+        if !self.tail_matches(&mut file) {
+            self.reset();
+        }
         if metadata.len() == self.offset || file.seek(SeekFrom::Start(self.offset)).is_err() {
             return;
         }
@@ -146,11 +156,31 @@ impl EventIndex {
             return;
         };
         self.offset += (end + 1) as u64;
+        let last_line_start = added[..end]
+            .iter()
+            .rposition(|&b| b == b'\n')
+            .map_or(0, |i| i + 1);
+        self.tail = added[last_line_start..=end].to_vec();
         for line in added[..end].split(|&b| b == b'\n') {
             if let Ok(event) = serde_json::from_slice::<Event>(line) {
                 self.apply(event);
             }
         }
+    }
+
+    /// Whether the bytes just before `offset` are still the last line we
+    /// consumed. An empty cache (nothing read yet) always matches.
+    fn tail_matches(&self, file: &mut File) -> bool {
+        let Some(start) = self.offset.checked_sub(self.tail.len() as u64) else {
+            return false;
+        };
+        if self.tail.is_empty() {
+            return true;
+        }
+        let mut current = vec![0u8; self.tail.len()];
+        file.seek(SeekFrom::Start(start)).is_ok()
+            && file.read_exact(&mut current).is_ok()
+            && current == self.tail
     }
 
     fn apply(&mut self, event: Event) {
@@ -296,6 +326,33 @@ mod tests {
         fs::remove_file(path).ok();
     }
 
+    #[test]
+    fn a_log_rewritten_in_place_with_other_content_is_detected_by_its_tail() {
+        // Same file (same inode, same or later length), different bytes in
+        // the part already read: only the content can tell.
+        let lines = sample_events();
+        let path = temp_path("in-place");
+        append(&path, &format!("{}\n{}\n", lines[0], lines[1]));
+        let mut index = EventIndex::new(path.clone());
+        index.refresh();
+        assert_eq!(index.generations().len(), 1);
+        fs::write(
+            &path,
+            format!("{}\n{}\n{}\n{}\n", lines[0], lines[2], lines[3], lines[1]),
+        )
+        .unwrap();
+        index.refresh();
+        assert_eq!(
+            index.epoch() % 1000,
+            1,
+            "the cached prefix no longer matches"
+        );
+        assert_eq!(index.generations().len(), 3);
+        fs::remove_file(path).ok();
+    }
+
+    /// Needs a file identity that survives equal content: the inode.
+    #[cfg(unix)]
     #[test]
     fn a_replacement_that_grew_past_the_old_offset_is_still_detected() {
         let lines = sample_events();
