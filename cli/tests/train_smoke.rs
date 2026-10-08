@@ -502,3 +502,159 @@ fn a_bad_from_leaves_nothing_behind_and_points_at_resume_or_the_size() {
     assert!(!resumed.status.success());
     let _ = std::fs::remove_dir_all(&base);
 }
+
+fn generation_means(events_path: &Path) -> Vec<f64> {
+    std::fs::read_to_string(events_path)
+        .unwrap()
+        .lines()
+        .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+        .filter(|event| event["type"] == "generation")
+        .map(|event| event["fitness"]["mean"].as_f64().unwrap())
+        .collect()
+}
+
+fn set_json(out: &Path) -> serde_json::Value {
+    serde_json::from_str(&std::fs::read_to_string(out.join("set.json")).unwrap()).unwrap()
+}
+
+#[test]
+fn a_set_runs_every_run_in_its_own_directory_with_a_set_eta() {
+    let out = run_dir("set");
+    let result = train(&out, &["--runs", "2", "--generations", "3"]);
+    assert!(result.status.success(), "{}", text(&result.stderr));
+    for name in ["run-01", "run-02"] {
+        assert!(out.join(name).join("best.json").exists(), "{name}");
+        assert_eq!(
+            generation_means(&out.join(name).join("events.jsonl")).len(),
+            3
+        );
+    }
+    assert_ne!(
+        generation_means(&out.join("run-01/events.jsonl")),
+        generation_means(&out.join("run-02/events.jsonl")),
+        "each run has its own seed"
+    );
+    let set = set_json(&out);
+    assert_eq!(set["total_runs"], 2);
+    assert_eq!(set["finished_secs"].as_array().unwrap().len(), 2);
+    let stdout = text(&result.stdout);
+    assert!(
+        stdout.contains("run 1/2") && stdout.contains("run 2/2"),
+        "{stdout}"
+    );
+    assert!(stdout.contains("set ETA"), "{stdout}");
+    assert!(stdout.contains("set finished"), "{stdout}");
+    let _ = std::fs::remove_dir_all(&out);
+}
+
+#[test]
+fn runs_1_is_exactly_a_normal_run() {
+    let out = run_dir("set-one");
+    let result = train(&out, &["--runs", "1", "--generations", "2"]);
+    assert!(result.status.success());
+    assert!(out.join("checkpoint.json").exists());
+    assert!(!out.join("run-01").exists() && !out.join("set.json").exists());
+    let _ = std::fs::remove_dir_all(&out);
+}
+
+#[test]
+fn a_killed_set_resumes_where_it_stopped() {
+    let out = run_dir("set-kill");
+    let mut child = Command::new(env!("CARGO_BIN_EXE_cli"))
+        .args([
+            "train",
+            "--out",
+            out.to_str().unwrap(),
+            "--runs",
+            "2",
+            "--generations",
+            "8",
+            "--population",
+            "12",
+            "--matches-per-genome",
+            "6",
+            "--reeval-matches",
+            "6",
+            "--rounds",
+            "3",
+            "--threads",
+            "2",
+            "--quiet",
+        ])
+        .stdout(std::process::Stdio::null())
+        .spawn()
+        .unwrap();
+    let second = out.join("run-02/checkpoint.json");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(120);
+    while !second.exists() && std::time::Instant::now() < deadline {
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    child.kill().unwrap();
+    child.wait().unwrap();
+    let first_events = std::fs::read(out.join("run-01/events.jsonl")).unwrap();
+    let result = cli(&[
+        "train",
+        "--out",
+        out.to_str().unwrap(),
+        "--resume",
+        "--quiet",
+    ]);
+    assert!(result.status.success(), "{}", text(&result.stderr));
+    assert_eq!(
+        std::fs::read(out.join("run-01/events.jsonl")).unwrap(),
+        first_events,
+        "a finished run is not touched"
+    );
+    assert_eq!(generation_means(&out.join("run-02/events.jsonl")).len(), 8);
+    assert_eq!(set_json(&out)["finished_secs"].as_array().unwrap().len(), 2);
+    let _ = std::fs::remove_dir_all(&out);
+}
+
+#[test]
+fn a_set_killed_between_runs_starts_the_next_run_on_resume() {
+    let out = run_dir("set-between");
+    assert!(train(&out, &["--runs", "2", "--generations", "2"])
+        .status
+        .success());
+    // Pretend the process died right after run 1 finished.
+    std::fs::remove_dir_all(out.join("run-02")).unwrap();
+    let mut set = set_json(&out);
+    set["finished_secs"] = serde_json::json!([set["finished_secs"][0].clone()]);
+    set["current_run"] = serde_json::json!(2);
+    std::fs::write(out.join("set.json"), set.to_string()).unwrap();
+    let result = cli(&[
+        "train",
+        "--out",
+        out.to_str().unwrap(),
+        "--resume",
+        "--quiet",
+    ]);
+    assert!(result.status.success(), "{}", text(&result.stderr));
+    assert_eq!(generation_means(&out.join("run-02/events.jsonl")).len(), 2);
+    assert_ne!(
+        generation_means(&out.join("run-01/events.jsonl")),
+        generation_means(&out.join("run-02/events.jsonl")),
+        "the restarted run still gets its own seed"
+    );
+    let _ = std::fs::remove_dir_all(&out);
+}
+
+#[test]
+fn a_bad_option_leaves_nothing_behind_in_a_set() {
+    let out = run_dir("set-bad");
+    for bad in [["--weight-power", "NaN"], ["--runs", "0"]] {
+        let mut args = vec!["--generations", "1"];
+        if bad[0] == "--weight-power" {
+            args.extend(["--runs", "2"]);
+        }
+        args.extend(bad);
+        let result = train(&out, &args);
+        assert!(!result.status.success(), "{bad:?}");
+        assert!(!text(&result.stderr).contains("panicked"), "{bad:?}");
+        assert!(
+            !out.join("set.json").exists() && !out.join("run-01").exists(),
+            "{bad:?}"
+        );
+    }
+    let _ = std::fs::remove_dir_all(&out);
+}

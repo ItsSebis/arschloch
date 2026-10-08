@@ -28,7 +28,7 @@ fn positive_finite(text: &str) -> Result<f64, String> {
 }
 
 /// Evolve a NEAT player, generation by generation.
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 #[command(
     name = "cli train",
     about = "Evolve a NEAT player against a pool of opponents, saving every champion",
@@ -52,10 +52,18 @@ pub struct TrainArgs {
         conflicts_with_all = [
             "player_count", "deck_variant", "duplicate_rule", "rounds", "population",
             "matches_per_genome", "reeval_matches", "seed", "opponent", "target_species",
-            "champion_candidates", "hall_of_fame", "hall_interval", "weight_power"
+            "champion_candidates", "hall_of_fame", "hall_interval", "weight_power", "runs"
         ]
     )]
     pub resume: bool,
+
+    /// Train this many independent runs one after another as a *set*: with
+    /// more than one, --out becomes the set directory holding run-01,
+    /// run-02, ... (run k uses seed SEED+k-1) and set.json, and the output
+    /// shows the time left for the whole set. A killed set continues with
+    /// --resume.
+    #[arg(long, default_value_t = 1, value_parser = clap::value_parser!(u32).range(1..=1000))]
+    pub runs: u32,
 
     /// Start from the final population of the earlier run in this
     /// directory instead of a random one (the earlier run is only read).
@@ -176,6 +184,14 @@ mod tests {
         assert!(parse(&["--out", "d", "--from", "old", "--resume"]).is_err());
         assert!(parse(&["--out", "d", "--from", "old", "--population", "20"]).is_err());
         assert_eq!(parse(&["--out", "d"]).unwrap().from, None);
+    }
+
+    #[test]
+    fn runs_defaults_to_one_and_conflicts_with_resume() {
+        assert_eq!(parse(&["--out", "d"]).unwrap().runs, 1);
+        assert_eq!(parse(&["--out", "d", "--runs", "5"]).unwrap().runs, 5);
+        assert!(parse(&["--out", "d", "--runs", "0"]).is_err());
+        assert!(parse(&["--out", "d", "--resume", "--runs", "2"]).is_err());
     }
 
     #[test]

@@ -20,6 +20,9 @@ pub struct SetFile {
     pub current_run: u32,
     /// Wall-clock seconds of each finished run, in order.
     pub finished_secs: Vec<f64>,
+    /// The run directory every run of the set warm-starts from, if any.
+    #[serde(default)]
+    pub from: Option<String>,
 }
 
 /// The directory name of run `index` (1-based): `run-01`, `run-02`, ...
@@ -35,6 +38,7 @@ impl SetFile {
     pub fn write(&self, dir: &Path) -> Result<(), TrainError> {
         let text = serde_json::to_string_pretty(self)
             .map_err(|e| TrainError::Checkpoint(e.to_string()))?;
+        fs::create_dir_all(dir).map_err(|e| TrainError::Io(format!("{}: {e}", dir.display())))?;
         write_atomically_in(dir, FILE, &text)
     }
 
@@ -135,6 +139,7 @@ mod tests {
             total_runs: 4,
             current_run: 2,
             finished_secs: vec![12.5],
+            from: None,
         };
         file.write(&dir).unwrap();
         assert_eq!(SetFile::read(&dir).unwrap(), Some(file));

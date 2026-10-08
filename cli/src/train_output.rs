@@ -151,8 +151,51 @@ pub fn render_summary(end: &RunEnd, out: &std::path::Path) -> String {
     text
 }
 
+/// Where a run sits in a set, so its rows can show the set's ETA.
+#[derive(Debug, Clone)]
+pub struct SetContext {
+    pub total_runs: u32,
+    /// Wall-clock seconds of the runs that already finished.
+    pub finished_secs: Vec<f64>,
+}
+
+/// The banner line that starts run `index` of a set.
+#[must_use]
+pub fn render_set_run_banner(index: u32, total: u32, seed: u64) -> String {
+    format!("=== run {index}/{total} (seed {seed}) ===")
+}
+
+/// The closing summary of a set: one line per run, then the total time.
+#[must_use]
+pub fn render_set_summary(ends: &[(String, RunEnd)], total_secs: f64) -> String {
+    let mut text = format!(
+        "set finished: {} runs in {}",
+        ends.len(),
+        format_duration(total_secs)
+    );
+    for (name, end) in ends {
+        let confirmed = end.best_heldout.as_ref().or(end.best_reeval.as_ref());
+        match (end.best_generation, confirmed) {
+            (Some(generation), Some(score)) => {
+                let _ = write!(
+                    text,
+                    "\n  {name}: best generation {generation}, held-out {:+.3} ±{:.3} ({})",
+                    score.mean,
+                    score.std_error,
+                    format_duration(end.elapsed_secs)
+                );
+            }
+            _ => {
+                let _ = write!(text, "\n  {name}: no champion");
+            }
+        }
+    }
+    text
+}
+
 #[allow(clippy::struct_excessive_bools)] // independent display switches
 pub struct TerminalObserver {
+    set: Option<SetContext>,
     quiet: bool,
     out: PathBuf,
     live_progress: bool,
@@ -168,6 +211,7 @@ impl TerminalObserver {
     #[must_use]
     pub fn new(out: PathBuf, quiet: bool) -> Self {
         Self {
+            set: None,
             quiet,
             out,
             live_progress: std::io::stderr().is_terminal(),
@@ -180,11 +224,26 @@ impl TerminalObserver {
         }
     }
 
+    /// Marks this run as part of a set (its rows then end with the set's ETA).
+    #[must_use]
+    pub fn with_set(mut self, set: SetContext) -> Self {
+        self.set = Some(set);
+        self
+    }
+
     fn clear_progress(&mut self) {
         if self.progress_visible {
             eprint!("\r{:60}\r", "");
             self.progress_visible = false;
         }
+    }
+
+    fn header(&self) -> String {
+        let mut header = render_header(self.opponent_count, self.show_hall);
+        if self.set.is_some() {
+            header.push_str("  set ETA");
+        }
+        header
     }
 
     fn eta(&self, event: &GenerationEvent) -> Option<f64> {
@@ -204,11 +263,7 @@ impl TrainObserver for TerminalObserver {
         self.show_hall = start.config.hall_of_fame_size > 0;
         self.total_generations = start.config.generations;
         if !self.quiet {
-            println!(
-                "{}\n\n{}",
-                render_banner(start, &self.out),
-                render_header(self.opponent_count, self.show_hall)
-            );
+            println!("{}\n\n{}", render_banner(start, &self.out), self.header());
         }
     }
 
@@ -229,9 +284,23 @@ impl TrainObserver for TerminalObserver {
             return;
         }
         if (event.generation - first).is_multiple_of(HEADER_EVERY) && event.generation != first {
-            println!("{}", render_header(self.opponent_count, self.show_hall));
+            println!("{}", self.header());
         }
-        println!("{}", render_row(event, self.eta(event), self.show_hall));
+        let mut row = render_row(event, self.eta(event), self.show_hall);
+        if let Some(set) = &self.set {
+            let eta = sim::training::set_eta(
+                &set.finished_secs,
+                set.total_runs,
+                self.eta(event),
+                event.elapsed_secs,
+            );
+            let _ = write!(
+                row,
+                "  set {}",
+                eta.map_or_else(|| "--:--:--".to_owned(), format_duration)
+            );
+        }
+        println!("{row}");
     }
 
     fn on_finish(&mut self, end: &RunEnd) {
