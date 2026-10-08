@@ -10,10 +10,10 @@ workspace = true
 [dependencies]
 anyhow = "1.0.104"
 clap = { version = "4.6.7", features = ["derive"] }
-engine = { version = "0.1.0", path = "../engine" }
-neat = { version = "0.1.0", path = "../neat" }
+engine = { version = "0.2.0", path = "../engine" }
+neat = { version = "0.2.0", path = "../neat" }
 rayon = "1.12.0"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = { version = "1.0.151", features = ["float_roundtrip"] }
-sim = { version = "0.1.0", path = "../sim" }
-web = { version = "0.1.0", path = "../web" }
+sim = { version = "0.2.0", path = "../sim" }
+web = { version = "0.2.0", path = "../web" }
