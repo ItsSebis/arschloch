@@ -9,6 +9,7 @@ pub mod match_runner;
 pub mod statistics;
 pub mod strategies;
 pub mod strategy;
+pub mod training;
 
 pub use hand_reading::{read_pass_ceilings, PassCeilings};
 pub use match_config::MatchConfig;
