@@ -21,6 +21,9 @@ fn temp(name: &str) -> PathBuf {
 struct Play {
     child: Child,
     address: String,
+    /// Kept open: the server prints a second line after the address, and a
+    /// closed pipe would make that print (and so the server) fail.
+    _stdout: BufReader<std::process::ChildStdout>,
 }
 
 impl Drop for Play {
@@ -44,8 +47,9 @@ fn start(extra: &[&str], records: &std::path::Path) -> Play {
         .stderr(Stdio::piped())
         .spawn()
         .expect("spawn cli play");
-    let mut lines = BufReader::new(child.stdout.take().unwrap()).lines();
-    let line = lines.next().expect("a first line").unwrap();
+    let mut stdout = BufReader::new(child.stdout.take().unwrap());
+    let mut line = String::new();
+    stdout.read_line(&mut line).expect("a first line");
     let address = line
         .split("http://")
         .nth(1)
@@ -54,7 +58,11 @@ fn start(extra: &[&str], records: &std::path::Path) -> Play {
         .next()
         .unwrap()
         .to_owned();
-    Play { child, address }
+    Play {
+        child,
+        address,
+        _stdout: stdout,
+    }
 }
 
 fn request(address: &str, method: &str, target: &str, body: Option<&Value>) -> (u16, Value) {
