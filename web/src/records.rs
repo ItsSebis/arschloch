@@ -18,6 +18,13 @@ pub struct Record {
     pub player_count: u8,
     pub deck: String,
     pub duplicate_rule: String,
+    /// `final` or `free`. Games recorded before the rule existed were played
+    /// under `free`.
+    #[serde(default = "legacy_pass_rule")]
+    pub pass_rule: String,
+    /// `forced` or `free`; records from before the rule existed read as `free`.
+    #[serde(default = "legacy_exchange_rule")]
+    pub exchange_rule: String,
     pub rounds: usize,
     /// The opponents' labels, in seat order (the human's seat skipped).
     pub opponents: Vec<String>,
@@ -41,6 +48,14 @@ pub struct RecordStore {
     write_error: Mutex<Option<String>>,
     /// Serialises appends so concurrent finishes never interleave a line.
     lock: Mutex<()>,
+}
+
+fn legacy_pass_rule() -> String {
+    "free".to_owned()
+}
+
+fn legacy_exchange_rule() -> String {
+    "free".to_owned()
 }
 
 impl Record {
@@ -112,17 +127,28 @@ impl RecordStore {
     #[must_use]
     pub fn summary(&self) -> serde_json::Value {
         let records = self.read_all();
-        let mut by_opponent: BTreeMap<String, (usize, f64)> = BTreeMap::new();
-        let mut by_table: BTreeMap<(u8, Vec<String>), TableStats> = BTreeMap::new();
+        let mut by_opponent: BTreeMap<(String, String, String), (usize, f64)> = BTreeMap::new();
+        let mut by_table: BTreeMap<(u8, Vec<String>, String, String), TableStats> = BTreeMap::new();
         for record in &records {
             let mut names = record.opponents.clone();
             names.sort();
             let stats = by_table
-                .entry((record.player_count, names.clone()))
+                .entry((
+                    record.player_count,
+                    names.clone(),
+                    record.pass_rule.clone(),
+                    record.exchange_rule.clone(),
+                ))
                 .or_default();
             stats.add(record);
             for name in names.iter().collect::<std::collections::BTreeSet<_>>() {
-                let entry = by_opponent.entry(name.clone()).or_default();
+                let entry = by_opponent
+                    .entry((
+                        name.clone(),
+                        record.pass_rule.clone(),
+                        record.exchange_rule.clone(),
+                    ))
+                    .or_default();
                 entry.0 += 1;
                 entry.1 += record.score;
             }
@@ -130,13 +156,15 @@ impl RecordStore {
         #[allow(clippy::cast_precision_loss)] // game counts are small
         let opponents: Vec<_> = by_opponent
             .iter()
-            .map(|(name, (games, total))| {
-                json!({"opponent": name, "games": games, "mean_score": total / *games as f64})
+            .map(|((name, rule, exchange), (games, total))| {
+                json!({"opponent": name, "pass_rule": rule, "exchange_rule": exchange, "games": games, "mean_score": total / *games as f64})
             })
             .collect();
         let tables: Vec<_> = by_table
             .iter()
-            .map(|((players, names), stats)| stats.to_json(*players, names))
+            .map(|((players, names, rule, exchange), stats)| {
+                stats.to_json(*players, names, rule, exchange)
+            })
             .collect();
         let recent: Vec<_> = records.iter().rev().take(20).collect();
         json!({
@@ -174,11 +202,19 @@ impl TableStats {
     }
 
     #[allow(clippy::cast_precision_loss)] // counts are small
-    fn to_json(&self, players: u8, names: &[String]) -> serde_json::Value {
+    fn to_json(
+        &self,
+        players: u8,
+        names: &[String],
+        rule: &str,
+        exchange: &str,
+    ) -> serde_json::Value {
         let rounds = self.rounds.max(1) as f64;
         json!({
             "players": players,
             "opponents": names,
+            "pass_rule": rule,
+            "exchange_rule": exchange,
             "games": self.games,
             "mean_score": self.score_sum / self.games.max(1) as f64,
             "president_rate": self.president as f64 / rounds,
@@ -206,6 +242,8 @@ mod tests {
             player_count: 4,
             deck: "single".into(),
             duplicate_rule: "first_dealt_wins".into(),
+            pass_rule: "free".into(),
+            exchange_rule: "free".into(),
             rounds: roles.len(),
             opponents: opponents.iter().map(|s| (*s).to_owned()).collect(),
             roles,
@@ -256,6 +294,60 @@ mod tests {
         drop(file);
         assert_eq!(store.read_all().len(), 1);
         assert_eq!(store.summary()["total_games"], 1);
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn games_under_different_pass_rules_are_never_mixed_and_old_records_read_as_free() {
+        let path = temp("rules");
+        let store = RecordStore::new(Some(path.clone()));
+        let mut final_game = record(1.0, vec![Role::President], &["A", "B", "C"]);
+        final_game.pass_rule = "final".into();
+        let free_game = record(-1.0, vec![Role::Arschloch], &["A", "B", "C"]);
+        store.append(&final_game);
+        store.append(&free_game);
+        // A line written before the field existed.
+        let mut old: serde_json::Value = serde_json::to_value(&free_game).unwrap();
+        old.as_object_mut().unwrap().remove("pass_rule");
+        old.as_object_mut().unwrap().remove("exchange_rule");
+        let mut file = std::fs::OpenOptions::new()
+            .append(true)
+            .open(&path)
+            .unwrap();
+        writeln!(file, "{old}").unwrap();
+        drop(file);
+        let all = store.read_all();
+        assert_eq!(all.len(), 3);
+        assert_eq!(
+            all[2].pass_rule, "free",
+            "old records were played under free"
+        );
+        let summary = store.summary();
+        let tables = summary["by_table"].as_array().unwrap();
+        assert_eq!(tables.len(), 2, "one table per rule: {tables:?}");
+        let by_rule = |rule: &str| tables.iter().find(|t| t["pass_rule"] == rule).unwrap();
+        assert_eq!(by_rule("final")["games"], 1);
+        assert_eq!(by_rule("free")["games"], 2);
+        for o in summary["by_opponent"].as_array().unwrap() {
+            assert!(o["pass_rule"] == "final" || o["pass_rule"] == "free");
+        }
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn games_under_different_exchange_rules_are_never_mixed() {
+        let path = temp("exchange");
+        let store = RecordStore::new(Some(path.clone()));
+        let mut forced = record(1.0, vec![Role::President], &["A", "B", "C"]);
+        forced.pass_rule = "final".into();
+        forced.exchange_rule = "forced".into();
+        let mut free_exchange = forced.clone();
+        free_exchange.exchange_rule = "free".into();
+        store.append(&forced);
+        store.append(&free_exchange);
+        let summary = store.summary();
+        assert_eq!(summary["by_table"].as_array().unwrap().len(), 2);
+        assert_eq!(summary["by_opponent"].as_array().unwrap().len(), 6);
         std::fs::remove_file(path).ok();
     }
 

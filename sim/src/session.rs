@@ -17,9 +17,9 @@ use std::fmt;
 use std::sync::Arc;
 
 use engine::{
-    assign_roles, deal, exchange_counts_for_player_count, exchange_with_selection,
-    lowest_card_holder, roles_for_player_count, standard_deck, Card, Combo, DeckVariant,
-    DuplicateRule, Move, Rank, Role, Round, SeatId, Suit,
+    assign_roles, deal, exchange_counts_for_player_count, exchange_with_rule, lowest_card_holder,
+    roles_for_player_count, standard_deck, Card, Combo, DeckVariant, DuplicateRule, ExchangeRule,
+    Move, PassRule, Rank, Role, Round, SeatId, Suit,
 };
 use rand::seq::SliceRandom;
 use rand::SeedableRng;
@@ -36,6 +36,8 @@ pub struct SessionConfig {
     pub player_count: u8,
     pub deck_variant: DeckVariant,
     pub duplicate_rule: DuplicateRule,
+    pub pass_rule: PassRule,
+    pub exchange_rule: ExchangeRule,
     pub rounds: usize,
     pub seed: u64,
     pub human_seat: u8,
@@ -245,6 +247,8 @@ pub struct SeatView {
     pub role: Option<Role>,
     /// Finishing place this round (1 = first out), once finished.
     pub place: Option<usize>,
+    /// Passed in the current trick and so out of it (pass rule `final`).
+    pub passed: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -278,6 +282,8 @@ pub struct View {
     pub round: usize,
     pub rounds: usize,
     pub player_count: u8,
+    pub pass_rule: PassRule,
+    pub exchange_rule: ExchangeRule,
     pub human_seat: SeatId,
     pub hand: Vec<CardView>,
     pub seats: Vec<SeatView>,
@@ -457,6 +463,10 @@ impl Session {
     /// How many cards the human must choose to give (0 when they are not
     /// a lower role, or their pair exchanges nothing).
     fn human_give_count(&self, roles: &[Role]) -> usize {
+        // Under the forced rule there is nothing to choose.
+        if self.config.exchange_rule == ExchangeRule::Forced {
+            return 0;
+        }
         let player_count = self.config.player_count;
         let (Some(order), Some(counts)) = (
             roles_for_player_count(player_count),
@@ -487,10 +497,11 @@ impl Session {
         let ai = &self.ai;
         let rng = &mut self.rng;
         let mut selection = human_selection.clone();
-        exchange_with_selection(
+        exchange_with_rule(
             &mut hands,
             roles,
             rule,
+            self.config.exchange_rule,
             |seat, hand, count, rule| match &ai[seat] {
                 Some(ai) => ai.strategy.choose_exchange_cards(hand, count, rule, rng),
                 None => selection
@@ -542,8 +553,9 @@ impl Session {
         if involved {
             let gave = match human_selection {
                 Some(selection) => views(&self.ids, &selection),
-                // The human was the higher role: they hand back their lowest
-                // cards, which is whatever left their hand.
+                // No selection: the exchange was forced (a lower role gives its
+                // highest cards) or the human was the higher role (hands back
+                // its lowest): in both cases whatever left their hand.
                 None => views(
                     &self.ids,
                     &before
@@ -570,8 +582,13 @@ impl Session {
         self.round_deck = hands.iter().flatten().copied().collect();
         let hand_sizes = hands.iter().map(Vec::len).collect();
         self.round = Some(
-            Round::new(hands, self.config.duplicate_rule, leader)
-                .expect("player_count/leader are always valid for a supported table size"),
+            Round::with_pass_rule(
+                hands,
+                self.config.duplicate_rule,
+                self.config.pass_rule,
+                leader,
+            )
+            .expect("player_count/leader are always valid for a supported table size"),
         );
         self.tracker = PassTracker::new(
             usize::from(self.config.player_count),
@@ -912,6 +929,7 @@ impl Session {
                     .as_ref()
                     .map(|roles| roles[usize::from(seat)]),
                 place: places[usize::from(seat)],
+                passed: self.phase == Phase::Playing && round.is_some_and(|r| r.has_passed(seat)),
             })
             .collect();
 
@@ -948,6 +966,8 @@ impl Session {
             },
             rounds: self.config.rounds,
             player_count: self.config.player_count,
+            pass_rule: self.config.pass_rule,
+            exchange_rule: self.config.exchange_rule,
             human_seat: human,
             hand: views(&self.ids, &hand),
             seats,
@@ -1034,6 +1054,8 @@ mod tests {
             player_count: players,
             deck_variant: deck,
             duplicate_rule: DuplicateRule::FirstDealtWins,
+            pass_rule: PassRule::default(),
+            exchange_rule: ExchangeRule::default(),
             rounds,
             seed: 7,
             human_seat,
@@ -1151,6 +1173,8 @@ mod tests {
                     duplicate_rule: DuplicateRule::FirstDealtWins,
                     rounds: 6,
                     seed: 7,
+                    pass_rule: engine::PassRule::default(),
+                    exchange_rule: engine::ExchangeRule::default(),
                 },
                 &strategies,
             );
@@ -1330,9 +1354,10 @@ mod tests {
     #[test]
     fn the_human_as_a_lower_role_chooses_the_cards_to_give() {
         // Play round 1 out; find a seed where the human ends lower and the
-        // second round opens in the exchange phase.
+        // second round opens in the exchange phase (free exchange rule).
         for seed in 0..300 {
             let mut cfg = config(4, DeckVariant::Single, 3, 0);
+            cfg.exchange_rule = ExchangeRule::Free;
             cfg.seed = seed;
             let mut session = Session::new(cfg, ai(3)).unwrap();
             // Finish round 1 with the scripted human.
@@ -1383,6 +1408,7 @@ mod tests {
     fn the_exchange_view_shows_a_fresh_table_not_the_last_round() {
         for seed in 0..300 {
             let mut cfg = config(4, DeckVariant::Single, 3, 0);
+            cfg.exchange_rule = ExchangeRule::Free;
             cfg.seed = seed;
             let mut session = Session::new(cfg, ai(3)).unwrap();
             while session.phase() == Phase::Playing {
@@ -1411,6 +1437,72 @@ mod tests {
             return;
         }
         panic!("the human never ended lower in 300 seeds");
+    }
+
+    #[test]
+    fn under_the_forced_rule_the_human_as_a_lower_role_gives_the_highest_cards_without_choosing() {
+        for seed in 0..300 {
+            let mut cfg = config(4, DeckVariant::Single, 3, 0);
+            cfg.exchange_rule = ExchangeRule::Forced;
+            cfg.seed = seed;
+            let mut session = Session::new(cfg, ai(3)).unwrap();
+            while session.phase() == Phase::Playing {
+                match scripted_move(&session) {
+                    Move::Pass => session.pass().unwrap(),
+                    Move::Play(c) => {
+                        let ids: Vec<u8> = c.cards().iter().map(|c| c.deal_index).collect();
+                        session.play(&ids).unwrap();
+                    }
+                }
+            }
+            let role = session.view().roles_history[0][0];
+            session.next_round().unwrap();
+            assert_ne!(
+                session.phase(),
+                Phase::Exchange,
+                "nothing to choose when forced"
+            );
+            if !matches!(role, Role::ViceArschloch | Role::Arschloch) {
+                continue;
+            }
+            let (gave, received) = session
+                .events_since(0)
+                .iter()
+                .find_map(|e| match e {
+                    GameEvent::ExchangeYours { gave, received } => {
+                        Some((gave.clone(), received.clone()))
+                    }
+                    _ => None,
+                })
+                .expect("a lower role still sees what was taken and received");
+            let count = if role == Role::Arschloch { 2 } else { 1 };
+            assert_eq!(gave.len(), count);
+            assert_eq!(received.len(), count);
+            // What was given is at least as high as anything kept (rank order).
+            let kept_max = session
+                .view()
+                .hand
+                .iter()
+                .filter(|c| {
+                    !gave.iter().any(|g| g.id == c.id) && !received.iter().any(|r| r.id == c.id)
+                })
+                .map(|c| (c.rank, c.suit))
+                .max();
+            let given_min = gave.iter().map(|c| (c.rank, c.suit)).min().unwrap();
+            if let Some(kept) = kept_max {
+                assert!(
+                    given_min >= kept,
+                    "seed {seed}: gave {gave:?} but kept a higher card"
+                );
+            }
+            // And what came back is from the president's low end.
+            assert!(
+                received.iter().all(|c| c.rank <= 6),
+                "received {received:?}"
+            );
+            return;
+        }
+        panic!("the human never ended in a lower role in 300 seeds");
     }
 
     #[test]
@@ -1531,6 +1623,120 @@ mod tests {
             revealing < total / 2,
             "{revealing} of {total} ids still match the seat"
         );
+    }
+
+    #[test]
+    fn under_the_final_rule_passes_show_in_the_view_and_a_pass_ends_the_humans_trick() {
+        let mut saw_an_ai_pass = false;
+        let mut humans_passes = 0;
+        for seed in 0..60 {
+            let mut cfg = config(4, DeckVariant::Single, 2, 0);
+            cfg.seed = seed;
+            cfg.pass_rule = PassRule::Final;
+            let mut session = Session::new(cfg, ai(3)).unwrap();
+            let mut guard = 0;
+            while session.phase() != Phase::MatchOver && guard < 2000 {
+                guard += 1;
+                let view = session.view();
+                if view.seats.iter().any(|s| s.passed && !s.is_human) {
+                    saw_an_ai_pass = true;
+                }
+                match view.phase {
+                    Phase::Exchange => {
+                        let ids: Vec<u8> = view
+                            .hand
+                            .iter()
+                            .take(view.give_count)
+                            .map(|c| c.id)
+                            .collect();
+                        session.give(&ids).unwrap();
+                    }
+                    Phase::Playing if !view.must_lead => {
+                        // Always pass when following: the human is out of the
+                        // trick, so the next human decision must come after
+                        // a TrickEnd.
+                        let before = view.event_count;
+                        session.pass().unwrap();
+                        humans_passes += 1;
+                        let ended = session.events_since(before).iter().any(|e| {
+                            matches!(e, GameEvent::TrickEnd { .. } | GameEvent::RoundEnd { .. })
+                        });
+                        assert!(
+                            ended,
+                            "seed {seed}: the human acted again inside the trick they passed in"
+                        );
+                    }
+                    Phase::Playing => {
+                        let rank = view.playable.first().unwrap();
+                        let size = rank.sizes[0];
+                        session
+                            .play(&rank.card_ids[rank.card_ids.len() - size..])
+                            .unwrap();
+                    }
+                    Phase::RoundOver => session.next_round().unwrap(),
+                    Phase::MatchOver => unreachable!(),
+                }
+            }
+            assert_eq!(session.phase(), Phase::MatchOver, "seed {seed}");
+        }
+        assert!(saw_an_ai_pass, "the view never showed a seat as passed");
+        assert!(humans_passes > 0);
+    }
+
+    #[test]
+    fn nobody_is_shown_as_passed_outside_a_trick_in_progress() {
+        // The round-over and match-over screens must not show last trick's passes.
+        let mut stale = 0;
+        for seed in 0..80 {
+            let mut cfg = config(4, DeckVariant::Single, 2, 0);
+            cfg.seed = seed;
+            cfg.pass_rule = PassRule::Final;
+            let mut session = Session::new(cfg, ai(3)).unwrap();
+            let mut guard = 0;
+            while session.phase() != Phase::MatchOver && guard < 3000 {
+                guard += 1;
+                let view = session.view();
+                if view.phase != Phase::Playing && view.seats.iter().any(|s| s.passed) {
+                    stale += 1;
+                }
+                match view.phase {
+                    Phase::Exchange => {
+                        let ids: Vec<u8> = view
+                            .hand
+                            .iter()
+                            .take(view.give_count)
+                            .map(|c| c.id)
+                            .collect();
+                        session.give(&ids).unwrap();
+                    }
+                    Phase::Playing if !view.must_lead => session.pass().unwrap(),
+                    Phase::Playing => {
+                        let rank = view.playable.first().unwrap();
+                        let size = rank.sizes[0];
+                        session
+                            .play(&rank.card_ids[rank.card_ids.len() - size..])
+                            .unwrap();
+                    }
+                    Phase::RoundOver => session.next_round().unwrap(),
+                    Phase::MatchOver => unreachable!(),
+                }
+            }
+            let end = session.view();
+            if end.seats.iter().any(|s| s.passed) {
+                stale += 1;
+            }
+        }
+        assert_eq!(stale, 0, "views outside play showed passed seats");
+    }
+
+    #[test]
+    fn under_the_free_rule_no_seat_is_ever_shown_as_passed() {
+        let mut cfg = config(4, DeckVariant::Single, 2, 0);
+        cfg.pass_rule = PassRule::Free;
+        let mut session = Session::new(cfg, ai(3)).unwrap();
+        play_by_view(&mut session);
+        assert_eq!(session.view().pass_rule, PassRule::Free);
+        assert!(session.view().seats.iter().all(|s| !s.passed));
     }
 
     fn champion() -> NeatStrategy {

@@ -39,13 +39,15 @@ duplicate-card rule, thread count, and cross-compiling a Windows `.exe`).
 - `greedy-highest` — always plays the largest, highest-ranked legal
   combo; the most aggressive baseline.
 - `random-legal` — picks uniformly among every legal move, including
-  passing when it doesn't have to. It also gives up uniformly random
-  cards when choosing which ones to hand over during the card exchange.
+  passing when it doesn't have to. (Under `--exchange-rule free` it also
+  gives up uniformly random cards in the card exchange; by default the
+  exchange is forced and it gives its highest cards like everyone else.)
 - `hold-back-pairs` — plays like `lowest-legal`, except while following:
   if every beating play would break up cards of a rank it holds more of
   than this play needs, it passes instead, to keep that reserve intact
-  for a later lead. It applies the same reserve-protecting logic when
-  choosing which cards to give up during the card exchange.
+  for a later lead. (Under `--exchange-rule free` it applies the same
+  reserve-protecting logic when choosing which cards to give up in the card
+  exchange; by default the exchange is forced.)
 - `card-counter` — tracks the exact multiset of unseen cards and plays
   a legal combo while some unseen card could still beat it, only
   holding it back once no unseen card can.

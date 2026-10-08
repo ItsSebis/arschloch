@@ -1,0 +1,20 @@
+4 players, Single deck, FirstDealtWins, pass rule final, exchange rule free, 2000 matches x 10 rounds, seed 1000, 4 threads
+
+Strategy       President       Vize            ViceArschloch   Arschloch       
+GreedyHighest  60              1393            7400            11147           
+LowestLegal    19940           18607           12600           8853            
+
+Voluntary pass rate: 0.00%
+
+Voluntary pass rate by strategy:
+  GreedyHighest  0.00%
+  LowestLegal    0.00%
+
+President retention (stayed President the very next round):
+  GreedyHighest  5.45% (3/55)
+  LowestLegal    72.15% (12948/17945)
+
+First-round placement variance (lower = more skill-driven, higher = more luck-driven):
+  GreedyHighest  0.42
+  LowestLegal    0.71
+

@@ -9,7 +9,7 @@
 
 use std::sync::Arc;
 
-use engine::{roles_for_player_count, DeckVariant, DuplicateRule, Role};
+use engine::{roles_for_player_count, DeckVariant, DuplicateRule, ExchangeRule, PassRule, Role};
 use rand::rngs::Xoshiro256PlusPlus;
 use rand::{RngExt, SeedableRng};
 
@@ -21,6 +21,8 @@ pub struct TableSpec {
     pub player_count: u8,
     pub deck_variant: DeckVariant,
     pub duplicate_rule: DuplicateRule,
+    pub pass_rule: PassRule,
+    pub exchange_rule: ExchangeRule,
     pub rounds: usize,
 }
 
@@ -115,6 +117,8 @@ pub fn evaluate(
                 duplicate_rule: table.duplicate_rule,
                 rounds: table.rounds,
                 seed,
+                pass_rule: table.pass_rule,
+                exchange_rule: table.exchange_rule,
             },
             &strategies,
         );
@@ -157,6 +161,8 @@ mod tests {
         deck_variant: DeckVariant::Single,
         duplicate_rule: DuplicateRule::FirstDealtWins,
         rounds: 4,
+        pass_rule: PassRule::Final,
+        exchange_rule: ExchangeRule::Forced,
     };
 
     fn seeds(count: u64) -> Vec<u64> {

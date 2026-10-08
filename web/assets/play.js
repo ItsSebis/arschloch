@@ -58,7 +58,7 @@ function setStatus(ok) {
 }
 
 // -------------------------------------------------------------------- setup
-const DEFAULT_OPPONENTS = ["model:champion-v1", "endgame-denial", "adaptive:reading,tempo,bully", "lowest-legal", "card-counter"];
+const DEFAULT_OPPONENTS = ["model:champion-v2", "endgame-denial", "adaptive:reading,tempo,bully", "lowest-legal", "card-counter"];
 
 function optionsFor(selectedId) {
   const group = (kind, title) => {
@@ -89,6 +89,8 @@ function readSetup() {
     players: state.players,
     deck: $("deck").value,
     duplicate_rule: $("rule").value,
+    pass_rule: $("passrule").value,
+    exchange_rule: $("exchangerule").value,
     rounds: Number($("rounds").value),
     ...(seat === "" ? {} : { human_seat: Number(seat) }),
     opponents: [...document.querySelectorAll("[data-opponent]")].map((s) => s.value),
@@ -278,13 +280,14 @@ function renderTable() {
     const size = display.handSizes[i];
     const place = display.places[i];
     const turn = !state.animating && view.to_move === i && view.phase === "playing";
+    const out = display.passed[i] && display.passRule === "final";
     const backs = Array.from({ length: Math.min(size, 26) }, () => '<span class="back"></span>').join("");
-    return `<div class="seat ${turn ? "turn" : ""} ${place ? "out" : ""}">
+    return `<div class="seat ${turn ? "turn" : ""} ${place || out ? "out" : ""}">
       ${place ? `<span class="place">${place}</span>` : ""}
       <div class="name">${esc(seat.name)}${seat.is_human ? " (you)" : ""}</div>
       <div class="role">${seat.role ? `${esc(roleName(seat.role))} · ` : ""}${size} card${size === 1 ? "" : "s"}</div>
       <div class="backs">${seat.is_human ? "" : backs}</div>
-      <div class="act">${esc(display.actions[i] || (display.leader === i && !display.table ? "leads" : ""))}</div>
+      <div class="act">${esc(display.actions[i] || (display.leader === i && !display.table ? "leads" : ""))}${display.passed[i] && display.passRule === "final" ? ' <span class="muted">· out of this trick</span>' : ""}</div>
     </div>`;
   }).join("");
   const table = display.table;
@@ -446,6 +449,14 @@ function onAdviceClick(event) {
 }
 
 // ------------------------------------------------------------------ records
+// Which older rules a recorded game was played under, empty for the current ones.
+function rulesNote(entry) {
+  const old = [];
+  if (entry.pass_rule === "free") old.push("free passing");
+  if (entry.exchange_rule === "free") old.push("free exchange");
+  return old.length ? ` <span class="muted">(${old.join(", ")})</span>` : "";
+}
+
 async function loadRecords() {
   const box = $("records");
   try {
@@ -455,12 +466,12 @@ async function loadRecords() {
       return;
     }
     const bar = (score) => `<div class="bar"><i style="left:${(Math.min(barFraction(score), 0.5) * 100).toFixed(0)}%;width:${(Math.abs(barFraction(score) - 0.5) * 100).toFixed(0)}%;${score < 0 ? "background:var(--neg)" : "background:var(--pos)"}"></i></div>`;
-    const opp = data.by_opponent.map((o) => `<tr><td>${esc(o.opponent)}</td><td>${o.games}</td><td>${formatScore(o.mean_score)}</td><td>${bar(o.mean_score)}</td></tr>`).join("");
-    const tables = data.by_table.map((t) => `<tr><td>${t.players}</td><td>${t.opponents.map(esc).join(", ")}</td><td>${t.games}</td><td>${formatScore(t.mean_score)}</td><td>${(t.president_rate * 100).toFixed(0)}%</td><td>${(t.last_rate * 100).toFixed(0)}%</td></tr>`).join("");
+    const opp = data.by_opponent.map((o) => `<tr><td>${esc(o.opponent)}${rulesNote(o)}</td><td>${o.games}</td><td>${formatScore(o.mean_score)}</td><td>${bar(o.mean_score)}</td></tr>`).join("");
+    const tables = data.by_table.map((t) => `<tr><td>${t.players}${rulesNote(t)}</td><td>${t.opponents.map(esc).join(", ")}</td><td>${t.games}</td><td>${formatScore(t.mean_score)}</td><td>${(t.president_rate * 100).toFixed(0)}%</td><td>${(t.last_rate * 100).toFixed(0)}%</td></tr>`).join("");
     const recent = data.recent.map((r) => `<tr><td>${new Date(r.finished_unix * 1000).toLocaleString()}</td><td>${r.player_count}p vs ${r.opponents.map(esc).join(", ")}</td><td>${formatScore(r.score)}</td></tr>`).join("");
     box.innerHTML = `<h2>Your record</h2>
       ${data.write_error ? `<p class="bad">${esc(data.write_error)} — new games are not being saved.</p>` : ""}
-      <p class="muted">${data.total_games} finished game${data.total_games === 1 ? "" : "s"}. Score: +1 = always President, 0 = even, −1 = always last. For reference the built-in champion scores about +0.6 against the hand-written strategies (docs/baselines/neat-v1).</p>
+      <p class="muted">${data.total_games} finished game${data.total_games === 1 ? "" : "s"}. Score: +1 = always President, 0 = even, −1 = always last. For reference the built-in champion scores about +0.6 against the hand-written strategies (docs/baselines/neat-v2).</p>
       <h3>By opponent</h3><table class="t"><thead><tr><th>Opponent</th><th>Games</th><th>Mean score</th><th></th></tr></thead><tbody>${opp}</tbody></table>
       <h3>By table</h3><table class="t"><thead><tr><th>Players</th><th>Opponents</th><th>Games</th><th>Mean</th><th>President</th><th>Last</th></tr></thead><tbody>${tables}</tbody></table>
       <h3>Recent games</h3><table class="t"><tbody>${recent}</tbody></table>`;
@@ -481,6 +492,8 @@ async function init() {
   state.setup = recall("arschloch.setup");
   if (state.setup?.rounds) $("rounds").value = state.setup.rounds;
   if (state.setup?.deck) $("deck").value = state.setup.deck;
+  if (state.setup?.pass_rule) $("passrule").value = state.setup.pass_rule;
+  if (state.setup?.exchange_rule) $("exchangerule").value = state.setup.exchange_rule;
   try {
     state.catalog = (await api("GET", "/api/catalog")).opponents;
     setStatus(true);

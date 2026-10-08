@@ -69,26 +69,24 @@ establishes roles for the exchange before round 2.
 ## Card Exchange ("Drücken")
 
 Before every round after the first, roles exchange cards. The
-higher-ranked role hands back their **lowest** N cards, chosen naively
-(no strategic input on that side). The lower-ranked role, however, hands
-over any N cards of its own choosing: which cards it gives up is decided
-by its `Strategy` (see `docs/ARCHITECTURE.md` for which strategies do
-what — e.g. `HoldBackPairs` will keep a pair of Aces intact and instead
-give up an isolated 9 and Jack). The exchange itself is still mandatory
-— there is no discretion about *whether* to exchange, only about
-*which* specific cards the lower-ranked role gives up, which is now
-strategy-driven.
+higher-ranked role hands back its **lowest** N cards, and the lower-ranked
+role hands over its **highest** N cards. Neither side has a choice: the
+exchange is mandatory and the cards are fixed by rank (then suit, then the
+duplicate-tiebreak rule, see "Card Ranking" above, which is a total order, so
+"the N highest" is always well defined).
 
-This was originally planned as merely a tie-break among the "highest N"
-cards on the giving side, but that framing turned out not to make sense:
-under `Card::compare`'s total order (rank, then suit, then a
-deal-index tiebreak — see "Card Ranking" above), no two cards in a hand
-are ever truly equal, so a literal "break ties among the Nth-highest
-cards" rule would have nothing to ever act on. The real design goal —
-letting a strategy avoid splitting up a useful same-rank reserve when
-it's forced to exchange — required giving strategies full freedom over
-which cards to give up, not just a tie-break among equally-ranked
-candidates.
+**Exchange rule (modifier).** The simulator also implements the behaviour it had
+until Phase 15, `--exchange-rule free`: the lower-ranked role hands over *any* N
+cards of its own choosing, decided by its `Strategy` (for example
+`HoldBackPairs` keeps a pair of Aces together and gives up an isolated 9 and
+Jack instead, `RandomLegal` gives random cards, and a human at the `cli play`
+table picks the cards). Strategies that simply give their highest cards
+(`LowestLegal`, `GreedyHighest`, `EndgameDenial`, `CardCounter`, `Adaptive`, the
+NEAT players) play identical games under both rules; only `RandomLegal` and
+`HoldBackPairs` differ. `free` is kept so earlier results
+(`docs/baselines/pre-neat`, `neat-v1`, `pass-final`, `neat-v2`) can be reproduced
+and as a game variant; the rules of the game, and the default everywhere, are
+`--exchange-rule forced`.
 
 **Decision — exchange counts scale with table size** (outer role-pair
 exchanges the most, decreasing by 1 per pair moving inward, a lone
@@ -115,7 +113,11 @@ unpaired middle role exchanges nothing):
 2. **Follow.** Going around the table, each other player either:
    - **Passes** (always legal, even if they hold a card/combo that could
      beat the current play — this is an intentional strategic option the
-     simulator needs to model, not just a fallback when unable to beat), or
+     simulator needs to model, not just a fallback when unable to beat).
+     **A pass is final for the trick:** a player who has passed is out of
+     this trick and is skipped for the rest of it; they cannot play when
+     the turn comes round to them again, and they take part again in the
+     next trick (see "Pass rule" below), or
    - Plays a combo of the **same size**, with **strictly higher** rank
      (suit, then the duplicate-tiebreak rule, break ties within equal
      rank).
@@ -123,15 +125,31 @@ unpaired middle role exchanges nothing):
      card (by the same rank/suit/duplicate-tiebreak order used everywhere
      else) represents the whole combo when comparing it against another
      combo of the same size.
-3. **Trick ends** when every other active player has passed in sequence.
-   The last player to play a combo wins the trick, collects nothing (cards
-   are discarded, not collected — unlike Whist-style games), and leads the
-   next trick.
+3. **Trick ends** when every other active player has passed, that is, only
+   the player who made the last play is still in the trick. That player wins
+   the trick, collects nothing (cards are discarded, not collected — unlike
+   Whist-style games), and leads the next trick (if they emptied their hand
+   with that play, the next active seat in turn order leads).
 4. A player who empties their hand is removed from further trick-leading
    for the round and recorded in finishing order. Passing is not available
    to a player with no cards — they're simply skipped.
 5. The round ends when only one player still holds cards; that player is
    ranked last (Arschloch, or the table's lowest role).
+
+### Pass rule
+
+Example, four seats, seat 0 leads: seat 0 plays a 4, seat 1 passes (out of
+the trick), seat 2 plays a 6, seat 3 passes (out), seat 0 plays a 9. The turn
+now goes to seat 2 only; seats 1 and 3 are skipped. If seat 2 passes, seat 0
+is the last one in the trick, wins it and leads the next. A passing seat is
+only out of *that trick*: it plays again in the following trick.
+
+The simulator also implements the older behaviour, `--pass-rule free`, where
+a pass merely declined the current play and the player could still play when
+the turn came round again after someone else had played. It was how the
+simulator behaved until Phase 14 and is kept so earlier measurements
+(`docs/baselines/pre-neat`, `docs/baselines/neat-v1`) can be reproduced. The
+rules of the game, and the default everywhere, are `--pass-rule final`.
 
 ### First lead of a trick / round
 

@@ -1,4 +1,4 @@
-3 players, Single deck, FirstDealtWins, 2000 matches x 10 rounds, seed 1000, 4 threads
+3 players, Single deck, FirstDealtWins, pass rule free, exchange rule free, 2000 matches x 10 rounds, seed 1000, 4 threads
 
 Strategy       President       Dorftrottel     Arschloch       
 HoldBackPairs  87              1807            18106           

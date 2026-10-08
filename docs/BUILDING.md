@@ -158,6 +158,16 @@ cargo run -p cli -- \
   seatings every `--strategy`-flag-count matches, so pick `--matches` at
   least `2 * (number of --strategy flags)` if you want this number
   populated.
+- `--exchange-rule` is `forced` (default: the lower role of an exchange pair must
+  hand over its highest cards, the rules of the game) or `free` (the lower role
+  or its strategy chooses which cards to give; the behaviour before Phase 15, for
+  reproducing older results and as a variant). It only changes games with
+  `random-legal` or `hold-back-pairs`.
+- `--pass-rule` is `final` (default: a player who passes is out of the
+  trick until it ends, the rules of the game) or `free` (the older behaviour,
+  where a passed player may still play later in the same trick; use it to
+  reproduce results measured before Phase 14). The summary line and the
+  `evaluate --json` output name the rule.
 
 ## Cross-compiling a Windows executable (from Linux or macOS)
 

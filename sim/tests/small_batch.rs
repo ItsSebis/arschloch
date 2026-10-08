@@ -28,6 +28,8 @@ fn a_small_batch_produces_well_shaped_results() {
             duplicate_rule: DuplicateRule::FirstDealtWins,
             rounds: 5,
             seed,
+            pass_rule: engine::PassRule::default(),
+            exchange_rule: engine::ExchangeRule::default(),
         })
         .collect();
 
@@ -68,10 +70,94 @@ fn identical_seeds_produce_identical_results() {
         duplicate_rule: DuplicateRule::FirstDealtWins,
         rounds: 3,
         seed: 42,
+        pass_rule: engine::PassRule::default(),
+        exchange_rule: engine::ExchangeRule::default(),
     };
     let first = run_match(&config, &strategies);
     let second = run_match(&config, &strategies);
     assert_eq!(first.role_history, second.role_history);
     assert_eq!(first.trick_count, second.trick_count);
     assert_eq!(first.pass_counts, second.pass_counts);
+}
+
+/// The two pass rules play different games (a passed seat is out of the
+/// trick under `final`), each deterministically.
+#[test]
+fn the_pass_rules_differ_and_each_is_deterministic() {
+    use engine::PassRule;
+    let strategies: Vec<std::sync::Arc<dyn sim::Strategy>> = (0..4)
+        .map(|_| std::sync::Arc::new(sim::HoldBackPairs) as std::sync::Arc<dyn sim::Strategy>)
+        .collect();
+    let configs = |rule| -> Vec<sim::MatchConfig> {
+        (0..40)
+            .map(|seed| sim::MatchConfig {
+                player_count: 4,
+                deck_variant: engine::DeckVariant::Single,
+                duplicate_rule: engine::DuplicateRule::FirstDealtWins,
+                rounds: 6,
+                seed,
+                pass_rule: rule,
+                exchange_rule: engine::ExchangeRule::default(),
+            })
+            .collect()
+    };
+    let run = |rule| {
+        sim::run_batch(&configs(rule), &strategies)
+            .iter()
+            .map(|r| (r.role_history.clone(), r.trick_count))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(run(PassRule::Free), run(PassRule::Free));
+    assert_eq!(run(PassRule::Final), run(PassRule::Final));
+    assert_ne!(run(PassRule::Free), run(PassRule::Final));
+}
+
+/// The forced exchange only changes what strategies that give something other
+/// than their highest cards would have done: the others play identical matches
+/// under both rules.
+#[test]
+fn the_forced_exchange_differs_only_for_strategies_that_choose_other_cards() {
+    use engine::ExchangeRule;
+    let run = |strategy: std::sync::Arc<dyn sim::Strategy>, rule: ExchangeRule| {
+        let strategies: Vec<std::sync::Arc<dyn sim::Strategy>> =
+            (0..4).map(|_| strategy.clone()).collect();
+        let configs: Vec<sim::MatchConfig> = (0..60)
+            .map(|seed| sim::MatchConfig {
+                player_count: 4,
+                deck_variant: engine::DeckVariant::Single,
+                duplicate_rule: engine::DuplicateRule::FirstDealtWins,
+                rounds: 6,
+                seed,
+                pass_rule: engine::PassRule::Final,
+                exchange_rule: rule,
+            })
+            .collect();
+        sim::run_batch(&configs, &strategies)
+            .iter()
+            .map(|r| r.role_history.clone())
+            .collect::<Vec<_>>()
+    };
+    for same in [
+        std::sync::Arc::new(sim::LowestLegal) as std::sync::Arc<dyn sim::Strategy>,
+        std::sync::Arc::new(sim::GreedyHighest),
+        std::sync::Arc::new(sim::EndgameDenial),
+        std::sync::Arc::new(sim::CardCounter),
+    ] {
+        assert_eq!(
+            run(same.clone(), ExchangeRule::Free),
+            run(same.clone(), ExchangeRule::Forced),
+            "{}",
+            same.name()
+        );
+    }
+    let hold = std::sync::Arc::new(sim::HoldBackPairs) as std::sync::Arc<dyn sim::Strategy>;
+    assert_ne!(
+        run(hold.clone(), ExchangeRule::Free),
+        run(hold, ExchangeRule::Forced)
+    );
+    let random = std::sync::Arc::new(sim::RandomLegal) as std::sync::Arc<dyn sim::Strategy>;
+    assert_ne!(
+        run(random.clone(), ExchangeRule::Free),
+        run(random, ExchangeRule::Forced)
+    );
 }

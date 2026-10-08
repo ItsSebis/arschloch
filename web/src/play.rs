@@ -16,7 +16,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde_json::{json, Value};
 use sim::session::{AiSeat, Phase, Session, SessionConfig, SessionError};
-use sim::{DeckVariant, DuplicateRule, NeatStrategy, Strategy};
+use sim::{DeckVariant, DuplicateRule, ExchangeRule, NeatStrategy, PassRule, Strategy};
 
 use crate::records::{Record, RecordStore};
 use crate::routes::Response;
@@ -73,6 +73,8 @@ struct Setup {
     players: u8,
     deck: DeckVariant,
     rule: DuplicateRule,
+    pass_rule: PassRule,
+    exchange_rule: ExchangeRule,
     rounds: usize,
     entries: Vec<CatalogEntry>,
     human_seat: u8,
@@ -84,6 +86,8 @@ struct Game {
     opponents: Vec<String>,
     deck: String,
     duplicate_rule: String,
+    pass_rule: String,
+    exchange_rule: String,
     recorded: bool,
     last_used: u64,
 }
@@ -218,6 +222,22 @@ impl PlayApp {
                 ))
             }
         };
+        let pass_rule = match &request["pass_rule"] {
+            Value::Null => PassRule::default(),
+            Value::String(text) => match text.parse::<PassRule>() {
+                Ok(rule) => rule,
+                Err(message) => return Err(bad(400, &message)),
+            },
+            _ => return Err(bad(400, "pass_rule must be final or free")),
+        };
+        let exchange_rule = match &request["exchange_rule"] {
+            Value::Null => ExchangeRule::default(),
+            Value::String(text) => match text.parse::<ExchangeRule>() {
+                Ok(rule) => rule,
+                Err(message) => return Err(bad(400, &message)),
+            },
+            _ => return Err(bad(400, "exchange_rule must be forced or free")),
+        };
         let rounds = match request["rounds"].as_u64() {
             None => 8,
             Some(r) => match usize::try_from(r)
@@ -252,6 +272,8 @@ impl PlayApp {
             players,
             deck,
             rule,
+            pass_rule,
+            exchange_rule,
             rounds,
             entries,
             human_seat,
@@ -272,6 +294,8 @@ impl PlayApp {
             players,
             deck,
             rule,
+            pass_rule,
+            exchange_rule,
             rounds,
             entries,
             human_seat,
@@ -282,6 +306,8 @@ impl PlayApp {
                 player_count: players,
                 deck_variant: deck,
                 duplicate_rule: rule,
+                pass_rule,
+                exchange_rule,
                 rounds,
                 seed,
                 human_seat,
@@ -341,6 +367,8 @@ impl PlayApp {
                     "last_dealt_wins"
                 }
                 .into(),
+                pass_rule: pass_rule.to_string(),
+                exchange_rule: exchange_rule.to_string(),
                 recorded: false,
                 last_used,
             },
@@ -434,6 +462,8 @@ impl PlayApp {
             player_count: view.player_count,
             deck: game.deck.clone(),
             duplicate_rule: game.duplicate_rule.clone(),
+            pass_rule: game.pass_rule.clone(),
+            exchange_rule: game.exchange_rule.clone(),
             rounds: view.rounds,
             opponents: game.opponents.clone(),
             roles: result.roles,
@@ -851,6 +881,62 @@ mod tests {
         );
         assert_eq!(status, 200, "{reply}");
         assert_eq!(percent_decode("a%3Ab%2Fc+d%zz%4"), "a:b/c d%zz%4");
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn the_pass_rule_is_chosen_per_game_and_defaults_to_the_rules_of_the_game() {
+        let (app, path) = app("passrule");
+        let make = |extra: Value| {
+            let mut body = json!({"players": 3, "opponents": ["lowest-legal", "lowest-legal"], "human_seat": 0});
+            body.as_object_mut()
+                .unwrap()
+                .extend(extra.as_object().unwrap().clone());
+            call(&app, "POST", "/api/games", &body.to_string())
+        };
+        assert_eq!(make(json!({})).1["view"]["pass_rule"], "final");
+        let (status, free) = make(json!({"pass_rule": "free"}));
+        assert_eq!(status, 200);
+        assert_eq!(free["view"]["pass_rule"], "free");
+        assert_eq!(make(json!({"pass_rule": "sometimes"})).0, 400);
+        assert_eq!(make(json!({"pass_rule": 5})).0, 400);
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn the_exchange_rule_is_chosen_per_game_and_forced_means_the_human_never_chooses() {
+        let (app, path) = app("exchangerule");
+        let make = |extra: Value| {
+            let mut body = json!({"players": 4, "opponents": ["lowest-legal", "lowest-legal", "lowest-legal"], "human_seat": 0, "rounds": 3});
+            body.as_object_mut()
+                .unwrap()
+                .extend(extra.as_object().unwrap().clone());
+            call(&app, "POST", "/api/games", &body.to_string())
+        };
+        assert_eq!(make(json!({})).1["view"]["exchange_rule"], "forced");
+        assert_eq!(
+            make(json!({"exchange_rule": "free"})).1["view"]["exchange_rule"],
+            "free"
+        );
+        assert_eq!(make(json!({"exchange_rule": "sometimes"})).0, 400);
+        assert_eq!(make(json!({"exchange_rule": 5})).0, 400);
+        // A whole forced match never reaches the exchange phase.
+        let (id, mut view) = new_game(
+            &app,
+            4,
+            3,
+            &["lowest-legal", "lowest-legal", "lowest-legal"],
+        );
+        let mut guard = 0;
+        while view["phase"] != "match_over" {
+            guard += 1;
+            assert!(guard < 5000);
+            assert_ne!(
+                view["phase"], "exchange",
+                "a forced exchange has nothing to choose"
+            );
+            view = step(&app, &id, &view);
+        }
         std::fs::remove_file(path).ok();
     }
 

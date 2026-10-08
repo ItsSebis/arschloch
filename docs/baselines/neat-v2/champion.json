@@ -1,0 +1,343 @@
+{
+  "format_version": 1,
+  "feature_set_version": 1,
+  "feature_names": [
+    "is_pass",
+    "combo_size",
+    "top_strength",
+    "hand_below_top",
+    "uses_top_group",
+    "splits_group",
+    "empties_hand",
+    "hand_left_after",
+    "is_leading",
+    "table_combo_size",
+    "hand_size",
+    "grouped_fraction",
+    "singleton_fraction",
+    "active_opponents",
+    "min_opponent_hand",
+    "mean_opponent_hand",
+    "opponent_close",
+    "unseen_outranking",
+    "unseen_beaters",
+    "opponents_locked_out"
+  ],
+  "genome": {
+    "num_inputs": 20,
+    "nodes": [
+      {
+        "id": 0,
+        "kind": "Input"
+      },
+      {
+        "id": 1,
+        "kind": "Input"
+      },
+      {
+        "id": 2,
+        "kind": "Input"
+      },
+      {
+        "id": 3,
+        "kind": "Input"
+      },
+      {
+        "id": 4,
+        "kind": "Input"
+      },
+      {
+        "id": 5,
+        "kind": "Input"
+      },
+      {
+        "id": 6,
+        "kind": "Input"
+      },
+      {
+        "id": 7,
+        "kind": "Input"
+      },
+      {
+        "id": 8,
+        "kind": "Input"
+      },
+      {
+        "id": 9,
+        "kind": "Input"
+      },
+      {
+        "id": 10,
+        "kind": "Input"
+      },
+      {
+        "id": 11,
+        "kind": "Input"
+      },
+      {
+        "id": 12,
+        "kind": "Input"
+      },
+      {
+        "id": 13,
+        "kind": "Input"
+      },
+      {
+        "id": 14,
+        "kind": "Input"
+      },
+      {
+        "id": 15,
+        "kind": "Input"
+      },
+      {
+        "id": 16,
+        "kind": "Input"
+      },
+      {
+        "id": 17,
+        "kind": "Input"
+      },
+      {
+        "id": 18,
+        "kind": "Input"
+      },
+      {
+        "id": 19,
+        "kind": "Input"
+      },
+      {
+        "id": 20,
+        "kind": "Bias"
+      },
+      {
+        "id": 21,
+        "kind": "Output"
+      },
+      {
+        "id": 22,
+        "kind": "Hidden"
+      },
+      {
+        "id": 33,
+        "kind": "Hidden"
+      },
+      {
+        "id": 39,
+        "kind": "Hidden"
+      }
+    ],
+    "connections": [
+      {
+        "innovation": 0,
+        "from": 0,
+        "to": 21,
+        "weight": -1.9397669297882953,
+        "enabled": true
+      },
+      {
+        "innovation": 1,
+        "from": 1,
+        "to": 21,
+        "weight": -0.5236983567334281,
+        "enabled": true
+      },
+      {
+        "innovation": 2,
+        "from": 2,
+        "to": 21,
+        "weight": -1.1074013835013397,
+        "enabled": true
+      },
+      {
+        "innovation": 3,
+        "from": 3,
+        "to": 21,
+        "weight": -1.2162068219838842,
+        "enabled": true
+      },
+      {
+        "innovation": 4,
+        "from": 4,
+        "to": 21,
+        "weight": -0.6081555541967864,
+        "enabled": false
+      },
+      {
+        "innovation": 5,
+        "from": 5,
+        "to": 21,
+        "weight": -0.437275557793552,
+        "enabled": true
+      },
+      {
+        "innovation": 6,
+        "from": 6,
+        "to": 21,
+        "weight": 0.05703706549009979,
+        "enabled": false
+      },
+      {
+        "innovation": 7,
+        "from": 7,
+        "to": 21,
+        "weight": -0.5366548571805014,
+        "enabled": true
+      },
+      {
+        "innovation": 8,
+        "from": 8,
+        "to": 21,
+        "weight": 0.6637117063087319,
+        "enabled": true
+      },
+      {
+        "innovation": 9,
+        "from": 9,
+        "to": 21,
+        "weight": -0.5610935831034735,
+        "enabled": true
+      },
+      {
+        "innovation": 10,
+        "from": 10,
+        "to": 21,
+        "weight": 0.7417931121639758,
+        "enabled": false
+      },
+      {
+        "innovation": 11,
+        "from": 11,
+        "to": 21,
+        "weight": 0.6481432088119417,
+        "enabled": true
+      },
+      {
+        "innovation": 12,
+        "from": 12,
+        "to": 21,
+        "weight": -1.0829905127484876,
+        "enabled": true
+      },
+      {
+        "innovation": 13,
+        "from": 13,
+        "to": 21,
+        "weight": -0.45067013675183176,
+        "enabled": true
+      },
+      {
+        "innovation": 14,
+        "from": 14,
+        "to": 21,
+        "weight": 0.98276689750173,
+        "enabled": true
+      },
+      {
+        "innovation": 15,
+        "from": 15,
+        "to": 21,
+        "weight": 0.34797035557099487,
+        "enabled": true
+      },
+      {
+        "innovation": 16,
+        "from": 16,
+        "to": 21,
+        "weight": -0.11342863114911639,
+        "enabled": true
+      },
+      {
+        "innovation": 17,
+        "from": 17,
+        "to": 21,
+        "weight": 0.39121129405187616,
+        "enabled": false
+      },
+      {
+        "innovation": 18,
+        "from": 18,
+        "to": 21,
+        "weight": -1.2513024753143545,
+        "enabled": true
+      },
+      {
+        "innovation": 19,
+        "from": 19,
+        "to": 21,
+        "weight": 0.5763393986072227,
+        "enabled": false
+      },
+      {
+        "innovation": 20,
+        "from": 20,
+        "to": 21,
+        "weight": -2.417929581033712,
+        "enabled": true
+      },
+      {
+        "innovation": 21,
+        "from": 6,
+        "to": 22,
+        "weight": 0.1123991845355089,
+        "enabled": false
+      },
+      {
+        "innovation": 22,
+        "from": 22,
+        "to": 21,
+        "weight": -0.5233379712290199,
+        "enabled": true
+      },
+      {
+        "innovation": 51,
+        "from": 10,
+        "to": 33,
+        "weight": 0.38532505024456565,
+        "enabled": true
+      },
+      {
+        "innovation": 52,
+        "from": 33,
+        "to": 21,
+        "weight": -0.3516749081540492,
+        "enabled": true
+      },
+      {
+        "innovation": 78,
+        "from": 19,
+        "to": 39,
+        "weight": 0.96412337112792,
+        "enabled": true
+      },
+      {
+        "innovation": 79,
+        "from": 39,
+        "to": 21,
+        "weight": 0.8057146168334701,
+        "enabled": true
+      },
+      {
+        "innovation": 216,
+        "from": 20,
+        "to": 33,
+        "weight": -0.3448579914614608,
+        "enabled": true
+      },
+      {
+        "innovation": 227,
+        "from": 14,
+        "to": 33,
+        "weight": 0.9703749749710748,
+        "enabled": true
+      },
+      {
+        "innovation": 245,
+        "from": 7,
+        "to": 33,
+        "weight": 0.8534833214142029,
+        "enabled": true
+      }
+    ]
+  }
+}

@@ -161,7 +161,7 @@ function renderSummary() {
   $("progress-bar").style.width = total && last ? `${Math.min(100, ((last.generation + 1) / total) * 100)}%` : "0";
   if (config) {
     const names = (state.runStart.opponents ?? []).join(", ");
-    $("run-info").textContent = `${config.player_count} players · ${config.deck.toLowerCase()} deck · population ${config.neat.population_size} · ${config.matches_per_genome} matches × ${config.rounds_per_match} rounds per genome · seed ${config.seed} · opponents: ${names}`;
+    $("run-info").textContent = `${config.player_count} players · ${config.deck.toLowerCase()} deck · pass rule ${config.pass_rule ?? "free"} · exchange ${config.exchange_rule ?? "free"} · population ${config.neat.population_size} · ${config.matches_per_genome} matches × ${config.rounds_per_match} rounds per genome · seed ${config.seed} · opponents: ${names}`;
   }
 }
 

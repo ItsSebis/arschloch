@@ -100,7 +100,7 @@ fn a_match_can_be_played_through_the_real_server_and_is_recorded() {
         .map(|o| o["id"].as_str().unwrap())
         .collect();
     assert!(
-        ids.contains(&"model:champion-v1") && ids.contains(&"lowest-legal"),
+        ids.contains(&"model:champion-v2") && ids.contains(&"lowest-legal"),
         "{ids:?}"
     );
 
@@ -109,7 +109,7 @@ fn a_match_can_be_played_through_the_real_server_and_is_recorded() {
         "POST",
         "/api/games",
         Some(
-            &json!({"players": 3, "rounds": 2, "opponents": ["model:champion-v1", "lowest-legal"], "human_seat": 1, "seed": 3}),
+            &json!({"players": 3, "rounds": 2, "opponents": ["model:champion-v2", "lowest-legal"], "human_seat": 1, "seed": 3}),
         ),
     );
     assert_eq!(status, 200, "{game}");

@@ -29,6 +29,8 @@ pub fn fixture_run_dir() -> PathBuf {
             player_count: 4,
             deck: DeckChoice::Single,
             duplicate_rule: DuplicateChoice::FirstDealtWins,
+            pass_rule: sim::PassRule::default(),
+            exchange_rule: sim::ExchangeRule::default(),
             rounds_per_match: 3,
             matches_per_genome: 4,
             reeval_matches: 6,

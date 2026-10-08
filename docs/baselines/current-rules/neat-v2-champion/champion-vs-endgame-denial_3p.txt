@@ -1,0 +1,20 @@
+3 players, Single deck, FirstDealtWins, pass rule final, exchange rule forced, 2000 matches x 10 rounds, seed 1000, 4 threads
+
+Strategy        President       Dorftrottel     Arschloch       
+EndgameDenial   7995            13012           18993           
+Neat(champion)  12005           6988            1007            
+
+Voluntary pass rate: 15.94%
+
+Voluntary pass rate by strategy:
+  EndgameDenial   0.00%
+  Neat(champion)  71.44%
+
+President retention (stayed President the very next round):
+  EndgameDenial   46.37% (3335/7192)
+  Neat(champion)  70.51% (7621/10808)
+
+First-round placement variance (lower = more skill-driven, higher = more luck-driven):
+  EndgameDenial   0.61
+  Neat(champion)  0.38
+

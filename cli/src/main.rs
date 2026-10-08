@@ -56,6 +56,8 @@ fn main() -> anyhow::Result<()> {
             seed: args
                 .seed
                 .wrapping_add(u64::try_from(i).expect("match index fits in u64")),
+            pass_rule: args.pass_rule,
+            exchange_rule: args.exchange_rule,
         })
         .collect();
 

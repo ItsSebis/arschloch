@@ -1,7 +1,7 @@
 //! Configuration for one simulated match (multiple rounds with role
 //! carry-over). See `crate::match_runner::run_match`.
 
-use engine::{DeckVariant, DuplicateRule};
+use engine::{DeckVariant, DuplicateRule, ExchangeRule, PassRule};
 
 /// One match's setup: how many seats, which deck/duplicate rules, how
 /// many rounds to play, and the seed its shuffles derive from. Two
@@ -15,4 +15,9 @@ pub struct MatchConfig {
     pub duplicate_rule: DuplicateRule,
     pub rounds: usize,
     pub seed: u64,
+    /// What a pass means for the rest of the trick.
+    pub pass_rule: PassRule,
+    /// Whether the lower role of an exchange pair must give its highest
+    /// cards or may choose.
+    pub exchange_rule: ExchangeRule,
 }

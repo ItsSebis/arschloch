@@ -1,0 +1,13 @@
+3 players, Single deck, FirstDealtWins, pass rule final, exchange rule free, 600 matches x 8 rounds per cell, seed 99
+score: +1 always President .. -1 always last; 0 is even
+
+opponent                                           champion
+LowestLegal                                   +0.390 ±0.013
+EndgameDenial                                 +0.481 ±0.012
+Adaptive(reading,tempo,bully)                 +0.434 ±0.013
+Adaptive(counting,reading)                    +0.480 ±0.012
+Adaptive(reading,deception=0.2,tempo,bully)   +0.376 ±0.012
+HoldBackPairs                                 +0.914 ±0.005
+GreedyHighest                                 +0.949 ±0.003
+RandomLegal                                   +0.956 ±0.003
+mixed (all opponents)                         +0.553 ±0.012

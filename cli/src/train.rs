@@ -89,6 +89,8 @@ fn new_config(args: &TrainArgs, specs: Vec<String>) -> TrainConfig {
             DuplicateRuleArg::FirstDealtWins => DuplicateChoice::FirstDealtWins,
             DuplicateRuleArg::LastDealtWins => DuplicateChoice::LastDealtWins,
         },
+        pass_rule: args.pass_rule,
+        exchange_rule: args.exchange_rule,
         rounds_per_match: args.rounds,
         matches_per_genome: args.matches_per_genome,
         reeval_matches: args.reeval_matches,

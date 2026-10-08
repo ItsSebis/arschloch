@@ -42,6 +42,8 @@ fn configs(player_count: u8, deck_variant: DeckVariant, rule: DuplicateRule) -> 
             duplicate_rule: rule,
             rounds: 4,
             seed,
+            pass_rule: engine::PassRule::default(),
+            exchange_rule: engine::ExchangeRule::default(),
         })
         .collect()
 }
@@ -118,6 +120,8 @@ fn random_networks_do_not_just_play_like_random_legal() {
         duplicate_rule: DuplicateRule::FirstDealtWins,
         rounds: 6,
         seed: 3,
+        pass_rule: engine::PassRule::default(),
+        exchange_rule: engine::ExchangeRule::default(),
     };
     let a = sim::run_match(&config, &neat_table);
     let b = sim::run_match(&config, &random_table);

@@ -107,6 +107,8 @@ independent of `--threads`.
 | `--hall-of-fame N` | 0 (off) | frozen past champions join the training opponents (`--hall-interval K`: every K generations). No measured benefit against the default pool; worth trying when the pool includes evolved opponents |
 | `--target-species` | 8 | how many species the speciation steers toward |
 | `--deck-variant`, `--duplicate-rule` | single, first-dealt-wins | table rules |
+| `--exchange-rule` | forced | `forced`: the lower role of an exchange pair must give its highest cards (the rules of the game); `free`: it may choose (the older behaviour). Evolved players give their highest cards either way, so it only changes what the opponents do. Like `--pass-rule` it cannot change on `--resume`; runs written before it existed resume as `free` |
+| `--pass-rule` | final | `final`: a pass ends your part in the trick (the rules of the game); `free`: the old behaviour. Genomes trained under one rule play the other legally but are tuned to their own; runs written before the rule existed resume as `free` (`--resume` cannot change it) |
 | `--seed` | 0 | change it to get an independent run |
 | `--from RUN_DIR` | off | start from the final population of an earlier run instead of a random one (see below); the population size is the earlier run's, so `--population` cannot be given |
 | `--runs N` | 1 | train N independent runs one after another as a set (see below) |

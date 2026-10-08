@@ -1,4 +1,4 @@
-4 players, Single deck, FirstDealtWins, 2000 matches x 10 rounds, seed 1000, 4 threads
+4 players, Single deck, FirstDealtWins, pass rule free, exchange rule free, 2000 matches x 10 rounds, seed 1000, 4 threads
 
 Strategy        President       Vize            ViceArschloch   Arschloch       
 LowestLegal     8698            13321           18412           19569           

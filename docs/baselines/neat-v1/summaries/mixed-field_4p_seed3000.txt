@@ -1,4 +1,4 @@
-4 players, Single deck, FirstDealtWins, 2000 matches x 10 rounds, seed 3000, 4 threads
+4 players, Single deck, FirstDealtWins, pass rule free, exchange rule free, 2000 matches x 10 rounds, seed 3000, 4 threads
 
 Strategy                       President       Vize            ViceArschloch   Arschloch       
 Adaptive(reading,tempo,bully)  3734            5300            5660            5306            

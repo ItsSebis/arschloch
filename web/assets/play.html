@@ -26,13 +26,23 @@
             <option value="first_dealt_wins">first dealt wins</option><option value="last_dealt_wins">last dealt wins</option>
           </select>
         </div>
+        <div class="field"><label class="label" for="passrule">Passing</label>
+          <select id="passrule" title="What a pass means for the rest of the trick">
+            <option value="final">a pass ends your part in the trick (the rules)</option>
+            <option value="free">you may still play later in the trick (old behaviour)</option>
+          </select></div>
+        <div class="field"><label class="label" for="exchangerule">Exchange</label>
+          <select id="exchangerule" title="Which cards the lower role gives in the exchange">
+            <option value="forced">the lower role gives its highest cards (the rules)</option>
+            <option value="free">the lower role chooses what to give (old behaviour)</option>
+          </select></div>
         <div class="field"><label class="label" for="rounds">Rounds</label><input id="rounds" type="number" min="1" max="50" value="8"></div>
         <div class="field"><label class="label" for="seat">Your seat</label><select id="seat"></select></div>
         <div class="field"><span class="label">Opponents</span><div id="opponents" class="opponents"></div></div>
         <div class="field"><button id="start" type="submit" class="primary">Start game</button>
           <button id="continue" type="button" hidden>Continue last game</button>
           <span id="setup-error" class="bad"></span></div>
-        <p class="muted">Models are trained players; the strongest built-in one is Neat(champion-v1). Your finished games are recorded under “Your record”.</p>
+        <p class="muted">Models are trained players; the strongest built-in one is Neat(champion-v2). Your finished games are recorded under “Your record”.</p>
       </form>
       <div id="game" hidden>
         <div class="card topbar">

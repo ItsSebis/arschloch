@@ -1,0 +1,36 @@
+6 players, Single deck, FirstDealtWins, pass rule final, exchange rule forced, 2000 matches x 10 rounds, seed 1000, 4 threads
+
+Strategy                       President       Vize            Offizier        Dummkopf        ViceArschloch   Arschloch       
+Adaptive(reading,tempo,bully)  6142            4361            3663            2638            1843            1353            
+CardCounter                    5164            5468            4459            2545            1429            935             
+EndgameDenial                  5017            4954            3840            2550            2005            1634            
+GreedyHighest                  144             590             1646            3445            6121            8054            
+HoldBackPairs                  1267            2161            3052            4184            4787            4549            
+LowestLegal                    2266            2466            3340            4638            3815            3475            
+
+Voluntary pass rate: 4.94%
+
+Voluntary pass rate by strategy:
+  Adaptive(reading,tempo,bully)  0.00%
+  CardCounter                    0.00%
+  EndgameDenial                  0.00%
+  GreedyHighest                  0.00%
+  HoldBackPairs                  25.47%
+  LowestLegal                    0.00%
+
+President retention (stayed President the very next round):
+  Adaptive(reading,tempo,bully)  59.96% (3326/5547)
+  CardCounter                    55.39% (2550/4604)
+  EndgameDenial                  54.51% (2437/4471)
+  GreedyHighest                  15.94% (22/138)
+  HoldBackPairs                  28.46% (341/1198)
+  LowestLegal                    50.10% (1023/2042)
+
+First-round placement variance (lower = more skill-driven, higher = more luck-driven):
+  Adaptive(reading,tempo,bully)  2.67
+  CardCounter                    1.91
+  EndgameDenial                  2.57
+  GreedyHighest                  1.50
+  HoldBackPairs                  3.23
+  LowestLegal                    2.40
+

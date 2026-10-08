@@ -193,6 +193,8 @@ pub fn record_decisions(
             duplicate_rule: table.duplicate_rule,
             rounds: table.rounds,
             seed,
+            pass_rule: table.pass_rule,
+            exchange_rule: table.exchange_rule,
         },
         &strategies,
     );
@@ -237,6 +239,8 @@ mod tests {
             deck_variant: DeckVariant::Single,
             duplicate_rule: DuplicateRule::FirstDealtWins,
             rounds: 3,
+            pass_rule: engine::PassRule::default(),
+            exchange_rule: engine::ExchangeRule::default(),
         }
     }
 
