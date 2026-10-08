@@ -5,6 +5,7 @@
 mod args;
 mod evaluate;
 mod output;
+mod play;
 mod summary;
 mod train;
 mod train_args;
@@ -17,12 +18,14 @@ use anyhow::Context;
 use clap::Parser;
 
 fn main() -> anyhow::Result<()> {
-    // `cli train ...` evolves a player and `cli watch ...` shows a run in
-    // the browser; everything else is a simulation run.
+    // `cli train ...` evolves a player, `cli watch ...` shows a run in the
+    // browser and `cli play ...` lets you play in it; everything else is a
+    // simulation run.
     match std::env::args().nth(1).as_deref() {
         Some("train") => return train::run(std::env::args().skip(2)),
         Some("watch") => return watch::run(std::env::args().skip(2)),
         Some("evaluate") => return evaluate::run(std::env::args().skip(2)),
+        Some("play") => return play::run(std::env::args().skip(2)),
         _ => {}
     }
     let args = args::Args::parse();
