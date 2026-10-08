@@ -13,3 +13,7 @@ pub use error::NeatError;
 pub mod innovation;
 
 pub use innovation::InnovationTracker;
+
+pub mod genome;
+
+pub use genome::{ConnectionGene, Genome, NodeGene, NodeKind};
