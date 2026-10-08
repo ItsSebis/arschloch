@@ -4,6 +4,7 @@ mod endgame_denial;
 mod greedy_highest;
 mod hold_back_pairs;
 mod lowest_legal;
+mod neat_player;
 mod random_legal;
 
 use engine::{Card, DuplicateRule};
