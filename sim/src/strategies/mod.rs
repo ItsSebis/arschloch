@@ -15,6 +15,10 @@ pub use endgame_denial::EndgameDenial;
 pub use greedy_highest::GreedyHighest;
 pub use hold_back_pairs::HoldBackPairs;
 pub use lowest_legal::LowestLegal;
+pub use neat_player::{
+    GenomeFile, GenomeFileError, NeatStrategy, TurnSummary, FEATURE_COUNT, FEATURE_NAMES,
+    FORMAT_VERSION,
+};
 pub use random_legal::RandomLegal;
 
 /// The naive "give up your highest `count` cards" behavior from Phase 1
