@@ -177,7 +177,7 @@ JSON results file (every `MatchResult` plus the aggregated `Statistics`,
 `sim`'s existing types with no new schema) and a human-readable summary
 table to stdout.
 
-### `neat` (planned, Phase 10)
+### `neat` (Phase 10; core done in 10a)
 
 A generic NEAT library crate with no game knowledge (genomes,
 speciation, crossover, mutation, feedforward evaluation). `sim` depends
@@ -187,6 +187,14 @@ training dashboard (Phase 10d), which Phase 11 extends with the
 simulation-statistics views. Dependency direction stays one-way
 (`cli -> web -> sim -> engine`, `sim -> neat`). See
 `docs/superpowers/specs/2026-10-08-neat-engine-design.md`.
+
+Public surface: `Population` (owns the generational loop; the caller
+evaluates `genomes()`, calls `set_fitness`, then `advance`, which returns
+a `GenerationReport`), `Genome` (validated, JSON-serializable),
+`Network` (immutable, `Send + Sync` feedforward evaluator with a
+caller-supplied scratch buffer), `InnovationTracker`, `NeatConfig` and
+`NeatError`. Randomness comes only from the population's seeded
+`StdRng`.
 
 ### `web` (starts in Phase 10d, extended in Phase 11)
 

@@ -19,6 +19,9 @@ cargo clippy --workspace --all-targets -- -D warnings
 All four are the phase-done gate from `docs/CODING_GUIDELINES.md` and
 should be clean before any phase is considered finished.
 
+The `neat` crate has no game dependency: `cargo test -p neat` runs its
+unit tests and the XOR end-to-end evolution test in about a second.
+
 The `cli` crate is a binary: `cargo run -p cli -- <args>` runs it, and
 `cargo build --release -p cli` produces `target/release/cli` (or
 `cli.exe` on Windows, natively).
