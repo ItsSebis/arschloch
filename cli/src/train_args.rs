@@ -39,7 +39,8 @@ pub struct TrainArgs {
         long,
         conflicts_with_all = [
             "player_count", "deck_variant", "duplicate_rule", "rounds", "population",
-            "matches_per_genome", "reeval_matches", "seed", "opponent", "target_species"
+            "matches_per_genome", "reeval_matches", "seed", "opponent", "target_species",
+            "champion_candidates", "hall_of_fame", "hall_interval", "weight_power"
         ]
     )]
     pub resume: bool,
@@ -91,6 +92,27 @@ pub struct TrainArgs {
     #[arg(long, default_value_t = 8, value_parser = clap::builder::RangedI64ValueParser::<usize>::new().range(1..))]
     pub target_species: usize,
 
+    /// Re-evaluate this many of each generation's best genomes (by training
+    /// fitness) on the fixed matches and take the best of them as the
+    /// champion. Training fitness is noisy, so its best genome is often not
+    /// the strongest; 1 trusts it. Default 5 (see docs/baselines/neat-v1).
+    #[arg(long, default_value_t = 5, value_parser = clap::builder::RangedI64ValueParser::<usize>::new().range(1..))]
+    pub champion_candidates: usize,
+
+    /// Keep this many frozen past champions as extra training opponents
+    /// (0 = none), so the population is not tuned only to the fixed pool.
+    #[arg(long, default_value_t = 0)]
+    pub hall_of_fame: usize,
+
+    /// A champion joins the hall of fame every this many generations.
+    #[arg(long, default_value_t = 5, value_parser = clap::value_parser!(u32).range(1..))]
+    pub hall_interval: u32,
+
+    /// Size of a weight perturbation (uniform in plus/minus this). Default
+    /// 0.2 (see docs/baselines/neat-v1).
+    #[arg(long, default_value_t = 0.2)]
+    pub weight_power: f64,
+
     /// Rayon thread-pool size. 0 lets rayon pick its own default.
     #[arg(long, default_value_t = 0)]
     pub threads: usize,
@@ -140,6 +162,48 @@ mod tests {
             Some(8080)
         );
         assert!(parse(&["--out", "d", "--serve", "notaport"]).is_err());
+    }
+
+    #[test]
+    fn learning_options_default_to_the_measured_settings_and_conflict_with_resume() {
+        let args = parse(&["--out", "d"]).unwrap();
+        assert_eq!(
+            (
+                args.champion_candidates,
+                args.hall_of_fame,
+                args.hall_interval
+            ),
+            (5, 0, 5)
+        );
+        assert!((args.weight_power - 0.2).abs() < f64::EPSILON);
+        let old_style = parse(&[
+            "--out",
+            "d",
+            "--champion-candidates",
+            "1",
+            "--hall-of-fame",
+            "3",
+            "--weight-power",
+            "0.5",
+        ])
+        .unwrap();
+        assert_eq!(
+            (old_style.champion_candidates, old_style.hall_of_fame),
+            (1, 3)
+        );
+        assert!((old_style.weight_power - 0.5).abs() < f64::EPSILON);
+        assert!(parse(&["--out", "d", "--champion-candidates", "0"]).is_err());
+        assert!(parse(&["--out", "d", "--hall-interval", "0"]).is_err());
+        for conflicting in [
+            ["--hall-of-fame", "2"],
+            ["--champion-candidates", "3"],
+            ["--weight-power", "0.1"],
+            ["--hall-interval", "7"],
+        ] {
+            let mut args = vec!["--out", "d", "--resume"];
+            args.extend(conflicting);
+            assert!(parse(&args).is_err(), "{conflicting:?}");
+        }
     }
 
     #[test]

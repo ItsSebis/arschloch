@@ -78,6 +78,11 @@ pub struct ChampionStats {
     /// generations inflates `reeval`.
     #[serde(default)]
     pub heldout: Option<ScoreStat>,
+    /// Where the champion ranked by *training* fitness among this
+    /// generation's genomes (0 = it was the training best). Non-zero means
+    /// the fixed-match re-evaluation overruled a lucky training score.
+    #[serde(default)]
+    pub training_rank: usize,
     pub hidden_nodes: usize,
     pub enabled_connections: usize,
     /// File name (inside the run directory) of this champion's genome.
@@ -112,6 +117,14 @@ pub struct GenerationEvent {
     pub fitness: FitnessStats,
     pub champion: ChampionStats,
     pub opponents: Vec<OpponentStat>,
+    /// Generations of the champions that were in the hall of fame (extra
+    /// training opponents) while this generation was evaluated.
+    #[serde(default)]
+    pub hall_of_fame: Vec<u32>,
+    /// The champion against tables of hall-of-fame members only (`None`
+    /// while the hall is empty).
+    #[serde(default)]
+    pub hall_score: Option<ScoreStat>,
     pub species: Vec<SpeciesStats>,
     pub compatibility_threshold: f64,
     pub complexity: Complexity,

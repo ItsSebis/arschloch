@@ -41,6 +41,29 @@ pub struct TrainConfig {
     /// The opponent pool as the `--strategy`-style specs that built it,
     /// so a resume can rebuild exactly the same pool.
     pub opponent_specs: Vec<String>,
+    /// How many of the genomes with the best *training* fitness are
+    /// re-evaluated on the fixed matches to pick the generation's
+    /// champion (1 = trust the training fitness). Training fitness is
+    /// noisy enough that its best genome is often not the strongest one.
+    #[serde(default = "one")]
+    pub champion_candidates: usize,
+    /// Frozen past champions kept as extra opponents in the training pool
+    /// (0 = none), so the population is not tuned only against the fixed
+    /// opponents.
+    #[serde(default)]
+    pub hall_of_fame_size: usize,
+    /// A generation's champion joins the hall of fame every this many
+    /// generations (the oldest member leaves when it is full).
+    #[serde(default = "five")]
+    pub hall_of_fame_interval: u32,
+}
+
+fn one() -> usize {
+    1
+}
+
+fn five() -> u32 {
+    5
 }
 
 impl TrainConfig {
@@ -84,6 +107,15 @@ impl TrainConfig {
         if self.opponent_specs.is_empty() {
             return Err("the opponent pool is empty".into());
         }
+        if self.champion_candidates == 0 || self.champion_candidates > self.neat.population_size {
+            return Err(format!(
+                "champion_candidates must be between 1 and the population size ({})",
+                self.neat.population_size
+            ));
+        }
+        if self.hall_of_fame_interval == 0 {
+            return Err("hall_of_fame_interval must be at least 1".into());
+        }
         self.neat.validate().map_err(|e| e.to_string())
     }
 }
@@ -107,6 +139,9 @@ pub(crate) mod test_support {
                 ..NeatConfig::default()
             },
             opponent_specs: vec!["lowest-legal".into()],
+            champion_candidates: 1,
+            hall_of_fame_size: 0,
+            hall_of_fame_interval: 5,
         }
     }
 }
@@ -170,11 +205,54 @@ mod tests {
                 },
                 "pool is empty",
             ),
+            (
+                TrainConfig {
+                    champion_candidates: 0,
+                    ..sample()
+                },
+                "champion_candidates",
+            ),
+            (
+                TrainConfig {
+                    champion_candidates: 99,
+                    ..sample()
+                },
+                "champion_candidates",
+            ),
+            (
+                TrainConfig {
+                    hall_of_fame_interval: 0,
+                    ..sample()
+                },
+                "hall_of_fame_interval",
+            ),
         ];
         for (config, expected) in cases {
             let error = config.validate().unwrap_err();
             assert!(error.contains(expected), "{expected}: {error}");
         }
+    }
+
+    #[test]
+    fn a_config_saved_before_these_options_existed_still_loads_with_their_defaults() {
+        let mut value = serde_json::to_value(sample()).unwrap();
+        let object = value.as_object_mut().unwrap();
+        for key in [
+            "champion_candidates",
+            "hall_of_fame_size",
+            "hall_of_fame_interval",
+        ] {
+            object.remove(key);
+        }
+        let old: TrainConfig = serde_json::from_value(value).unwrap();
+        assert_eq!(
+            (
+                old.champion_candidates,
+                old.hall_of_fame_size,
+                old.hall_of_fame_interval
+            ),
+            (1, 0, 5)
+        );
     }
 
     #[test]

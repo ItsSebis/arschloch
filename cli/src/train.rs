@@ -91,9 +91,13 @@ fn new_config(args: &TrainArgs, specs: Vec<String>) -> TrainConfig {
         neat: neat::NeatConfig {
             population_size: args.population,
             target_species: args.target_species,
+            weight_perturb_power: args.weight_power,
             ..neat::NeatConfig::default()
         },
         opponent_specs: specs,
+        champion_candidates: args.champion_candidates,
+        hall_of_fame_size: args.hall_of_fame,
+        hall_of_fame_interval: args.hall_interval,
     }
 }
 

@@ -69,10 +69,13 @@ pub fn render_banner(start: &RunStart, out: &std::path::Path) -> String {
 }
 
 #[must_use]
-pub fn render_header(opponent_count: usize) -> String {
+pub fn render_header(opponent_count: usize, show_hall: bool) -> String {
     let mut text = String::from("  gen    best    mean  champion (fresh)  spc  nodes/conn");
     for i in 1..=opponent_count {
         let _ = write!(text, "   o{i:<3}");
+    }
+    if show_hall {
+        text.push_str("   hof ");
     }
     text.push_str("  rounds/s      ETA");
     text
@@ -83,7 +86,7 @@ pub fn render_header(opponent_count: usize) -> String {
 /// champion's score against each opponent alone, throughput and ETA. A
 /// trailing `*` marks a new best champion.
 #[must_use]
-pub fn render_row(event: &GenerationEvent, eta_secs: Option<f64>) -> String {
+pub fn render_row(event: &GenerationEvent, eta_secs: Option<f64>, show_hall: bool) -> String {
     let champion = &event.champion;
     let mut text = format!(
         "{:>5} {:>+7.3} {:>+7.3}  {:>+7.3} ±{:<6.3}  {:>3}  {:>4}/{:<5}",
@@ -98,6 +101,14 @@ pub fn render_row(event: &GenerationEvent, eta_secs: Option<f64>) -> String {
     );
     for opponent in &event.opponents {
         let _ = write!(text, " {:>+6.2}", opponent.score.mean);
+    }
+    if show_hall {
+        match &event.hall_score {
+            Some(score) => {
+                let _ = write!(text, " {:>+6.2}", score.mean);
+            }
+            None => text.push_str("      –"),
+        }
     }
     let _ = write!(
         text,
@@ -133,12 +144,14 @@ pub fn render_summary(end: &RunEnd, out: &std::path::Path) -> String {
     text
 }
 
+#[allow(clippy::struct_excessive_bools)] // independent display switches
 pub struct TerminalObserver {
     quiet: bool,
     out: PathBuf,
     live_progress: bool,
     progress_visible: bool,
     opponent_count: usize,
+    show_hall: bool,
     total_generations: u32,
     first_generation: Option<u32>,
     generation_secs: Vec<f64>,
@@ -153,6 +166,7 @@ impl TerminalObserver {
             live_progress: std::io::stderr().is_terminal(),
             progress_visible: false,
             opponent_count: 0,
+            show_hall: false,
             total_generations: 0,
             first_generation: None,
             generation_secs: Vec::new(),
@@ -180,12 +194,13 @@ impl TerminalObserver {
 impl TrainObserver for TerminalObserver {
     fn on_start(&mut self, start: &RunStart) {
         self.opponent_count = start.opponents.len();
+        self.show_hall = start.config.hall_of_fame_size > 0;
         self.total_generations = start.config.generations;
         if !self.quiet {
             println!(
                 "{}\n\n{}",
                 render_banner(start, &self.out),
-                render_header(self.opponent_count)
+                render_header(self.opponent_count, self.show_hall)
             );
         }
     }
@@ -207,9 +222,9 @@ impl TrainObserver for TerminalObserver {
             return;
         }
         if (event.generation - first).is_multiple_of(HEADER_EVERY) && event.generation != first {
-            println!("{}", render_header(self.opponent_count));
+            println!("{}", render_header(self.opponent_count, self.show_hall));
         }
-        println!("{}", render_row(event, self.eta(event)));
+        println!("{}", render_row(event, self.eta(event), self.show_hall));
     }
 
     fn on_finish(&mut self, end: &RunEnd) {
@@ -254,6 +269,7 @@ mod tests {
                 train_fitness: 0.412,
                 reeval: stat(0.397),
                 heldout: None,
+                training_rank: 0,
                 hidden_nodes: 7,
                 enabled_connections: 23,
                 genome_file: "gen-0042.json".into(),
@@ -269,6 +285,8 @@ mod tests {
                     score: stat(-0.05),
                 },
             ],
+            hall_of_fame: vec![],
+            hall_score: None,
             species: vec![],
             compatibility_threshold: 0.5,
             complexity: Complexity {
@@ -281,7 +299,7 @@ mod tests {
 
     #[test]
     fn a_row_shows_every_headline_number() {
-        let row = render_row(&event(false), Some(2470.0));
+        let row = render_row(&event(false), Some(2470.0), false);
         for expected in [
             "42", "+0.412", "+0.188", "+0.397", "±0.021", "7/23", "+0.61", "-0.05", "84k",
             "0:41:10",
@@ -293,17 +311,36 @@ mod tests {
 
     #[test]
     fn a_new_best_is_marked_and_a_missing_eta_is_dashes() {
-        let row = render_row(&event(true), None);
+        let row = render_row(&event(true), None, false);
         assert!(row.ends_with(" *"), "{row}");
         assert!(row.contains("--:--:--"));
     }
 
     #[test]
     fn the_header_has_one_column_per_opponent() {
-        let header = render_header(3);
+        let header = render_header(3, false);
         assert!(header.contains("o1") && header.contains("o2") && header.contains("o3"));
         assert!(!header.contains("o4"));
         assert!(header.contains("ETA") && header.contains("champion"));
+    }
+
+    #[test]
+    fn the_hall_of_fame_column_appears_only_when_the_hall_is_enabled() {
+        assert!(!render_header(2, false).contains("hof"));
+        assert!(render_header(2, true).contains("hof"));
+        let mut with = event(false);
+        with.hall_score = Some(stat(0.37));
+        assert!(render_row(&with, None, true).contains("+0.37"));
+        let without = event(false);
+        assert!(
+            render_row(&without, None, true).contains('–'),
+            "an empty hall shows a dash"
+        );
+        assert!(!render_row(&with, None, false).contains("+0.37"));
+        assert_eq!(
+            render_header(2, true).split_whitespace().count(),
+            render_header(2, false).split_whitespace().count() + 1
+        );
     }
 
     #[test]
@@ -374,6 +411,9 @@ mod tests {
             generations: 100,
             neat: neat::NeatConfig::default(),
             opponent_specs: vec![],
+            champion_candidates: 1,
+            hall_of_fame_size: 0,
+            hall_of_fame_interval: 5,
         }
     }
 }

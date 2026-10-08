@@ -22,7 +22,7 @@ use super::events::{
     ChampionStats, Complexity, Event, FitnessStats, GenerationEvent, OpponentStat, RunEnd,
     RunStart, SCHEMA_VERSION,
 };
-use super::run_dir::{BestRecord, Checkpoint, RunDir, TrainError};
+use super::run_dir::{BestRecord, Checkpoint, HallMember, RunDir, TrainError};
 use crate::{NeatStrategy, Strategy, FEATURE_COUNT, FEATURE_NAMES, FEATURE_SET_VERSION};
 
 /// One member of the opponent pool.
@@ -49,6 +49,7 @@ pub struct Trainer {
     dir: RunDir,
     population: Population,
     best: Option<BestRecord>,
+    hall: Vec<HallMember>,
     total_rounds: u64,
     elapsed_before: f64,
     resumed_from: Option<u32>,
@@ -92,18 +93,12 @@ fn strategy_for(genome: &Genome) -> Arc<dyn Strategy> {
     )
 }
 
-fn position_of_best(values: &[f64]) -> usize {
-    values
-        .iter()
-        .enumerate()
-        .fold((0, f64::NEG_INFINITY), |best, (i, &v)| {
-            if v > best.1 {
-                (i, v)
-            } else {
-                best
-            }
-        })
-        .0
+/// The indices of the `k` highest values, best first (ties: lower index).
+fn top_indices(values: &[f64], k: usize) -> Vec<usize> {
+    let mut order: Vec<usize> = (0..values.len()).collect();
+    order.sort_by(|&a, &b| values[b].total_cmp(&values[a]));
+    order.truncate(k);
+    order
 }
 
 #[allow(clippy::cast_precision_loss)] // counts are far below 2^52
@@ -174,6 +169,7 @@ impl Trainer {
             dir,
             population,
             best: None,
+            hall: Vec::new(),
             total_rounds: 0,
             elapsed_before: 0.0,
             resumed_from: None,
@@ -194,6 +190,7 @@ impl Trainer {
             opponent_names: self.opponents.iter().map(|o| o.name.clone()).collect(),
             population: self.population.snapshot(),
             best: self.best.clone(),
+            hall_of_fame: self.hall.clone(),
             total_rounds: self.total_rounds,
             elapsed_secs,
         }
@@ -250,6 +247,7 @@ impl Trainer {
             dir,
             population,
             best: checkpoint.best,
+            hall: checkpoint.hall_of_fame,
             total_rounds: checkpoint.total_rounds,
             elapsed_before: checkpoint.elapsed_secs,
             resumed_from: Some(completed),
@@ -300,10 +298,34 @@ impl Trainer {
         Ok(end)
     }
 
+    /// The fixed opponents only: what champions are compared against, so
+    /// scores stay comparable across generations as the hall changes.
+    fn fixed_pool(&self) -> Vec<Arc<dyn Strategy>> {
+        self.opponents.iter().map(|o| o.strategy.clone()).collect()
+    }
+
+    fn hall_pool(&self) -> Vec<Arc<dyn Strategy>> {
+        self.hall
+            .iter()
+            .map(|member| -> Arc<dyn Strategy> {
+                Arc::new(
+                    NeatStrategy::new(format!("HoF({})", member.generation), &member.genome)
+                        .expect("hall members use this build's features"),
+                )
+            })
+            .collect()
+    }
+
+    /// What genomes train against: the fixed opponents plus the hall.
+    fn training_pool(&self) -> Vec<Arc<dyn Strategy>> {
+        let mut pool = self.fixed_pool();
+        pool.extend(self.hall_pool());
+        pool
+    }
+
     fn evaluate_population(&self, generation: u32, observer: &mut dyn TrainObserver) -> Vec<f64> {
         let table = self.config.table();
-        let pool: Vec<Arc<dyn Strategy>> =
-            self.opponents.iter().map(|o| o.strategy.clone()).collect();
+        let pool = self.training_pool();
         let seeds = training_seeds(&self.config, generation);
         let genomes = self.population.genomes();
         let batch = genomes.len().div_ceil(PROGRESS_STEPS);
@@ -327,13 +349,43 @@ impl Trainer {
         fitness
     }
 
-    fn reevaluate(&self, champion: &Genome) -> (Score, Vec<OpponentStat>) {
+    /// Picks the generation's champion: the best of the `k` genomes with
+    /// the highest training fitness *on the fixed matches*. Returns its
+    /// index, its rank by training fitness and its fixed-match score.
+    fn select_champion(&self, fitness: &[f64]) -> (usize, usize, Score) {
         let table = self.config.table();
-        let pool: Vec<Arc<dyn Strategy>> =
-            self.opponents.iter().map(|o| o.strategy.clone()).collect();
+        let pool = self.fixed_pool();
+        let seeds = reeval_seeds(&self.config);
+        let ranked = top_indices(fitness, self.config.champion_candidates);
+        let genomes = self.population.genomes();
+        let scores: Vec<Score> = ranked
+            .par_iter()
+            .map(|&index| {
+                evaluate(
+                    &strategy_for(&genomes[index]),
+                    &table,
+                    Opponents::Mixed(&pool),
+                    &seeds,
+                )
+            })
+            .collect();
+        let winner = scores.iter().enumerate().fold(0, |best, (rank, score)| {
+            if score.mean > scores[best].mean {
+                rank
+            } else {
+                best
+            }
+        });
+        (ranked[winner], winner, scores[winner].clone())
+    }
+
+    /// The champion against each fixed opponent alone and, once the hall
+    /// has members, against the hall alone. `mixed` is its score against
+    /// the mixed fixed pool (already computed by `select_champion`).
+    fn reevaluate(&self, champion: &Genome) -> (Vec<OpponentStat>, Option<Score>) {
+        let table = self.config.table();
         let seeds = reeval_seeds(&self.config);
         let candidate = strategy_for(champion);
-        let mixed = evaluate(&candidate, &table, Opponents::Mixed(&pool), &seeds);
         let per_opponent = self
             .opponents
             .par_iter()
@@ -348,7 +400,10 @@ impl Trainer {
                 .into(),
             })
             .collect();
-        (mixed, per_opponent)
+        let hall = self.hall_pool();
+        let hall_score = (!hall.is_empty())
+            .then(|| evaluate(&candidate, &table, Opponents::Mixed(&hall), &seeds));
+        (per_opponent, hall_score)
     }
 
     /// A few real decisions of the champion (for the dashboard's decision
@@ -391,14 +446,15 @@ impl Trainer {
         let generation = self.population.generation();
 
         let fitness = self.evaluate_population(generation, observer);
-        let champion_index = position_of_best(&fitness);
+        let (champion_index, training_rank, reeval) = self.select_champion(&fitness);
         // `advance` replaces the genomes, so take the champion first.
         let champion = self.population.genomes()[champion_index].clone();
+        let hall_generations: Vec<u32> = self.hall.iter().map(|m| m.generation).collect();
         let stats = fitness_stats(&fitness);
         self.population.set_fitness(fitness.clone());
         let report = self.population.advance();
 
-        let (reeval, opponents) = self.reevaluate(&champion);
+        let (opponents, hall_score) = self.reevaluate(&champion);
         let is_new_best = self
             .best
             .as_ref()
@@ -419,11 +475,29 @@ impl Trainer {
             None
         };
 
+        // The hall takes a fresh champion every `interval` generations.
+        if self.config.hall_of_fame_size > 0
+            && generation > 0
+            && generation.is_multiple_of(self.config.hall_of_fame_interval)
+        {
+            self.hall.push(HallMember {
+                generation,
+                genome: champion.clone(),
+            });
+            while self.hall.len() > self.config.hall_of_fame_size {
+                self.hall.remove(0);
+            }
+        }
+
         let table = self.config.table();
         let rounds_per_match = table.rounds as u64;
         let rounds_evaluated = rounds_per_match
             * (self.config.matches_per_genome as u64 * self.config.neat.population_size as u64
-                + self.config.reeval_matches as u64 * (1 + self.opponents.len() as u64));
+                + self.config.reeval_matches as u64
+                    * (self.config.champion_candidates as u64
+                        + self.opponents.len() as u64
+                        + u64::from(hall_score.is_some()))
+                + heldout.as_ref().map_or(0, |h| h.matches as u64));
         self.total_rounds += rounds_evaluated;
         let generation_secs = step_started.elapsed().as_secs_f64();
         let elapsed_secs = self.elapsed_before + started.elapsed().as_secs_f64();
@@ -441,12 +515,15 @@ impl Trainer {
                 train_fitness: fitness[champion_index],
                 reeval: reeval.into(),
                 heldout: heldout.map(Into::into),
+                training_rank,
                 hidden_nodes: champion.hidden_count(),
                 enabled_connections: champion.enabled_connection_count(),
                 genome_file,
                 is_new_best,
             },
             opponents,
+            hall_of_fame: hall_generations,
+            hall_score: hall_score.map(Into::into),
             species: report.species,
             compatibility_threshold: report.compatibility_threshold,
             complexity: Complexity {
@@ -470,6 +547,15 @@ impl Trainer {
 mod tests {
     use super::super::config::test_support::sample;
     use super::*;
+
+    #[test]
+    fn top_indices_orders_best_first_with_ties_going_to_the_lower_index() {
+        let values = [0.5, 0.9, 0.5, -1.0, 0.9];
+        assert_eq!(top_indices(&values, 3), vec![1, 4, 0]);
+        assert_eq!(top_indices(&values, 1), vec![1]);
+        assert_eq!(top_indices(&values, 99), vec![1, 4, 0, 2, 3]);
+        assert!(top_indices(&[], 3).is_empty());
+    }
 
     #[test]
     fn champions_are_compared_on_one_fixed_seed_set_that_training_never_uses() {

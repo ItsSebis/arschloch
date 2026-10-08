@@ -46,6 +46,9 @@ fn config(generations: u32) -> TrainConfig {
             ..NeatConfig::default()
         },
         opponent_specs: vec!["lowest-legal".into(), "random-legal".into()],
+        champion_candidates: 1,
+        hall_of_fame_size: 0,
+        hall_of_fame_interval: 5,
     }
 }
 
@@ -143,8 +146,10 @@ fn a_short_run_leaves_every_artifact_and_notifies_the_observer() {
         "the first champion is the first best"
     );
     assert_eq!(first.champion.genome_file, "gen-0000.json");
-    // 16 genomes x 8 matches + 12 x (1 + 2 opponents), 4 rounds each.
-    assert_eq!(first.rounds_evaluated, 4 * (16 * 8 + 12 * 3));
+    // 16 genomes x 8 matches, the champion's fixed-match scores (12 matches
+    // each: the mixed pool and 2 opponents), and, because the first
+    // champion is a new best, 24 held-out matches; 4 rounds each.
+    assert_eq!(first.rounds_evaluated, 4 * (16 * 8 + 12 * 3 + 24));
     assert!(matches!(log[4], Event::RunEnd(_)));
 
     assert!(NeatStrategy::from_file(&run.join("best.json")).is_ok());
@@ -461,4 +466,177 @@ fn the_best_champion_is_confirmed_on_held_out_matches() {
     assert_eq!(end.best_heldout, last_best.champion.heldout);
     assert!(end.best_heldout.is_some());
     fs::remove_dir_all(&run).unwrap();
+}
+
+fn generation_events(dir: &Path) -> Vec<sim::training::GenerationEvent> {
+    events(dir)
+        .into_iter()
+        .filter_map(|e| match e {
+            Event::Generation(g) => Some(*g),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn a_hall_of_fame_fills_every_interval_and_keeps_only_the_newest() {
+    let run = dir("hall");
+    let config = TrainConfig {
+        hall_of_fame_size: 2,
+        hall_of_fame_interval: 2,
+        ..config(8)
+    };
+    Trainer::new(config, opponents(), &run)
+        .unwrap()
+        .run(&mut Recorder::default())
+        .unwrap();
+    let events = generation_events(&run);
+    // A champion is admitted at the end of generations 2, 4, 6; the hall
+    // holds the newest two and a generation sees the members admitted
+    // before it.
+    let seen: Vec<Vec<u32>> = events.iter().map(|g| g.hall_of_fame.clone()).collect();
+    assert_eq!(
+        seen,
+        vec![
+            vec![],
+            vec![],
+            vec![],
+            vec![2],
+            vec![2],
+            vec![2, 4],
+            vec![2, 4],
+            vec![4, 6]
+        ]
+    );
+    for generation in &events {
+        assert_eq!(
+            generation.hall_score.is_some(),
+            !generation.hall_of_fame.is_empty(),
+            "the champion is scored against the hall exactly when it has members"
+        );
+    }
+    // Hall members are extra opponents but the per-opponent report stays
+    // on the fixed pool, so the series stay comparable across generations.
+    assert!(events.iter().all(|g| g.opponents.len() == 2));
+    fs::remove_dir_all(&run).unwrap();
+}
+
+#[test]
+fn resuming_with_a_hall_of_fame_still_equals_never_stopping() {
+    let with_hall = |generations| TrainConfig {
+        hall_of_fame_size: 2,
+        hall_of_fame_interval: 2,
+        ..config(generations)
+    };
+    let straight = dir("hall-straight");
+    Trainer::new(with_hall(6), opponents(), &straight)
+        .unwrap()
+        .run(&mut Recorder::default())
+        .unwrap();
+    let split = dir("hall-split");
+    Trainer::new(with_hall(3), opponents(), &split)
+        .unwrap()
+        .run(&mut Recorder::default())
+        .unwrap();
+    Trainer::resume(&split, opponents(), Some(6))
+        .unwrap()
+        .run(&mut Recorder::default())
+        .unwrap();
+
+    let checkpoint = |dir: &Path| -> serde_json::Value {
+        serde_json::from_str(&fs::read_to_string(dir.join("checkpoint.json")).unwrap()).unwrap()
+    };
+    let (a, b) = (checkpoint(&straight), checkpoint(&split));
+    assert_eq!(a["population"], b["population"]);
+    assert_eq!(a["hall_of_fame"], b["hall_of_fame"]);
+    assert_eq!(a["hall_of_fame"].as_array().unwrap().len(), 2);
+    fs::remove_dir_all(&straight).unwrap();
+    fs::remove_dir_all(&split).unwrap();
+}
+
+#[test]
+fn a_checkpoint_from_before_the_hall_of_fame_still_resumes() {
+    let run = dir("oldcheckpoint");
+    Trainer::new(config(2), opponents(), &run)
+        .unwrap()
+        .run(&mut Recorder::default())
+        .unwrap();
+    let path = run.join("checkpoint.json");
+    let mut value: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+    value.as_object_mut().unwrap().remove("hall_of_fame");
+    for key in [
+        "champion_candidates",
+        "hall_of_fame_size",
+        "hall_of_fame_interval",
+    ] {
+        value["config"].as_object_mut().unwrap().remove(key);
+    }
+    fs::write(&path, value.to_string()).unwrap();
+    let end = Trainer::resume(&run, opponents(), Some(3))
+        .unwrap()
+        .run(&mut Recorder::default())
+        .unwrap();
+    assert_eq!(end.generations_completed, 3);
+    fs::remove_dir_all(&run).unwrap();
+}
+
+#[test]
+fn the_champion_is_chosen_among_the_top_candidates_by_the_fixed_matches() {
+    // With one candidate the training best is always the champion; with
+    // several, the fixed-match score decides, so a champion can come from
+    // below the training best (which is just a lucky sample).
+    let single = dir("single");
+    Trainer::new(config(6), opponents(), &single)
+        .unwrap()
+        .run(&mut Recorder::default())
+        .unwrap();
+    assert!(generation_events(&single)
+        .iter()
+        .all(|g| g.champion.training_rank == 0));
+
+    let several = dir("several");
+    let config = TrainConfig {
+        champion_candidates: 6,
+        ..config(6)
+    };
+    Trainer::new(config, opponents(), &several)
+        .unwrap()
+        .run(&mut Recorder::default())
+        .unwrap();
+    let ranks: Vec<usize> = generation_events(&several)
+        .iter()
+        .map(|g| g.champion.training_rank)
+        .collect();
+    assert!(ranks.iter().all(|&r| r < 6), "{ranks:?}");
+    assert!(ranks.iter().any(|&r| r > 0), "over six generations the fixed matches overrule the training best at least once: {ranks:?}");
+    fs::remove_dir_all(&single).unwrap();
+    fs::remove_dir_all(&several).unwrap();
+}
+
+#[test]
+fn candidate_selection_never_picks_a_worse_champion_than_the_training_best() {
+    // The training best is always among the candidates, so the chosen
+    // champion's fixed-match score is at least that of the training best:
+    // compare two runs that differ only in the candidate count (same seed,
+    // so generation 0 evaluates identical genomes).
+    let one = dir("cmp-one");
+    let many = dir("cmp-many");
+    Trainer::new(config(1), opponents(), &one)
+        .unwrap()
+        .run(&mut Recorder::default())
+        .unwrap();
+    let wide = TrainConfig {
+        champion_candidates: 8,
+        ..config(1)
+    };
+    Trainer::new(wide, opponents(), &many)
+        .unwrap()
+        .run(&mut Recorder::default())
+        .unwrap();
+    let a = generation_events(&one)[0].champion.reeval.mean;
+    let b = generation_events(&many)[0].champion.reeval.mean;
+    assert!(b >= a - 1e-12, "{b} < {a}");
+    fs::remove_dir_all(&one).unwrap();
+    fs::remove_dir_all(&many).unwrap();
 }

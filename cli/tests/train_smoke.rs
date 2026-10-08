@@ -324,3 +324,50 @@ fn two_neat_opponents_with_the_same_file_name_stay_distinct() {
     std::fs::remove_dir_all(&out).unwrap();
     std::fs::remove_dir_all(&base).unwrap();
 }
+
+#[test]
+fn the_learning_options_show_up_in_the_output_and_the_events() {
+    let out = run_dir("learning");
+    let result = train(
+        &out,
+        &[
+            "--generations",
+            "3",
+            "--champion-candidates",
+            "3",
+            "--hall-of-fame",
+            "2",
+            "--hall-interval",
+            "1",
+            "--weight-power",
+            "0.2",
+        ],
+    );
+    assert!(result.status.success(), "stderr: {}", text(&result.stderr));
+    let stdout = text(&result.stdout);
+    assert!(
+        stdout.contains("hof"),
+        "the hall column appears when the hall is on:\n{stdout}"
+    );
+    let config: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(out.join("config.json")).unwrap()).unwrap();
+    assert_eq!(config["champion_candidates"], 3);
+    assert_eq!(config["hall_of_fame_size"], 2);
+    assert!((config["neat"]["weight_perturb_power"].as_f64().unwrap() - 0.2).abs() < 1e-12);
+    let events = std::fs::read_to_string(out.join("events.jsonl")).unwrap();
+    assert!(
+        events.contains(r#""hall_of_fame":[1]"#) || events.contains(r#""hall_of_fame":[1,2]"#),
+        "{events}"
+    );
+    std::fs::remove_dir_all(&out).unwrap();
+}
+
+#[test]
+fn an_absurd_weight_power_is_refused_before_anything_is_written() {
+    let out = run_dir("badpower");
+    let result = train(&out, &["--generations", "1", "--weight-power", "-1"]);
+    assert!(!result.status.success());
+    assert!(!out.join("checkpoint.json").exists());
+    assert!(!text(&result.stderr).contains("panicked"));
+    let _ = std::fs::remove_dir_all(&out);
+}

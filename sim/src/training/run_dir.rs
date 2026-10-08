@@ -58,6 +58,13 @@ pub struct BestRecord {
     pub heldout: ScoreStat,
 }
 
+/// A frozen past champion serving as an extra training opponent.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HallMember {
+    pub generation: u32,
+    pub genome: Genome,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Checkpoint {
     pub schema_version: u32,
@@ -70,6 +77,8 @@ pub struct Checkpoint {
     pub opponent_names: Vec<String>,
     pub population: PopulationState,
     pub best: Option<BestRecord>,
+    #[serde(default)]
+    pub hall_of_fame: Vec<HallMember>,
     pub total_rounds: u64,
     pub elapsed_secs: f64,
 }
@@ -303,6 +312,7 @@ mod tests {
             opponent_names: vec!["LowestLegal".into()],
             population: population.snapshot(),
             best: None,
+            hall_of_fame: Vec::new(),
             total_rounds: 10,
             elapsed_secs: 1.0,
         }
@@ -334,12 +344,15 @@ mod tests {
                 train_fitness: 0.0,
                 reeval: stat,
                 heldout: None,
+                training_rank: 0,
                 hidden_nodes: 0,
                 enabled_connections: 0,
                 genome_file: String::new(),
                 is_new_best: false,
             },
             opponents: vec![],
+            hall_of_fame: vec![],
+            hall_score: None,
             species: vec![],
             compatibility_threshold: 0.5,
             complexity: super::super::events::Complexity {

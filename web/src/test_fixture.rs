@@ -38,6 +38,9 @@ pub fn fixture_run_dir() -> PathBuf {
                 ..NeatConfig::default()
             },
             opponent_specs: vec!["lowest-legal".into(), "random-legal".into()],
+            champion_candidates: 1,
+            hall_of_fame_size: 0,
+            hall_of_fame_interval: 5,
         };
         let opponents = vec![
             Opponent {
