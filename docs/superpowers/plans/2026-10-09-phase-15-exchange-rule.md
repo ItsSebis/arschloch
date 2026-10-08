@@ -9,7 +9,7 @@
 ## Rulings
 
 - Default is `Forced` (the user: "enforce the highest cards to be given away too ... default is forcing N highest cards"); `Free` is the modifier. The strategies' `choose_exchange_cards` stays (it is what `Free` uses).
-- Under `Forced` nothing consumes the match RNG during the exchange; strategies that give their highest cards anyway (LowestLegal, GreedyHighest, EndgameDenial, CardCounter, NEAT) play byte-identical games under both rules. Only `RandomLegal`, `HoldBackPairs` and Adaptive differ.
+- Under `Forced` nothing consumes the match RNG during the exchange; strategies that give their highest cards anyway (LowestLegal, GreedyHighest, EndgameDenial, CardCounter, Adaptive, NEAT) play byte-identical games under both rules. Only `RandomLegal` and `HoldBackPairs` differ.
 - Old baselines (pre-neat, neat-v1, perf checksums) are reproduced with `--pass-rule free --exchange-rule free`; the Phase 14 `pass-final` baselines were measured with `--pass-rule final --exchange-rule free`; new `current-rules` baselines use both defaults.
 
 ## Review Focus

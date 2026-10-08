@@ -1,4 +1,4 @@
-3 players, Single deck, FirstDealtWins, pass rule final, 2000 matches x 10 rounds, seed 1000, 4 threads
+3 players, Single deck, FirstDealtWins, pass rule final, exchange rule free, 2000 matches x 10 rounds, seed 1000, 4 threads
 
 Strategy                       President       Dorftrottel     Arschloch       
 Adaptive(reading,tempo,bully)  8637            12824           18539           

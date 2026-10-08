@@ -1,0 +1,28 @@
+4 players, Single deck, FirstDealtWins, pass rule final, exchange rule forced, 2000 matches x 10 rounds, seed 1000, 4 threads
+
+Strategy                       President       Vize            ViceArschloch   Arschloch       
+Adaptive(reading,tempo,bully)  5685            4994            4989            4332            
+CardCounter                    4994            5474            5103            4429            
+EndgameDenial                  5392            5366            4970            4272            
+LowestLegal                    3929            4166            4938            6967            
+
+Voluntary pass rate: 0.00%
+
+Voluntary pass rate by strategy:
+  Adaptive(reading,tempo,bully)  0.00%
+  CardCounter                    0.00%
+  EndgameDenial                  0.00%
+  LowestLegal                    0.00%
+
+President retention (stayed President the very next round):
+  Adaptive(reading,tempo,bully)  63.82% (3268/5121)
+  CardCounter                    60.72% (2741/4514)
+  EndgameDenial                  62.34% (2991/4798)
+  LowestLegal                    58.90% (2101/3567)
+
+First-round placement variance (lower = more skill-driven, higher = more luck-driven):
+  Adaptive(reading,tempo,bully)  1.30
+  CardCounter                    1.15
+  EndgameDenial                  1.18
+  LowestLegal                    1.35
+

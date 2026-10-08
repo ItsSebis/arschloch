@@ -1,4 +1,4 @@
-5 players, Single deck, FirstDealtWins, pass rule final, 2000 matches x 10 rounds, seed 1000, 4 threads
+5 players, Single deck, FirstDealtWins, pass rule final, exchange rule free, 2000 matches x 10 rounds, seed 1000, 4 threads
 
 Strategy                       President       Vize            Dorftrottel     ViceArschloch   Arschloch       
 Adaptive(reading,tempo,bully)  4473            3703            3788            4165            3871            

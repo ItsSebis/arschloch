@@ -31,7 +31,7 @@ table() { # threads, strategy specs...
   shift
   local args=()
   for spec in "$@"; do args+=(--strategy "$spec"); done
-  "$CLI" --player-count 4 --matches "$MATCHES" --rounds 8 --seed 42 --pass-rule "${PASS_RULE:-free}" --output "$TMP/result.json" \
+  "$CLI" --player-count 4 --matches "$MATCHES" --rounds 8 --seed 42 --pass-rule "${PASS_RULE:-free}" --exchange-rule "${EXCHANGE_RULE:-free}" --output "$TMP/result.json" \
     --threads "$threads" "${args[@]}"
 }
 
@@ -47,7 +47,7 @@ echo "== training (pop 60, 4 generations, 40 matches, 6 rounds, seed 7)"
 rm -rf "$TMP/run"
 start=$(date +%s.%N)
 "$CLI" train --out "$TMP/run" --population 60 --generations 4 --matches-per-genome 40 \
-  --reeval-matches 60 --rounds 6 --seed 7 --pass-rule "${PASS_RULE:-free}" --threads "$THREADS" --quiet > /dev/null
+  --reeval-matches 60 --rounds 6 --seed 7 --pass-rule "${PASS_RULE:-free}" --exchange-rule "${EXCHANGE_RULE:-free}" --threads "$THREADS" --quiet > /dev/null
 end=$(date +%s.%N)
 printf '%-28s %7.2fs  %s\n' "train (best.json)" "$(echo "$end - $start" | bc -l)" \
   "$(sha256sum < "$TMP/run/best.json" | cut -c1-16)"

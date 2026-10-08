@@ -1,5 +1,11 @@
 # NEAT v2 baseline (pass rule `final`)
 
+> `run.sh` defaults to `EXCHANGE_RULE=free` (how the summaries here were recorded);
+> `../current-rules/neat-v2-champion` is the same measurement under the forced
+> exchange. The champion itself is unchanged by that rule (a retrain under it is
+> byte-identical, see `../current-rules/README.md`), so it is the champion built into
+> `cli play`.
+
 The champion retrained under the rules of the game (`--pass-rule final`, a pass
 ends your part in the trick) with exactly the neat-v1 recipe. `neat-v1` remains
 the reference for the older rule (`free`).
@@ -16,7 +22,8 @@ the reference for the older rule (`free`).
 ```bash
 target/release/cli train --out runs/v2 --seed 1 --population 150 \
   --generations 120 --matches-per-genome 80 --reeval-matches 200 \
-  --rounds 8 --champion-candidates 5 --weight-power 0.2 --pass-rule final --quiet
+  --rounds 8 --champion-candidates 5 --weight-power 0.2 --pass-rule final \
+  --exchange-rule free --quiet
 ```
 
 4 players, single deck, opponent pool `lowest-legal`, `endgame-denial`,

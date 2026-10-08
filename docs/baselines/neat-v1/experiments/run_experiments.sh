@@ -11,7 +11,8 @@ OUT=${1:-/tmp/neat-experiments}
 mkdir -p "$OUT"
 # Run before the pass rule existed: `free` is what they were measured under.
 PASS_RULE=${PASS_RULE:-free}
-COMMON=(--pass-rule "$PASS_RULE" --population 100 --generations 60 --matches-per-genome 40 --reeval-matches 100 --rounds 6 --quiet)
+EXCHANGE_RULE=${EXCHANGE_RULE:-free}
+COMMON=(--pass-rule "$PASS_RULE" --exchange-rule "$EXCHANGE_RULE" --population 100 --generations 60 --matches-per-genome 40 --reeval-matches 100 --rounds 6 --quiet)
 
 run() { # name seed extra-args...
   local name=$1 seed=$2; shift 2
@@ -22,7 +23,7 @@ run() { # name seed extra-args...
   "$CLI" train --out "$dir" --seed "$seed" "${COMMON[@]}" "$@" > "$dir.log" 2>&1
   # A battery that includes opponents training never saw, on a seed stream
   # training never uses.
-  "$CLI" evaluate --genome "$dir/best.json" --matches 600 --seed 99 --pass-rule "$PASS_RULE" --json "$dir.eval.json" > "$dir.eval.txt"
+  "$CLI" evaluate --genome "$dir/best.json" --matches 600 --seed 99 --pass-rule "$PASS_RULE" --exchange-rule "$EXCHANGE_RULE" --json "$dir.eval.json" > "$dir.eval.txt"
   echo "done $name seed $seed"
 }
 

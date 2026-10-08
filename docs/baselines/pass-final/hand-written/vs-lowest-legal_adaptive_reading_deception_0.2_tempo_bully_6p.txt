@@ -1,4 +1,4 @@
-6 players, Single deck, FirstDealtWins, pass rule final, 2000 matches x 10 rounds, seed 1000, 4 threads
+6 players, Single deck, FirstDealtWins, pass rule final, exchange rule free, 2000 matches x 10 rounds, seed 1000, 4 threads
 
 Strategy                                     President       Vize            Offizier        Dummkopf        ViceArschloch   Arschloch       
 Adaptive(reading,deception=0.2,tempo,bully)  3212            2857            3144            3476            3792            3519            

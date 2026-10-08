@@ -313,6 +313,21 @@ results can be reproduced.
 - Not done (Phase 13): neat inputs for "who is still in this trick", which the new
   rule makes meaningful.
 
+## Phase 15 — Rule change: the exchange gives your highest cards (done)
+
+The lower role of an exchange pair must hand over its highest cards (no choice),
+as in the real game; `docs/RULES.md` says so and it is the default everywhere
+(`--exchange-rule forced`). The older behaviour, where the lower role or its
+strategy chose any cards, stays as `--exchange-rule free` (a game modifier, and
+how earlier results were measured). Carried like the pass rule: `engine::
+ExchangeRule` with `exchange_with_rule`, fields of the match, training,
+evaluation and play-session configs and of the play records, options of every CLI
+mode and the play page (under `forced` the human is never asked to choose and
+only sees what was taken and received); old runs, configs and records read as
+`free`. Finding: only `random-legal` and `hold-back-pairs` ever gave other
+cards, so every other strategy plays identical games under both rules and the
+retrained champion is byte-identical (`docs/baselines/current-rules`).
+
 ## Idea — GPU (CUDA / ROCm) training
 
 Measured in Phase 12 (details in `docs/baselines/perf/README.md`): the

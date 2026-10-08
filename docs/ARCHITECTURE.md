@@ -220,6 +220,10 @@ routes serve state, events, genomes and recorded decisions). `cli train
 `Statistics`/`MatchResult` JSON output (or driving `sim` live), rather
 than a refactor of the crates above.
 
+The exchange rule (Phase 15): `engine::ExchangeRule` (`Forced` by default: the lower role gives its highest
+cards and `exchange_with_rule` never asks a strategy; `Free` asks `choose_exchange_cards`), carried like the
+pass rule and selected with `--exchange-rule`.
+
 The pass rule (Phase 14): `engine::PassRule` (`Final` by default, `Free` for the older
 behaviour) lives in `Trick`; `MatchConfig`, `TableSpec`, `TrainConfig` and the play
 session carry it, and `--pass-rule` selects it. See `docs/RULES.md`.

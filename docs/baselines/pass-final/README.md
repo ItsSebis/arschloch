@@ -1,5 +1,9 @@
 # Baselines under the pass rule
 
+> Measured with `--pass-rule final --exchange-rule free`: the exchange rule was added
+> afterwards, so these keep the older, choosing exchange. The current rules are in
+> `../current-rules`.
+
 Phase 14 made "a pass ends your part in the trick" (`--pass-rule final`) the rule
 of the game and the default; the baselines recorded before it were measured
 under the older behaviour (`--pass-rule free`). This directory re-measures them

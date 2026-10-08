@@ -1,4 +1,4 @@
-5 players, Single deck, FirstDealtWins, pass rule free, 2000 matches x 10 rounds, seed 1000, 4 threads
+5 players, Single deck, FirstDealtWins, pass rule free, exchange rule free, 2000 matches x 10 rounds, seed 1000, 4 threads
 
 Strategy        President       Vize            Dorftrottel     ViceArschloch   Arschloch       
 LowestLegal     10166           14306           17205           18810           19513           

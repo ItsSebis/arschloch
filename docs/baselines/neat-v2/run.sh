@@ -15,6 +15,9 @@ ROUNDS=10
 THREADS=${THREADS:-4}
 # Measured under the rules of the game (a pass ends your part in the trick).
 PASS_RULE=${PASS_RULE:-final}
+# The exchange rule was introduced after these were recorded; `free` is what they
+# were measured under (set EXCHANGE_RULE=forced for the rules of the game).
+EXCHANGE_RULE=${EXCHANGE_RULE:-free}
 mkdir -p "$OUT"
 TMP=$(mktemp)
 trap 'rm -f "$TMP"' EXIT
@@ -28,13 +31,13 @@ for n in 3 4 5 6; do
     args=()
     for spec in "${specs[@]}"; do args+=(--strategy "$spec"); done
     "$CLI" --player-count "$n" --matches "$MATCHES" --rounds "$ROUNDS" \
-      --seed "$SEED" --pass-rule "$PASS_RULE" --threads "$THREADS" --output "$TMP" "${args[@]}" \
+      --seed "$SEED" --pass-rule "$PASS_RULE" --exchange-rule "$EXCHANGE_RULE" --threads "$THREADS" --output "$TMP" "${args[@]}" \
       > "$OUT/champion-vs-${opponent//[:,=]/_}_${n}p.txt"
   done
   # The same champion on a seed stream training never used, against the
   # whole battery including opponents it never trained against.
   "$CLI" evaluate --genome "$GENOME" --player-count "$n" --matches 600 --seed 99 \
-    --pass-rule "$PASS_RULE" --threads "$THREADS" --json "$OUT/evaluate_${n}p.json" > "$OUT/evaluate_${n}p.txt"
+    --pass-rule "$PASS_RULE" --exchange-rule "$EXCHANGE_RULE" --threads "$THREADS" --json "$OUT/evaluate_${n}p.json" > "$OUT/evaluate_${n}p.txt"
 done
 
 # The design spec's mixed-field lineup (section 9): the champion and three
@@ -44,7 +47,7 @@ done
 # larger than that effect, see docs/baselines/pre-neat/README.md.)
 for base in 1000 2000 3000 4000; do
   "$CLI" --player-count 4 --matches "$MATCHES" --rounds "$ROUNDS" \
-    --seed "$base" --pass-rule "$PASS_RULE" --threads "$THREADS" --output "$TMP" \
+    --seed "$base" --pass-rule "$PASS_RULE" --exchange-rule "$EXCHANGE_RULE" --threads "$THREADS" --output "$TMP" \
     --strategy "neat:$GENOME" --strategy card-counter --strategy endgame-denial \
     --strategy "adaptive:reading,tempo,bully" > "$OUT/mixed-field_4p_seed${base}.txt"
 done

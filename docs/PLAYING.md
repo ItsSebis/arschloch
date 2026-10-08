@@ -30,7 +30,8 @@ target/release/cli play --model runs/first --model runs/second/gen-0042.json
 Choose the table size (3-6), the deck (single or double, with the duplicate
 rule for the double deck), whether a pass ends your part in the trick (the
 rules, default) or you may still play later in it (the old simulator
-behaviour), how many rounds make a match (default 8), your seat
+behaviour), whether the exchange is forced (the rules) or lets the
+lower role choose, how many rounds make a match (default 8), your seat
 (or random) and, for every other seat, an opponent: a trained model or a
 hand-written strategy. A match runs for the chosen number of rounds with the
 roles carried over, exactly like a simulated match.
@@ -48,9 +49,11 @@ roles carried over, exactly like a simulated match.
 - **Pass** is allowed when you do not lead the trick. Under the default rule a
   pass is final for the trick: you sit out until it ends (the seat boxes show
   who is out of the trick).
-- **The exchange**: if you hold a lower role you choose which cards to give
-  (as many as the role asks for); a higher role automatically hands back its
-  lowest cards. The log tells you what you gave and received.
+- **The exchange**: by the rules the lower role must give its highest cards and
+  the higher role hands back its lowest, so there is nothing to choose: the log
+  tells you what you gave and received. With the *free* exchange option in the
+  setup (the old behaviour) a lower role instead picks which cards to give, as
+  many as the role asks for.
 - **Replay speed** controls how fast the other seats' moves are shown. The game
   itself runs on the server, so reloading the page and pressing *Continue last
   game* picks it up again.

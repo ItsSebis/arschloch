@@ -1,6 +1,7 @@
 {
   "deck_variant": "Single",
   "duplicate_rule": "FirstDealtWins",
+  "exchange_rule": "free",
   "matches": 600,
   "pass_rule": "final",
   "player_count": 6,
