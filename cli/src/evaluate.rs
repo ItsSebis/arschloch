@@ -63,6 +63,13 @@ pub struct EvaluateArgs {
     #[arg(long, value_enum, default_value_t = DuplicateRuleArg::FirstDealtWins)]
     pub duplicate_rule: DuplicateRuleArg,
 
+    /// What a pass means for the rest of the trick: `final` (the rules of the
+    /// game) takes a seat out of the trick once it passes; `free` is how the
+    /// simulator played before the rule was fixed, kept to reproduce older
+    /// results.
+    #[arg(long, value_parser = clap::value_parser!(engine::PassRule), default_value_t = engine::PassRule::Final)]
+    pub pass_rule: engine::PassRule,
+
     /// Rounds per match.
     #[arg(long, default_value_t = 8, value_parser = clap::builder::RangedI64ValueParser::<usize>::new().range(1..))]
     pub rounds: usize,
@@ -223,6 +230,7 @@ pub fn run(raw_args: impl Iterator<Item = String>) -> anyhow::Result<()> {
         deck_variant: args.deck_variant.into(),
         duplicate_rule: args.duplicate_rule.into(),
         rounds: args.rounds,
+        pass_rule: args.pass_rule,
     };
     // A seed stream that training (generation streams, fixed and held-out
     // sets) never uses.
@@ -255,10 +263,11 @@ pub fn run(raw_args: impl Iterator<Item = String>) -> anyhow::Result<()> {
         .collect();
 
     println!(
-        "{} players, {:?} deck, {:?}, {} matches x {} rounds per cell, seed {}",
+        "{} players, {:?} deck, {:?}, pass rule {}, {} matches x {} rounds per cell, seed {}",
         args.player_count,
         args.deck_variant,
         args.duplicate_rule,
+        args.pass_rule,
         args.matches,
         args.rounds,
         args.seed
@@ -270,6 +279,7 @@ pub fn run(raw_args: impl Iterator<Item = String>) -> anyhow::Result<()> {
             "player_count": args.player_count,
             "deck_variant": format!("{:?}", args.deck_variant),
             "duplicate_rule": format!("{:?}", args.duplicate_rule),
+            "pass_rule": args.pass_rule.to_string(),
             "rounds": args.rounds,
             "matches": args.matches,
             "seed": args.seed,

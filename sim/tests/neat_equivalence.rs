@@ -29,6 +29,7 @@ fn a_lowest_legal_network_plays_identically_to_lowest_legal() {
                     duplicate_rule,
                     rounds: 6,
                     seed,
+                    pass_rule: engine::PassRule::default(),
                 };
                 let a = run_match(&config, &table(player_count, &|| neat.clone()));
                 let b = run_match(&config, &table(player_count, &|| reference.clone()));
@@ -65,6 +66,7 @@ fn flipping_the_strength_weight_changes_play() {
             duplicate_rule: DuplicateRule::FirstDealtWins,
             rounds: 6,
             seed,
+            pass_rule: engine::PassRule::default(),
         };
         let a = run_match(&config, &table(4, &|| greedy.clone()));
         let b = run_match(&config, &table(4, &|| reference.clone()));

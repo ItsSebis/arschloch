@@ -19,7 +19,7 @@ use std::sync::Arc;
 use engine::{
     assign_roles, deal, exchange_counts_for_player_count, exchange_with_selection,
     lowest_card_holder, roles_for_player_count, standard_deck, Card, Combo, DeckVariant,
-    DuplicateRule, Move, Rank, Role, Round, SeatId, Suit,
+    DuplicateRule, Move, PassRule, Rank, Role, Round, SeatId, Suit,
 };
 use rand::seq::SliceRandom;
 use rand::SeedableRng;
@@ -36,6 +36,7 @@ pub struct SessionConfig {
     pub player_count: u8,
     pub deck_variant: DeckVariant,
     pub duplicate_rule: DuplicateRule,
+    pub pass_rule: PassRule,
     pub rounds: usize,
     pub seed: u64,
     pub human_seat: u8,
@@ -570,8 +571,13 @@ impl Session {
         self.round_deck = hands.iter().flatten().copied().collect();
         let hand_sizes = hands.iter().map(Vec::len).collect();
         self.round = Some(
-            Round::new(hands, self.config.duplicate_rule, leader)
-                .expect("player_count/leader are always valid for a supported table size"),
+            Round::with_pass_rule(
+                hands,
+                self.config.duplicate_rule,
+                self.config.pass_rule,
+                leader,
+            )
+            .expect("player_count/leader are always valid for a supported table size"),
         );
         self.tracker = PassTracker::new(
             usize::from(self.config.player_count),
@@ -1034,6 +1040,7 @@ mod tests {
             player_count: players,
             deck_variant: deck,
             duplicate_rule: DuplicateRule::FirstDealtWins,
+            pass_rule: PassRule::default(),
             rounds,
             seed: 7,
             human_seat,
@@ -1151,6 +1158,7 @@ mod tests {
                     duplicate_rule: DuplicateRule::FirstDealtWins,
                     rounds: 6,
                     seed: 7,
+                    pass_rule: engine::PassRule::default(),
                 },
                 &strategies,
             );

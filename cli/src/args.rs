@@ -21,6 +21,13 @@ pub struct Args {
     #[arg(long, value_enum, default_value_t = DuplicateRuleArg::FirstDealtWins)]
     pub duplicate_rule: DuplicateRuleArg,
 
+    /// What a pass means for the rest of the trick: `final` (the rules of the
+    /// game) takes a seat out of the trick once it passes; `free` is how the
+    /// simulator played before the rule was fixed, kept to reproduce older
+    /// results.
+    #[arg(long, value_parser = clap::value_parser!(engine::PassRule), default_value_t = engine::PassRule::Final)]
+    pub pass_rule: engine::PassRule,
+
     /// How many independent matches to simulate.
     #[arg(long, value_parser = clap::builder::RangedI64ValueParser::<usize>::new().range(1..))]
     pub matches: usize,
@@ -254,6 +261,7 @@ mod tests {
             player_count,
             deck_variant: DeckVariantArg::Single,
             duplicate_rule: DuplicateRuleArg::FirstDealtWins,
+            pass_rule: engine::PassRule::default(),
             matches: 1,
             rounds: 1,
             strategies: vec![StrategyArg::Fixed(FixedStrategy::LowestLegal); strategy_count],

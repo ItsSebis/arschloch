@@ -154,6 +154,7 @@ mod tests {
                 duplicate_rule: DuplicateRule::FirstDealtWins,
                 rounds: 5,
                 seed,
+                pass_rule: engine::PassRule::default(),
             })
             .collect()
     }

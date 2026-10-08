@@ -133,8 +133,9 @@ pub fn run_match(config: &MatchConfig, strategies: &[Arc<dyn Strategy>]) -> Matc
 
         let round_deck: Vec<Card> = hands.iter().flatten().copied().collect();
 
-        let mut round = Round::new(hands, config.duplicate_rule, leader)
-            .expect("player_count/leader are always valid for a supported table size");
+        let mut round =
+            Round::with_pass_rule(hands, config.duplicate_rule, config.pass_rule, leader)
+                .expect("player_count/leader are always valid for a supported table size");
 
         let mut tracker = PassTracker::new(usize::from(config.player_count), config.duplicate_rule);
         while !round.is_complete() {
@@ -235,6 +236,7 @@ mod tests {
             duplicate_rule: DuplicateRule::FirstDealtWins,
             rounds: 3,
             seed: 1,
+            pass_rule: engine::PassRule::default(),
         };
         let result = run_match(&config, &four_lowest_legal());
         assert_eq!(result.role_history.len(), 3);
@@ -251,6 +253,7 @@ mod tests {
             duplicate_rule: DuplicateRule::FirstDealtWins,
             rounds: 3,
             seed: 42,
+            pass_rule: engine::PassRule::default(),
         };
         let strategies = four_lowest_legal();
         let first = run_match(&config, &strategies);
@@ -316,6 +319,7 @@ mod tests {
                 duplicate_rule: DuplicateRule::FirstDealtWins,
                 rounds: 3,
                 seed,
+                pass_rule: engine::PassRule::default(),
             };
             let result = run_match(&config, &strategies);
             // Every round's last trick ends on a `Play` (the round ends
@@ -383,6 +387,7 @@ mod tests {
             duplicate_rule: DuplicateRule::FirstDealtWins,
             rounds: 3,
             seed: 7,
+            pass_rule: engine::PassRule::default(),
         };
         // The first round never exchanges (no prior roles yet), so at
         // least one of the two later rounds must trigger the exchange
@@ -405,6 +410,7 @@ mod tests {
                 duplicate_rule: DuplicateRule::FirstDealtWins,
                 rounds: 1,
                 seed,
+                pass_rule: engine::PassRule::default(),
             })
             .collect();
         let results = run_batch(&configs, &strategies);
@@ -465,6 +471,7 @@ mod tests {
             duplicate_rule: DuplicateRule::FirstDealtWins,
             rounds: 3,
             seed: 7,
+            pass_rule: engine::PassRule::default(),
         };
         let violation = Arc::new(AtomicBool::new(false));
         let strategies: Vec<Arc<dyn Strategy>> = (0..4)
@@ -545,6 +552,7 @@ mod tests {
                 duplicate_rule: DuplicateRule::FirstDealtWins,
                 rounds: 3,
                 seed,
+                pass_rule: engine::PassRule::default(),
             };
             let _ = run_match(&config, &strategies);
             let seen_ceilings = recorder

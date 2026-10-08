@@ -28,6 +28,7 @@ fn a_small_batch_produces_well_shaped_results() {
             duplicate_rule: DuplicateRule::FirstDealtWins,
             rounds: 5,
             seed,
+            pass_rule: engine::PassRule::default(),
         })
         .collect();
 
@@ -68,10 +69,42 @@ fn identical_seeds_produce_identical_results() {
         duplicate_rule: DuplicateRule::FirstDealtWins,
         rounds: 3,
         seed: 42,
+        pass_rule: engine::PassRule::default(),
     };
     let first = run_match(&config, &strategies);
     let second = run_match(&config, &strategies);
     assert_eq!(first.role_history, second.role_history);
     assert_eq!(first.trick_count, second.trick_count);
     assert_eq!(first.pass_counts, second.pass_counts);
+}
+
+/// The two pass rules play different games (a passed seat is out of the
+/// trick under `final`), each deterministically.
+#[test]
+fn the_pass_rules_differ_and_each_is_deterministic() {
+    use engine::PassRule;
+    let strategies: Vec<std::sync::Arc<dyn sim::Strategy>> = (0..4)
+        .map(|_| std::sync::Arc::new(sim::HoldBackPairs) as std::sync::Arc<dyn sim::Strategy>)
+        .collect();
+    let configs = |rule| -> Vec<sim::MatchConfig> {
+        (0..40)
+            .map(|seed| sim::MatchConfig {
+                player_count: 4,
+                deck_variant: engine::DeckVariant::Single,
+                duplicate_rule: engine::DuplicateRule::FirstDealtWins,
+                rounds: 6,
+                seed,
+                pass_rule: rule,
+            })
+            .collect()
+    };
+    let run = |rule| {
+        sim::run_batch(&configs(rule), &strategies)
+            .iter()
+            .map(|r| (r.role_history.clone(), r.trick_count))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(run(PassRule::Free), run(PassRule::Free));
+    assert_eq!(run(PassRule::Final), run(PassRule::Final));
+    assert_ne!(run(PassRule::Free), run(PassRule::Final));
 }

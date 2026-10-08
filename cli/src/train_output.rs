@@ -495,6 +495,7 @@ mod tests {
             champion_candidates: 1,
             hall_of_fame_size: 0,
             hall_of_fame_interval: 5,
+            pass_rule: sim::PassRule::default(),
         }
     }
 }

@@ -16,7 +16,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde_json::{json, Value};
 use sim::session::{AiSeat, Phase, Session, SessionConfig, SessionError};
-use sim::{DeckVariant, DuplicateRule, NeatStrategy, Strategy};
+use sim::{DeckVariant, DuplicateRule, NeatStrategy, PassRule, Strategy};
 
 use crate::records::{Record, RecordStore};
 use crate::routes::Response;
@@ -73,6 +73,7 @@ struct Setup {
     players: u8,
     deck: DeckVariant,
     rule: DuplicateRule,
+    pass_rule: PassRule,
     rounds: usize,
     entries: Vec<CatalogEntry>,
     human_seat: u8,
@@ -218,6 +219,13 @@ impl PlayApp {
                 ))
             }
         };
+        let pass_rule = match request["pass_rule"].as_str() {
+            None => PassRule::default(),
+            Some(text) => match text.parse::<PassRule>() {
+                Ok(rule) => rule,
+                Err(message) => return Err(bad(400, &message)),
+            },
+        };
         let rounds = match request["rounds"].as_u64() {
             None => 8,
             Some(r) => match usize::try_from(r)
@@ -252,6 +260,7 @@ impl PlayApp {
             players,
             deck,
             rule,
+            pass_rule,
             rounds,
             entries,
             human_seat,
@@ -272,6 +281,7 @@ impl PlayApp {
             players,
             deck,
             rule,
+            pass_rule,
             rounds,
             entries,
             human_seat,
@@ -282,6 +292,7 @@ impl PlayApp {
                 player_count: players,
                 deck_variant: deck,
                 duplicate_rule: rule,
+                pass_rule,
                 rounds,
                 seed,
                 human_seat,

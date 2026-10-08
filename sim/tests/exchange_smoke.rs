@@ -39,6 +39,7 @@ fn every_table_size_runs_many_rounds_without_panicking() {
                 duplicate_rule: DuplicateRule::FirstDealtWins,
                 rounds: 6,
                 seed,
+                pass_rule: engine::PassRule::default(),
             })
             .collect();
         let results = run_batch(&configs, &baseline_strategies(player_count));

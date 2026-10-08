@@ -50,7 +50,7 @@ pub struct TrainArgs {
     #[arg(
         long,
         conflicts_with_all = [
-            "player_count", "deck_variant", "duplicate_rule", "rounds", "population",
+            "player_count", "deck_variant", "duplicate_rule", "pass_rule", "rounds", "population",
             "matches_per_genome", "reeval_matches", "seed", "opponent", "target_species",
             "champion_candidates", "hall_of_fame", "hall_interval", "weight_power", "runs"
         ]
@@ -82,6 +82,13 @@ pub struct TrainArgs {
 
     #[arg(long, value_enum, default_value_t = DuplicateRuleArg::FirstDealtWins)]
     pub duplicate_rule: DuplicateRuleArg,
+
+    /// What a pass means for the rest of the trick: `final` (the rules of the
+    /// game) takes a seat out of the trick once it passes; `free` is how the
+    /// simulator played before the rule was fixed, kept to reproduce older
+    /// results.
+    #[arg(long, value_parser = clap::value_parser!(engine::PassRule), default_value_t = engine::PassRule::Final)]
+    pub pass_rule: engine::PassRule,
 
     /// Rounds per evaluation match (role carry-over between rounds).
     #[arg(long, default_value_t = 8, value_parser = clap::builder::RangedI64ValueParser::<usize>::new().range(1..))]
@@ -192,6 +199,17 @@ mod tests {
         assert_eq!(parse(&["--out", "d", "--runs", "5"]).unwrap().runs, 5);
         assert!(parse(&["--out", "d", "--runs", "0"]).is_err());
         assert!(parse(&["--out", "d", "--resume", "--runs", "2"]).is_err());
+    }
+
+    #[test]
+    fn the_pass_rule_defaults_to_final_and_cannot_change_on_resume() {
+        assert_eq!(parse(&["--out", "d"]).unwrap().pass_rule, engine::PassRule::Final);
+        assert_eq!(
+            parse(&["--out", "d", "--pass-rule", "free"]).unwrap().pass_rule,
+            engine::PassRule::Free
+        );
+        assert!(parse(&["--out", "d", "--pass-rule", "sometimes"]).is_err());
+        assert!(parse(&["--out", "d", "--resume", "--pass-rule", "free"]).is_err());
     }
 
     #[test]
