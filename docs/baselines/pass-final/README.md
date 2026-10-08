@@ -23,7 +23,7 @@ only when they have to (`Voluntary pass rate: 0.00%` in their summaries), so the
 results are **identical** under both rules. Only the strategies that pass on
 purpose differ:
 
-| strategy (vs 3 `lowest-legal`, 4 players, 2000 x 10 rounds) | President | Arschloch | voluntary pass rate |
+| strategy (vs 3 `lowest-legal`, 4 players, 2000 x 10 rounds) | President | Arschloch | table-wide voluntary pass rate |
 |---|---:|---:|---:|
 | `hold-back-pairs`, free | 87 | 16195 | 25.66% |
 | `hold-back-pairs`, final | 33 | 16785 | 27.98% |
@@ -31,6 +31,9 @@ purpose differ:
 | `random-legal`, final | 427 | 11135 | 10.88% |
 | adaptive with deception 0.2, free | 6798 | 3252 | 1.10% |
 | adaptive with deception 0.2, final | 6789 | 3202 | 1.46% |
+
+(The pass-rate column is the whole table's rate, as the summaries print it; the
+named strategy's own rate is higher.)
 
 Files that differ between `pre-neat/summaries` and `hand-written/` (ignoring the
 header line): `random-legal`, `hold-back-pairs` and the deception variant at 3-6

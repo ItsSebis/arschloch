@@ -921,7 +921,7 @@ impl Session {
                     .as_ref()
                     .map(|roles| roles[usize::from(seat)]),
                 place: places[usize::from(seat)],
-                passed: round.is_some_and(|r| r.has_passed(seat)),
+                passed: self.phase == Phase::Playing && round.is_some_and(|r| r.has_passed(seat)),
             })
             .collect();
 
@@ -1602,6 +1602,52 @@ mod tests {
         }
         assert!(saw_an_ai_pass, "the view never showed a seat as passed");
         assert!(humans_passes > 0);
+    }
+
+    #[test]
+    fn nobody_is_shown_as_passed_outside_a_trick_in_progress() {
+        // The round-over and match-over screens must not show last trick's passes.
+        let mut stale = 0;
+        for seed in 0..80 {
+            let mut cfg = config(4, DeckVariant::Single, 2, 0);
+            cfg.seed = seed;
+            cfg.pass_rule = PassRule::Final;
+            let mut session = Session::new(cfg, ai(3)).unwrap();
+            let mut guard = 0;
+            while session.phase() != Phase::MatchOver && guard < 3000 {
+                guard += 1;
+                let view = session.view();
+                if view.phase != Phase::Playing && view.seats.iter().any(|s| s.passed) {
+                    stale += 1;
+                }
+                match view.phase {
+                    Phase::Exchange => {
+                        let ids: Vec<u8> = view
+                            .hand
+                            .iter()
+                            .take(view.give_count)
+                            .map(|c| c.id)
+                            .collect();
+                        session.give(&ids).unwrap();
+                    }
+                    Phase::Playing if !view.must_lead => session.pass().unwrap(),
+                    Phase::Playing => {
+                        let rank = view.playable.first().unwrap();
+                        let size = rank.sizes[0];
+                        session
+                            .play(&rank.card_ids[rank.card_ids.len() - size..])
+                            .unwrap();
+                    }
+                    Phase::RoundOver => session.next_round().unwrap(),
+                    Phase::MatchOver => unreachable!(),
+                }
+            }
+            let end = session.view();
+            if end.seats.iter().any(|s| s.passed) {
+                stale += 1;
+            }
+        }
+        assert_eq!(stale, 0, "views outside play showed passed seats");
     }
 
     #[test]

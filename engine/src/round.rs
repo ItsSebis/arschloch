@@ -741,9 +741,9 @@ mod tests {
     #[test]
     fn when_the_winner_goes_out_the_lead_passes_to_the_next_active_seat_under_final() {
         use Rank::*;
-        // Seat 0 leads its last card; 1 passes; 2 beats it with its last card
-        // and goes out; seat 0 is already out; only seat 1 (passed) is left in
-        // the round with cards? Use 4 seats so someone can still lead.
+        // Seat 0 leads its last card (and is out); 1 passes; 2 beats it with
+        // its last card (and is out, as the trick's winner); 3 passes. The
+        // trick ends and the next active seat after the winner leads.
         let hands = single_hands(&[&[Four], &[Five, Seven], &[Six], &[Eight, Ten]]);
         let mut round =
             Round::with_pass_rule(hands, DuplicateRule::FirstDealtWins, PassRule::Final, 0)

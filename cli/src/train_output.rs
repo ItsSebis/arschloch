@@ -44,10 +44,11 @@ pub fn render_banner(start: &RunStart, out: &std::path::Path) -> String {
     let mut text = String::new();
     let _ = writeln!(
         text,
-        "training: {} players, {:?} deck, {:?} | population {}, {} generations | {} matches x {} rounds per genome, seed {}",
+        "training: {} players, {:?} deck, {:?}, pass rule {} | population {}, {} generations | {} matches x {} rounds per genome, seed {}",
         config.player_count,
         config.deck,
         config.duplicate_rule,
+        config.pass_rule,
         config.neat.population_size,
         config.generations,
         config.matches_per_genome,
@@ -462,6 +463,23 @@ mod tests {
             ..end
         };
         assert!(!render_summary(&none, std::path::Path::new("x")).contains("best champion"));
+    }
+
+    #[test]
+    fn the_banner_names_the_pass_rule() {
+        let mut start = RunStart {
+            schema_version: SCHEMA_VERSION,
+            config: sim_config(),
+            opponents: vec![],
+            feature_names: vec![],
+            resumed_from_generation: None,
+            warm_started_from: None,
+        };
+        let text = render_banner(&start, std::path::Path::new("runs/a"));
+        assert!(text.contains("pass rule final"), "{text}");
+        start.config.pass_rule = sim::PassRule::Free;
+        let text = render_banner(&start, std::path::Path::new("runs/a"));
+        assert!(text.contains("pass rule free"), "{text}");
     }
 
     #[test]

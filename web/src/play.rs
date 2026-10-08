@@ -85,6 +85,7 @@ struct Game {
     opponents: Vec<String>,
     deck: String,
     duplicate_rule: String,
+    pass_rule: String,
     recorded: bool,
     last_used: u64,
 }
@@ -353,6 +354,7 @@ impl PlayApp {
                     "last_dealt_wins"
                 }
                 .into(),
+                pass_rule: pass_rule.to_string(),
                 recorded: false,
                 last_used,
             },
@@ -446,6 +448,7 @@ impl PlayApp {
             player_count: view.player_count,
             deck: game.deck.clone(),
             duplicate_rule: game.duplicate_rule.clone(),
+            pass_rule: game.pass_rule.clone(),
             rounds: view.rounds,
             opponents: game.opponents.clone(),
             roles: result.roles,
