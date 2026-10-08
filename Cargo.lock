@@ -392,6 +392,8 @@ name = "web"
 version = "0.2.0"
 dependencies = [
  "neat",
+ "rand",
+ "serde",
  "serde_json",
  "sim",
 ]

@@ -12,6 +12,7 @@ pub mod strategies;
 pub mod strategy;
 pub mod training;
 
+pub use engine::{DeckVariant, DuplicateRule, Role};
 pub use hand_reading::{read_pass_ceilings, PassCeilings};
 pub use match_config::MatchConfig;
 pub use match_result::MatchResult;
