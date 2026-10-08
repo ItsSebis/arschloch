@@ -3,6 +3,7 @@
 //! docs/ARCHITECTURE.md, "cli".
 
 mod args;
+mod evaluate;
 mod output;
 mod summary;
 mod train;
@@ -21,6 +22,7 @@ fn main() -> anyhow::Result<()> {
     match std::env::args().nth(1).as_deref() {
         Some("train") => return train::run(std::env::args().skip(2)),
         Some("watch") => return watch::run(std::env::args().skip(2)),
+        Some("evaluate") => return evaluate::run(std::env::args().skip(2)),
         _ => {}
     }
     let args = args::Args::parse();
