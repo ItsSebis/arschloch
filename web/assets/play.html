@@ -26,6 +26,11 @@
             <option value="first_dealt_wins">first dealt wins</option><option value="last_dealt_wins">last dealt wins</option>
           </select>
         </div>
+        <div class="field"><label class="label" for="passrule">Passing</label>
+          <select id="passrule" title="What a pass means for the rest of the trick">
+            <option value="final">a pass ends your part in the trick (the rules)</option>
+            <option value="free">you may still play later in the trick (old behaviour)</option>
+          </select></div>
         <div class="field"><label class="label" for="rounds">Rounds</label><input id="rounds" type="number" min="1" max="50" value="8"></div>
         <div class="field"><label class="label" for="seat">Your seat</label><select id="seat"></select></div>
         <div class="field"><span class="label">Opponents</span><div id="opponents" class="opponents"></div></div>

@@ -203,9 +203,14 @@ mod tests {
 
     #[test]
     fn the_pass_rule_defaults_to_final_and_cannot_change_on_resume() {
-        assert_eq!(parse(&["--out", "d"]).unwrap().pass_rule, engine::PassRule::Final);
         assert_eq!(
-            parse(&["--out", "d", "--pass-rule", "free"]).unwrap().pass_rule,
+            parse(&["--out", "d"]).unwrap().pass_rule,
+            engine::PassRule::Final
+        );
+        assert_eq!(
+            parse(&["--out", "d", "--pass-rule", "free"])
+                .unwrap()
+                .pass_rule,
             engine::PassRule::Free
         );
         assert!(parse(&["--out", "d", "--pass-rule", "sometimes"]).is_err());

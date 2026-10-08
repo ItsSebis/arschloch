@@ -89,6 +89,7 @@ function readSetup() {
     players: state.players,
     deck: $("deck").value,
     duplicate_rule: $("rule").value,
+    pass_rule: $("passrule").value,
     rounds: Number($("rounds").value),
     ...(seat === "" ? {} : { human_seat: Number(seat) }),
     opponents: [...document.querySelectorAll("[data-opponent]")].map((s) => s.value),
@@ -278,13 +279,14 @@ function renderTable() {
     const size = display.handSizes[i];
     const place = display.places[i];
     const turn = !state.animating && view.to_move === i && view.phase === "playing";
+    const out = display.passed[i] && display.passRule === "final";
     const backs = Array.from({ length: Math.min(size, 26) }, () => '<span class="back"></span>').join("");
-    return `<div class="seat ${turn ? "turn" : ""} ${place ? "out" : ""}">
+    return `<div class="seat ${turn ? "turn" : ""} ${place || out ? "out" : ""}">
       ${place ? `<span class="place">${place}</span>` : ""}
       <div class="name">${esc(seat.name)}${seat.is_human ? " (you)" : ""}</div>
       <div class="role">${seat.role ? `${esc(roleName(seat.role))} · ` : ""}${size} card${size === 1 ? "" : "s"}</div>
       <div class="backs">${seat.is_human ? "" : backs}</div>
-      <div class="act">${esc(display.actions[i] || (display.leader === i && !display.table ? "leads" : ""))}</div>
+      <div class="act">${esc(display.actions[i] || (display.leader === i && !display.table ? "leads" : ""))}${display.passed[i] && display.passRule === "final" ? ' <span class="muted">· out of this trick</span>' : ""}</div>
     </div>`;
   }).join("");
   const table = display.table;
@@ -481,6 +483,7 @@ async function init() {
   state.setup = recall("arschloch.setup");
   if (state.setup?.rounds) $("rounds").value = state.setup.rounds;
   if (state.setup?.deck) $("deck").value = state.setup.deck;
+  if (state.setup?.pass_rule) $("passrule").value = state.setup.pass_rule;
   try {
     state.catalog = (await api("GET", "/api/catalog")).opponents;
     setStatus(true);

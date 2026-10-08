@@ -301,6 +301,10 @@ mod tests {
         let again: TrainConfig =
             serde_json::from_str(&serde_json::to_string(&config).unwrap()).unwrap();
         assert_eq!(again.pass_rule, PassRule::Final);
-        assert_eq!(sample().pass_rule, PassRule::Final, "new runs use the rules of the game");
+        assert_eq!(
+            sample().pass_rule,
+            PassRule::Final,
+            "new runs use the rules of the game"
+        );
     }
 }

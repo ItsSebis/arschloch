@@ -103,6 +103,12 @@ impl Trick {
         }
     }
 
+    /// Whether `seat` has passed in this trick and is out of it (always
+    /// `false` under `Free`, where a pass only declines the current play).
+    pub(crate) fn has_passed(&self, seat: SeatId) -> bool {
+        self.rule == PassRule::Final && self.passed[usize::from(seat)]
+    }
+
     pub(crate) fn leader(&self) -> SeatId {
         self.leader
     }

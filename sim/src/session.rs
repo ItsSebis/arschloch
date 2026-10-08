@@ -246,6 +246,8 @@ pub struct SeatView {
     pub role: Option<Role>,
     /// Finishing place this round (1 = first out), once finished.
     pub place: Option<usize>,
+    /// Passed in the current trick and so out of it (pass rule `final`).
+    pub passed: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -279,6 +281,7 @@ pub struct View {
     pub round: usize,
     pub rounds: usize,
     pub player_count: u8,
+    pub pass_rule: PassRule,
     pub human_seat: SeatId,
     pub hand: Vec<CardView>,
     pub seats: Vec<SeatView>,
@@ -918,6 +921,7 @@ impl Session {
                     .as_ref()
                     .map(|roles| roles[usize::from(seat)]),
                 place: places[usize::from(seat)],
+                passed: round.is_some_and(|r| r.has_passed(seat)),
             })
             .collect();
 
@@ -954,6 +958,7 @@ impl Session {
             },
             rounds: self.config.rounds,
             player_count: self.config.player_count,
+            pass_rule: self.config.pass_rule,
             human_seat: human,
             hand: views(&self.ids, &hand),
             seats,
@@ -1539,6 +1544,74 @@ mod tests {
             revealing < total / 2,
             "{revealing} of {total} ids still match the seat"
         );
+    }
+
+    #[test]
+    fn under_the_final_rule_passes_show_in_the_view_and_a_pass_ends_the_humans_trick() {
+        let mut saw_an_ai_pass = false;
+        let mut humans_passes = 0;
+        for seed in 0..60 {
+            let mut cfg = config(4, DeckVariant::Single, 2, 0);
+            cfg.seed = seed;
+            cfg.pass_rule = PassRule::Final;
+            let mut session = Session::new(cfg, ai(3)).unwrap();
+            let mut guard = 0;
+            while session.phase() != Phase::MatchOver && guard < 2000 {
+                guard += 1;
+                let view = session.view();
+                if view.seats.iter().any(|s| s.passed && !s.is_human) {
+                    saw_an_ai_pass = true;
+                }
+                match view.phase {
+                    Phase::Exchange => {
+                        let ids: Vec<u8> = view
+                            .hand
+                            .iter()
+                            .take(view.give_count)
+                            .map(|c| c.id)
+                            .collect();
+                        session.give(&ids).unwrap();
+                    }
+                    Phase::Playing if !view.must_lead => {
+                        // Always pass when following: the human is out of the
+                        // trick, so the next human decision must come after
+                        // a TrickEnd.
+                        let before = view.event_count;
+                        session.pass().unwrap();
+                        humans_passes += 1;
+                        let ended = session.events_since(before).iter().any(|e| {
+                            matches!(e, GameEvent::TrickEnd { .. } | GameEvent::RoundEnd { .. })
+                        });
+                        assert!(
+                            ended,
+                            "seed {seed}: the human acted again inside the trick they passed in"
+                        );
+                    }
+                    Phase::Playing => {
+                        let rank = view.playable.first().unwrap();
+                        let size = rank.sizes[0];
+                        session
+                            .play(&rank.card_ids[rank.card_ids.len() - size..])
+                            .unwrap();
+                    }
+                    Phase::RoundOver => session.next_round().unwrap(),
+                    Phase::MatchOver => unreachable!(),
+                }
+            }
+            assert_eq!(session.phase(), Phase::MatchOver, "seed {seed}");
+        }
+        assert!(saw_an_ai_pass, "the view never showed a seat as passed");
+        assert!(humans_passes > 0);
+    }
+
+    #[test]
+    fn under_the_free_rule_no_seat_is_ever_shown_as_passed() {
+        let mut cfg = config(4, DeckVariant::Single, 2, 0);
+        cfg.pass_rule = PassRule::Free;
+        let mut session = Session::new(cfg, ai(3)).unwrap();
+        play_by_view(&mut session);
+        assert_eq!(session.view().pass_rule, PassRule::Free);
+        assert!(session.view().seats.iter().all(|s| !s.passed));
     }
 
     fn champion() -> NeatStrategy {

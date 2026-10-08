@@ -219,12 +219,13 @@ impl PlayApp {
                 ))
             }
         };
-        let pass_rule = match request["pass_rule"].as_str() {
-            None => PassRule::default(),
-            Some(text) => match text.parse::<PassRule>() {
+        let pass_rule = match &request["pass_rule"] {
+            Value::Null => PassRule::default(),
+            Value::String(text) => match text.parse::<PassRule>() {
                 Ok(rule) => rule,
                 Err(message) => return Err(bad(400, &message)),
             },
+            _ => return Err(bad(400, "pass_rule must be final or free")),
         };
         let rounds = match request["rounds"].as_u64() {
             None => 8,
@@ -862,6 +863,25 @@ mod tests {
         );
         assert_eq!(status, 200, "{reply}");
         assert_eq!(percent_decode("a%3Ab%2Fc+d%zz%4"), "a:b/c d%zz%4");
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn the_pass_rule_is_chosen_per_game_and_defaults_to_the_rules_of_the_game() {
+        let (app, path) = app("passrule");
+        let make = |extra: Value| {
+            let mut body = json!({"players": 3, "opponents": ["lowest-legal", "lowest-legal"], "human_seat": 0});
+            body.as_object_mut()
+                .unwrap()
+                .extend(extra.as_object().unwrap().clone());
+            call(&app, "POST", "/api/games", &body.to_string())
+        };
+        assert_eq!(make(json!({})).1["view"]["pass_rule"], "final");
+        let (status, free) = make(json!({"pass_rule": "free"}));
+        assert_eq!(status, 200);
+        assert_eq!(free["view"]["pass_rule"], "free");
+        assert_eq!(make(json!({"pass_rule": "sometimes"})).0, 400);
+        assert_eq!(make(json!({"pass_rule": 5})).0, 400);
         std::fs::remove_file(path).ok();
     }
 

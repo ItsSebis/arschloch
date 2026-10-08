@@ -99,6 +99,9 @@ export function initialDisplay(view) {
     toMove: view.to_move ?? null,
     leader: null,
     actions: view.seats.map(() => ""),
+    passRule: view.pass_rule ?? "final",
+    // Out of the current trick after passing (pass rule "final").
+    passed: view.seats.map((s) => Boolean(s.passed)),
   };
 }
 
@@ -111,12 +114,14 @@ export function applyEvent(display, event) {
     handSizes: [...display.handSizes],
     places: [...display.places],
     actions: [...display.actions],
+    passed: [...display.passed],
   };
   switch (event.type) {
     case "round_start":
       next.handSizes = [...event.hand_sizes];
       next.places = event.hand_sizes.map(() => null);
       next.actions = event.hand_sizes.map(() => "");
+      next.passed = event.hand_sizes.map(() => false);
       next.table = null;
       next.leader = event.leader;
       break;
@@ -127,11 +132,13 @@ export function applyEvent(display, event) {
       break;
     case "pass":
       next.actions[event.seat] = "passes";
+      if (display.passRule === "final") next.passed[event.seat] = true;
       break;
     case "trick_end":
       next.table = null;
       next.leader = event.leader;
       next.actions = next.actions.map(() => "");
+      next.passed = next.passed.map(() => false);
       break;
     case "finished":
       next.places[event.seat] = event.place;

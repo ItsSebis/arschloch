@@ -114,6 +114,24 @@ test("applyEvent follows a round event by event", () => {
   assert.equal(display.leader, 0);
 });
 
+test("under the final pass rule a pass marks the seat as out until the trick ends", () => {
+  const seats = [0, 1, 2].map(() => ({ hand_size: 3, place: null, passed: false }));
+  let display = initialDisplay({ seats, table: null, to_move: 0, pass_rule: "final" });
+  display = applyEvent(display, { type: "play", seat: 0, cards: [card(1, 2, 0)], hand_left: 2 });
+  display = applyEvent(display, { type: "pass", seat: 1 });
+  assert.deepEqual(display.passed, [false, true, false]);
+  display = applyEvent(display, { type: "trick_end", leader: 0 });
+  assert.deepEqual(display.passed, [false, false, false]);
+  // The free rule never marks anyone.
+  let free = initialDisplay({ seats, table: null, to_move: 0, pass_rule: "free" });
+  free = applyEvent(free, { type: "pass", seat: 1 });
+  assert.deepEqual(free.passed, [false, false, false]);
+  // A server-supplied state is kept, and a new round clears it.
+  const served = initialDisplay({ seats: seats.map((s, i) => ({ ...s, passed: i === 2 })), table: null, to_move: 0, pass_rule: "final" });
+  assert.deepEqual(served.passed, [false, false, true]);
+  assert.deepEqual(applyEvent(served, { type: "round_start", round: 2, roles: null, leader: 0, hand_sizes: [4, 4, 4] }).passed, [false, false, false]);
+});
+
 test("applyEvent does not modify its input", () => {
   const before = initialDisplay({ seats: [{ hand_size: 3, place: null }, { hand_size: 3, place: null }, { hand_size: 3, place: null }], table: null, to_move: 0 });
   const snapshot = JSON.stringify(before);

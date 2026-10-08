@@ -93,6 +93,14 @@ impl Round {
         })
     }
 
+    /// Whether `seat` has passed in the current trick and is out of it
+    /// until the trick ends (`PassRule::Final` only; always `false` under
+    /// `Free`).
+    #[must_use]
+    pub fn has_passed(&self, seat: SeatId) -> bool {
+        self.trick.has_passed(seat)
+    }
+
     #[must_use]
     pub fn pass_rule(&self) -> PassRule {
         self.pass_rule
@@ -688,6 +696,7 @@ mod tests {
         round.submit_move(2, Move::Pass).unwrap();
         assert_eq!(round.current_combo(), None);
         assert_eq!(round.seat_to_move(), Some(0));
+        assert!(!round.has_passed(1), "a new trick clears the passes");
     }
 
     #[test]
@@ -707,6 +716,7 @@ mod tests {
         round.submit_move(3, Move::Pass).unwrap();
         play(&mut round, 0, Nine);
         assert_eq!(round.seat_to_move(), Some(1), "free: seat 1 is back in");
+        assert!(!round.has_passed(1), "free never marks a seat as out");
         // Seat 1 can act again (here it passes once more) and play goes on.
         round.submit_move(1, Move::Pass).unwrap();
         assert_eq!(round.seat_to_move(), Some(2));
