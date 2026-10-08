@@ -5,27 +5,19 @@
 //! See docs/superpowers/specs/2026-10-08-neat-engine-design.md.
 
 pub mod config;
+pub mod crossover;
 pub mod error;
+pub mod genome;
+pub mod innovation;
+pub mod mutation;
+pub mod network;
+pub mod population;
+pub mod species;
 
 pub use config::NeatConfig;
 pub use error::NeatError;
-
-pub mod innovation;
-
-pub use innovation::InnovationTracker;
-
-pub mod genome;
-
 pub use genome::{ConnectionGene, Genome, NodeGene, NodeKind};
-
-pub mod mutation;
-
-pub mod crossover;
-
-pub mod network;
-
+pub use innovation::InnovationTracker;
 pub use network::Network;
-
-pub mod species;
-
+pub use population::{GenerationReport, Population};
 pub use species::SpeciesStats;
