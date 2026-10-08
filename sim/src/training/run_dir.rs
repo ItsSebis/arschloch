@@ -97,6 +97,22 @@ pub struct RunDir {
     root: PathBuf,
 }
 
+/// Writes `root/name` so a reader (or a crash) sees either the old or the
+/// whole new contents: temp file, fsync, rename.
+pub(crate) fn write_atomically_in(
+    root: &Path,
+    name: &str,
+    contents: &str,
+) -> Result<(), TrainError> {
+    let target = root.join(name);
+    let temporary = root.join(format!("{name}.tmp"));
+    let mut file = File::create(&temporary).map_err(|e| io_error(&temporary, &e))?;
+    file.write_all(contents.as_bytes())
+        .map_err(|e| io_error(&temporary, &e))?;
+    file.sync_all().map_err(|e| io_error(&temporary, &e))?;
+    fs::rename(&temporary, &target).map_err(|e| io_error(&target, &e))
+}
+
 impl RunDir {
     /// Starts a new run directory, creating it if needed.
     ///
@@ -144,13 +160,7 @@ impl RunDir {
     }
 
     fn write_atomically(&self, name: &str, contents: &str) -> Result<(), TrainError> {
-        let target = self.path(name);
-        let temporary = self.path(&format!("{name}.tmp"));
-        let mut file = File::create(&temporary).map_err(|e| io_error(&temporary, &e))?;
-        file.write_all(contents.as_bytes())
-            .map_err(|e| io_error(&temporary, &e))?;
-        file.sync_all().map_err(|e| io_error(&temporary, &e))?;
-        fs::rename(&temporary, &target).map_err(|e| io_error(&target, &e))
+        write_atomically_in(&self.root, name, contents)
     }
 
     /// # Errors
