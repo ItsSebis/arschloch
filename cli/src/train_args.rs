@@ -15,6 +15,18 @@ pub const DEFAULT_OPPONENTS: [&str; 3] = [
     "adaptive:reading,tempo,bully",
 ];
 
+/// A strictly positive, finite number (clap parses `NaN`/`inf` as floats).
+fn positive_finite(text: &str) -> Result<f64, String> {
+    let value: f64 = text
+        .parse()
+        .map_err(|e| format!("`{text}` is not a number: {e}"))?;
+    if value.is_finite() && value > 0.0 {
+        Ok(value)
+    } else {
+        Err(format!("`{text}` must be a positive, finite number"))
+    }
+}
+
 /// Evolve a NEAT player, generation by generation.
 #[derive(Parser, Debug)]
 #[command(
@@ -110,7 +122,7 @@ pub struct TrainArgs {
 
     /// Size of a weight perturbation (uniform in plus/minus this). Default
     /// 0.2 (see docs/baselines/neat-v1).
-    #[arg(long, default_value_t = 0.2)]
+    #[arg(long, default_value_t = 0.2, value_parser = positive_finite)]
     pub weight_power: f64,
 
     /// Rayon thread-pool size. 0 lets rayon pick its own default.
@@ -204,6 +216,17 @@ mod tests {
             args.extend(conflicting);
             assert!(parse(&args).is_err(), "{conflicting:?}");
         }
+    }
+
+    #[test]
+    fn the_weight_power_must_be_a_positive_finite_number() {
+        for bad in ["NaN", "inf", "-inf", "0", "-0.5", "abc"] {
+            assert!(
+                parse(&["--out", "d", "--weight-power", bad]).is_err(),
+                "{bad}"
+            );
+        }
+        assert!(parse(&["--out", "d", "--weight-power", "0.05"]).is_ok());
     }
 
     #[test]

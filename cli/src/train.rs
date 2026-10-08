@@ -95,7 +95,8 @@ fn new_config(args: &TrainArgs, specs: Vec<String>) -> TrainConfig {
             ..neat::NeatConfig::default()
         },
         opponent_specs: specs,
-        champion_candidates: args.champion_candidates,
+        // Cannot re-score more genomes than there are.
+        champion_candidates: args.champion_candidates.min(args.population),
         hall_of_fame_size: args.hall_of_fame,
         hall_of_fame_interval: args.hall_interval,
     }
@@ -146,6 +147,11 @@ pub fn run(raw_args: impl Iterator<Item = String>) -> anyhow::Result<()> {
                 .map_err(anyhow::Error::msg)
                 .with_context(|| format!("invalid --opponent `{spec}`"))?;
         }
+        // Validate the whole setup before freezing anything into the run
+        // directory: an invalid run must leave nothing behind.
+        new_config(&args, specs.clone())
+            .validate()
+            .map_err(|reason| anyhow::anyhow!("invalid training setup: {reason}"))?;
         let frozen = freeze_neat_specs(&specs, &args.out)?;
         let opponents = build_opponents(&frozen, &args.out)?;
         Trainer::new(new_config(&args, frozen), opponents, &args.out)?

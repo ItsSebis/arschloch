@@ -149,7 +149,8 @@ fn a_short_run_leaves_every_artifact_and_notifies_the_observer() {
     // 16 genomes x 8 matches, the champion's fixed-match scores (12 matches
     // each: the mixed pool and 2 opponents), and, because the first
     // champion is a new best, 24 held-out matches; 4 rounds each.
-    assert_eq!(first.rounds_evaluated, 4 * (16 * 8 + 12 * 3 + 24));
+    // ... plus the one match played to record the champion's decisions.
+    assert_eq!(first.rounds_evaluated, 4 * (16 * 8 + 12 * 3 + 24 + 1));
     assert!(matches!(log[4], Event::RunEnd(_)));
 
     assert!(NeatStrategy::from_file(&run.join("best.json")).is_ok());
@@ -657,6 +658,10 @@ fn candidate_selection_costs_its_own_matches_and_is_accounted_for() {
         .run(&mut Recorder::default())
         .unwrap();
     let first = &generation_events(&run)[0];
-    assert_eq!(first.rounds_evaluated, 4 * (16 * 8 + 12 * (4 + 1 + 2) + 24));
+    // ... plus the one match played to record the champion's decisions.
+    assert_eq!(
+        first.rounds_evaluated,
+        4 * (16 * 8 + 12 * (4 + 1 + 2) + 24 + 1)
+    );
     fs::remove_dir_all(&run).unwrap();
 }

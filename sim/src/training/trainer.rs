@@ -521,7 +521,8 @@ impl Trainer {
                     } + 1
                         + self.opponents.len() as u64
                         + u64::from(hall_score.is_some()))
-                + heldout.as_ref().map_or(0, |h| h.matches as u64));
+                // A new best also plays one match to record its decisions.
+                + heldout.as_ref().map_or(0, |h| h.matches as u64 + 1));
         self.total_rounds += rounds_evaluated;
         let generation_secs = step_started.elapsed().as_secs_f64();
         let elapsed_secs = self.elapsed_before + started.elapsed().as_secs_f64();

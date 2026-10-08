@@ -371,3 +371,65 @@ fn an_absurd_weight_power_is_refused_before_anything_is_written() {
     assert!(!text(&result.stderr).contains("panicked"));
     let _ = std::fs::remove_dir_all(&out);
 }
+
+#[test]
+fn a_bad_option_leaves_nothing_behind_even_with_a_neat_opponent() {
+    // The opponent file is frozen into the run directory; that must not
+    // happen for a run whose settings turn out to be invalid.
+    let base = run_dir("nothing-behind");
+    let genome = base.join("g.json");
+    genome_file(&genome, 1);
+    let out = base.join("run");
+    for bad in [
+        ["--weight-power", "NaN"],
+        ["--weight-power", "inf"],
+        ["--weight-power", "0"],
+    ] {
+        let spec = format!("neat:{}", genome.display());
+        let mut args = vec![
+            "--generations",
+            "1",
+            "--opponent",
+            spec.as_str(),
+            "--opponent",
+            "lowest-legal",
+        ];
+        args.extend(bad);
+        let result = train(&out, &args);
+        assert!(!result.status.success(), "{bad:?}");
+        assert!(!text(&result.stderr).contains("panicked"), "{bad:?}");
+        assert!(
+            !out.join("opponents").exists(),
+            "{bad:?}: a frozen opponent was left behind"
+        );
+        assert!(!out.join("checkpoint.json").exists(), "{bad:?}");
+    }
+    let _ = std::fs::remove_dir_all(&base);
+}
+
+#[test]
+fn a_tiny_population_works_with_the_default_candidate_count() {
+    // The default re-scores the top 5 genomes, which cannot exceed the
+    // population: a small population simply uses all of its genomes.
+    let out = run_dir("tinypop");
+    let result = cli(&[
+        "train",
+        "--out",
+        out.to_str().unwrap(),
+        "--population",
+        "3",
+        "--generations",
+        "2",
+        "--matches-per-genome",
+        "2",
+        "--reeval-matches",
+        "4",
+        "--rounds",
+        "2",
+        "--threads",
+        "1",
+        "--quiet",
+    ]);
+    assert!(result.status.success(), "stderr: {}", text(&result.stderr));
+    std::fs::remove_dir_all(&out).unwrap();
+}

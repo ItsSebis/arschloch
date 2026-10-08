@@ -264,7 +264,7 @@ function renderOpponents() {
     values: events.map((e) => e.opponents.find((o) => o.name === name)?.score.mean ?? null),
   }));
   if (events.some((e) => e.hall_score)) {
-    series.push({ name: "hall of fame (past champions)", color: "var(--s6)", dashed: true, values: events.map((e) => (e.hall_score ? e.hall_score.mean : null)) });
+    series.push({ name: "hall of fame (past champions)", color: "var(--accent)", dashed: true, values: events.map((e) => (e.hall_score ? e.hall_score.mean : null)) });
   }
   lineChart("opponents-chart", "opponents-readout", { xs: events.map((e) => e.generation), ref: 0, signed: true, series });
 }
