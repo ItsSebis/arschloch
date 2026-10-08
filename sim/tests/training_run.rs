@@ -640,3 +640,23 @@ fn candidate_selection_never_picks_a_worse_champion_than_the_training_best() {
     fs::remove_dir_all(&one).unwrap();
     fs::remove_dir_all(&many).unwrap();
 }
+
+#[test]
+fn candidate_selection_costs_its_own_matches_and_is_accounted_for() {
+    // 16 genomes x 8 matches; the 4 candidates ranked on 12 selection
+    // matches each; then the champion measured on 12 fresh matches against
+    // the mixed pool and 12 against each of the 2 opponents; plus, for a
+    // new best, 24 held-out matches; 4 rounds each.
+    let run = dir("accounting");
+    let config = TrainConfig {
+        champion_candidates: 4,
+        ..config(1)
+    };
+    Trainer::new(config, opponents(), &run)
+        .unwrap()
+        .run(&mut Recorder::default())
+        .unwrap();
+    let first = &generation_events(&run)[0];
+    assert_eq!(first.rounds_evaluated, 4 * (16 * 8 + 12 * (4 + 1 + 2) + 24));
+    fs::remove_dir_all(&run).unwrap();
+}

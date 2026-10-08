@@ -79,6 +79,16 @@ fn reeval_seeds(config: &TrainConfig) -> Vec<u64> {
         .collect()
 }
 
+/// The set the champion *candidates* are ranked on. It is separate from
+/// `reeval_seeds` so that the champion's reported score is measured on
+/// matches that played no part in choosing it (a score measured on the
+/// selection matches would be inflated by the selection).
+fn selection_seeds(config: &TrainConfig) -> Vec<u64> {
+    (0..config.reeval_matches as u64)
+        .map(|i| match_seed(config.seed, u64::MAX - 4, i))
+        .collect()
+}
+
 /// A second fixed set, used only to confirm a new best champion: it was
 /// not used to pick it, so its score is not inflated by the selection.
 fn heldout_seeds(config: &TrainConfig) -> Vec<u64> {
@@ -350,13 +360,17 @@ impl Trainer {
     }
 
     /// Picks the generation's champion: the best of the `k` genomes with
-    /// the highest training fitness *on the fixed matches*. Returns its
-    /// index, its rank by training fitness and its fixed-match score.
-    fn select_champion(&self, fitness: &[f64]) -> (usize, usize, Score) {
+    /// the highest training fitness, ranked on the selection matches.
+    /// Returns its index and its rank by training fitness (0 = the training
+    /// best). With one candidate no matches are played.
+    fn select_champion(&self, fitness: &[f64]) -> (usize, usize) {
+        let ranked = top_indices(fitness, self.config.champion_candidates);
+        if ranked.len() == 1 {
+            return (ranked[0], 0);
+        }
         let table = self.config.table();
         let pool = self.fixed_pool();
-        let seeds = reeval_seeds(&self.config);
-        let ranked = top_indices(fitness, self.config.champion_candidates);
+        let seeds = selection_seeds(&self.config);
         let genomes = self.population.genomes();
         let scores: Vec<Score> = ranked
             .par_iter()
@@ -376,16 +390,22 @@ impl Trainer {
                 best
             }
         });
-        (ranked[winner], winner, scores[winner].clone())
+        (ranked[winner], winner)
     }
 
-    /// The champion against each fixed opponent alone and, once the hall
-    /// has members, against the hall alone. `mixed` is its score against
-    /// the mixed fixed pool (already computed by `select_champion`).
-    fn reevaluate(&self, champion: &Genome) -> (Vec<OpponentStat>, Option<Score>) {
+    /// The champion on the fixed matches: against the mixed fixed pool,
+    /// against each fixed opponent alone and, once the hall has members,
+    /// against the hall alone. These matches played no part in choosing it.
+    fn reevaluate(&self, champion: &Genome) -> (Score, Vec<OpponentStat>, Option<Score>) {
         let table = self.config.table();
         let seeds = reeval_seeds(&self.config);
         let candidate = strategy_for(champion);
+        let mixed = evaluate(
+            &candidate,
+            &table,
+            Opponents::Mixed(&self.fixed_pool()),
+            &seeds,
+        );
         let per_opponent = self
             .opponents
             .par_iter()
@@ -403,7 +423,7 @@ impl Trainer {
         let hall = self.hall_pool();
         let hall_score = (!hall.is_empty())
             .then(|| evaluate(&candidate, &table, Opponents::Mixed(&hall), &seeds));
-        (per_opponent, hall_score)
+        (mixed, per_opponent, hall_score)
     }
 
     /// A few real decisions of the champion (for the dashboard's decision
@@ -446,7 +466,7 @@ impl Trainer {
         let generation = self.population.generation();
 
         let fitness = self.evaluate_population(generation, observer);
-        let (champion_index, training_rank, reeval) = self.select_champion(&fitness);
+        let (champion_index, training_rank) = self.select_champion(&fitness);
         // `advance` replaces the genomes, so take the champion first.
         let champion = self.population.genomes()[champion_index].clone();
         let hall_generations: Vec<u32> = self.hall.iter().map(|m| m.generation).collect();
@@ -454,7 +474,7 @@ impl Trainer {
         self.population.set_fitness(fitness.clone());
         let report = self.population.advance();
 
-        let (opponents, hall_score) = self.reevaluate(&champion);
+        let (reeval, opponents, hall_score) = self.reevaluate(&champion);
         let is_new_best = self
             .best
             .as_ref()
@@ -494,7 +514,11 @@ impl Trainer {
         let rounds_evaluated = rounds_per_match
             * (self.config.matches_per_genome as u64 * self.config.neat.population_size as u64
                 + self.config.reeval_matches as u64
-                    * (self.config.champion_candidates as u64
+                    * (if self.config.champion_candidates > 1 {
+                        self.config.champion_candidates as u64
+                    } else {
+                        0
+                    } + 1
                         + self.opponents.len() as u64
                         + u64::from(hall_score.is_some()))
                 + heldout.as_ref().map_or(0, |h| h.matches as u64));
@@ -555,6 +579,29 @@ mod tests {
         assert_eq!(top_indices(&values, 1), vec![1]);
         assert_eq!(top_indices(&values, 99), vec![1, 4, 0, 2, 3]);
         assert!(top_indices(&[], 3).is_empty());
+    }
+
+    #[test]
+    fn champion_selection_has_its_own_seed_stream() {
+        // The candidates are ranked on `selection_seeds`; the champion's
+        // reported score is then measured on `reeval_seeds`. If they shared
+        // matches, the reported score would be inflated by the very
+        // selection that chose the champion.
+        let config = sample();
+        let selection = selection_seeds(&config);
+        assert_eq!(selection.len(), config.reeval_matches);
+        assert_eq!(
+            selection,
+            selection_seeds(&config),
+            "fixed, not per generation"
+        );
+        for seed in &selection {
+            assert!(!reeval_seeds(&config).contains(seed));
+            assert!(!heldout_seeds(&config).contains(seed));
+            for generation in 0..200 {
+                assert!(!training_seeds(&config, generation).contains(seed));
+            }
+        }
     }
 
     #[test]

@@ -68,9 +68,11 @@ pub struct ChampionStats {
     /// The champion's fitness in the generation that selected it.
     pub train_fitness: f64,
     /// Its score against the mixed pool on a fixed set of matches that
-    /// training never plays and that is the same every generation, so
-    /// champions of different generations are compared on the same deals
-    /// (the training fitness is inflated by selection).
+    /// training never plays, that is the same every generation (so
+    /// champions of different generations are compared on the same deals)
+    /// and that played no part in choosing it (candidates are ranked on
+    /// separate matches). The training fitness, by contrast, is inflated
+    /// by selection.
     pub reeval: ScoreStat,
     /// Present only for a new best champion: its score on a second fixed,
     /// held-out set of matches that was *not* used to pick it. This is

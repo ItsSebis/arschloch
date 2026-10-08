@@ -16,12 +16,17 @@ use sim::training::{evaluate, match_seed, Opponents, Score, TableSpec};
 use crate::args::{DeckVariantArg, DuplicateRuleArg, StrategyArg};
 
 /// Opponents when none are given: the strongest hand-written strategies
-/// (the training pool's defaults) plus ones a default training run never
-/// sees.
-pub const DEFAULT_BATTERY: [&str; 6] = [
+/// (the training pool's defaults), stronger variants a default training run
+/// never sees, and three weak strategies as a sanity floor.
+pub const DEFAULT_BATTERY: [&str; 8] = [
     "lowest-legal",
     "endgame-denial",
     "adaptive:reading,tempo,bully",
+    // Stronger strategies a default training run never sees: variants of
+    // the best hand-written one with modifiers outside the training pool.
+    "adaptive:counting,reading",
+    "adaptive:reading,deception=0.2,tempo,bully",
+    // Weak ones: a sanity floor, not evidence of generalization.
     "hold-back-pairs",
     "greedy-highest",
     "random-legal",
@@ -44,8 +49,8 @@ pub struct EvaluateArgs {
 
     /// An opponent, in `--strategy` syntax (repeat for several; `neat:PATH`
     /// pits a genome against another genome). Default: lowest-legal,
-    /// endgame-denial, adaptive:reading,tempo,bully, hold-back-pairs,
-    /// greedy-highest, random-legal.
+    /// endgame-denial, adaptive:reading,tempo,bully, two stronger adaptive
+    /// variants, hold-back-pairs, greedy-highest, random-legal.
     #[arg(long, value_name = "SPEC")]
     pub opponent: Vec<String>,
 
@@ -263,6 +268,8 @@ pub fn run(raw_args: impl Iterator<Item = String>) -> anyhow::Result<()> {
     if let Some(path) = &args.json {
         let text = serde_json::to_string_pretty(&serde_json::json!({
             "player_count": args.player_count,
+            "deck_variant": format!("{:?}", args.deck_variant),
+            "duplicate_rule": format!("{:?}", args.duplicate_rule),
             "rounds": args.rounds,
             "matches": args.matches,
             "seed": args.seed,
@@ -327,7 +334,7 @@ mod tests {
     #[test]
     fn the_default_battery_builds_and_bad_or_duplicate_opponents_are_rejected() {
         let specs: Vec<String> = DEFAULT_BATTERY.iter().map(|&s| s.to_owned()).collect();
-        assert_eq!(build_opponents(&specs).unwrap().len(), 6);
+        assert_eq!(build_opponents(&specs).unwrap().len(), 8);
         let error = build_opponents(&["nonsense".to_owned()]).err().unwrap();
         assert!(format!("{error:#}").contains("--opponent `nonsense`"));
         let twice = build_opponents(&["lowest-legal".to_owned(), "lowest-legal".to_owned()])

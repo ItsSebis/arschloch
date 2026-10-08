@@ -75,6 +75,11 @@ fn it_scores_genomes_against_opponents_and_writes_json() {
     }
     let value: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(&json).unwrap()).unwrap();
+    assert_eq!(
+        value["deck_variant"], "Single",
+        "the file must say which table it measured"
+    );
+    assert_eq!(value["duplicate_rule"], "FirstDealtWins");
     let results = value["results"].as_array().unwrap();
     assert_eq!(results.len(), 2);
     let cells = results[0]["cells"].as_array().unwrap();
