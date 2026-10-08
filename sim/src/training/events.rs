@@ -29,6 +29,9 @@ pub struct RunStart {
     pub feature_names: Vec<String>,
     /// `Some(generation)` when this start is a resume.
     pub resumed_from_generation: Option<u32>,
+    /// The run directory whose final population this run started from.
+    #[serde(default)]
+    pub warm_started_from: Option<String>,
 }
 
 /// A candidate's score with the statistics around it.

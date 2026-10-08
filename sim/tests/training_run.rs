@@ -668,3 +668,79 @@ fn candidate_selection_costs_its_own_matches_and_is_accounted_for() {
     );
     fs::remove_dir_all(&run).unwrap();
 }
+
+fn run_start(dir: &Path) -> sim::training::RunStart {
+    match events(dir).into_iter().next() {
+        Some(Event::RunStart(start)) => *start,
+        other => panic!("first event is not a run start: {other:?}"),
+    }
+}
+
+#[test]
+fn a_warm_started_run_begins_from_the_sources_final_population() {
+    let source = dir("warm-source");
+    Trainer::new(config(6), opponents(), &source)
+        .unwrap()
+        .run(&mut Recorder::default())
+        .unwrap();
+    let source_bytes = fs::read(source.join("checkpoint.json")).unwrap();
+    let source_events = generation_events(&source);
+
+    let warm_dir = dir("warm-child");
+    let mut warm_config = config(2);
+    warm_config.seed = 11;
+    let mut warm = Trainer::new_from(warm_config.clone(), opponents(), &warm_dir, &source).unwrap();
+    warm.run(&mut Recorder::default()).unwrap();
+    let cold_dir = dir("warm-cold");
+    Trainer::new(warm_config, opponents(), &cold_dir)
+        .unwrap()
+        .run(&mut Recorder::default())
+        .unwrap();
+
+    let start = run_start(&warm_dir);
+    assert_eq!(
+        start.warm_started_from.as_deref(),
+        Some(source.display().to_string().as_str())
+    );
+    let warm_events = generation_events(&warm_dir);
+    assert_eq!(warm_events[0].generation, 0, "the new run counts from 0");
+    assert!(
+        warm_events[0].fitness.mean > generation_events(&cold_dir)[0].fitness.mean,
+        "a warm start begins ahead of a cold one: {} vs {}",
+        warm_events[0].fitness.mean,
+        generation_events(&cold_dir)[0].fitness.mean
+    );
+    assert!(warm_events[0].fitness.mean > source_events[0].fitness.mean);
+    assert_eq!(
+        fs::read(source.join("checkpoint.json")).unwrap(),
+        source_bytes,
+        "the source run is only read"
+    );
+}
+
+#[test]
+fn a_warm_start_from_a_different_population_size_is_refused_and_leaves_nothing() {
+    let source = dir("warm-size-source");
+    Trainer::new(config(1), opponents(), &source)
+        .unwrap()
+        .run(&mut Recorder::default())
+        .unwrap();
+    let target = dir("warm-size-target");
+    let mut bigger = config(1);
+    bigger.neat.population_size = 20;
+    let error = Trainer::new_from(bigger, opponents(), &target, &source)
+        .err()
+        .expect("size mismatch");
+    assert!(matches!(error, TrainError::Mismatch(_)), "{error}");
+    assert!(!target.exists(), "nothing is created for a refused start");
+}
+
+#[test]
+fn a_warm_start_from_a_missing_run_is_a_clear_error() {
+    let target = dir("warm-missing-target");
+    let error = Trainer::new_from(config(1), opponents(), &target, &dir("warm-missing-source"))
+        .err()
+        .expect("no source");
+    assert!(matches!(error, TrainError::Checkpoint(_)), "{error}");
+    assert!(!target.exists());
+}

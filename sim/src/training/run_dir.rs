@@ -446,6 +446,7 @@ mod tests {
             opponents: vec![],
             feature_names: vec![],
             resumed_from_generation: None,
+            warm_started_from: None,
         })))
         .unwrap();
         for generation in 0..4 {

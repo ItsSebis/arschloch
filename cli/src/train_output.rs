@@ -396,6 +396,7 @@ mod tests {
             opponents: vec!["LowestLegal".into(), "Adaptive(x)".into()],
             feature_names: vec![],
             resumed_from_generation: Some(12),
+            warm_started_from: None,
         };
         let text = render_banner(&start, std::path::Path::new("runs/a"));
         assert!(text.contains("o1=LowestLegal  o2=Adaptive(x)"), "{text}");

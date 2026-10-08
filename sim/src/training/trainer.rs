@@ -53,6 +53,7 @@ pub struct Trainer {
     total_rounds: u64,
     elapsed_before: f64,
     resumed_from: Option<u32>,
+    warm_started_from: Option<String>,
 }
 
 /// Genomes are evaluated in this many parallel batches, with a progress
@@ -157,6 +158,35 @@ impl Trainer {
         opponents: Vec<Opponent>,
         dir: &Path,
     ) -> Result<Self, TrainError> {
+        Self::start(config, opponents, dir, None)
+    }
+
+    /// Starts a new run in `dir` from the final population of the run in
+    /// `source`, which is only read. The new run has its own settings,
+    /// seed and generation count (from 0); the population size must match
+    /// the source's because its genomes are kept as they are.
+    ///
+    /// # Errors
+    ///
+    /// `TrainError::Checkpoint` if `source` holds no usable run,
+    /// `TrainError::Mismatch` if it was trained on another feature set or
+    /// has another population size, otherwise as `new`. Nothing is
+    /// created in `dir` when the source is refused.
+    pub fn new_from(
+        config: TrainConfig,
+        opponents: Vec<Opponent>,
+        dir: &Path,
+        source: &Path,
+    ) -> Result<Self, TrainError> {
+        Self::start(config, opponents, dir, Some(source))
+    }
+
+    fn start(
+        config: TrainConfig,
+        opponents: Vec<Opponent>,
+        dir: &Path,
+        source: Option<&Path>,
+    ) -> Result<Self, TrainError> {
         config.validate().map_err(TrainError::Config)?;
         if opponents.len() != config.opponent_specs.len() {
             return Err(TrainError::Config(format!(
@@ -165,14 +195,44 @@ impl Trainer {
                 config.opponent_specs.len()
             )));
         }
+        let seed = match_seed(config.seed, u64::MAX, 0);
+        // Everything that can refuse the source happens before the new
+        // directory is touched.
+        let (population, warm_started_from) = if let Some(source) = source {
+            let checkpoint = RunDir::open_existing(source)?.read_checkpoint()?;
+            if checkpoint.feature_count != FEATURE_COUNT
+                || checkpoint.feature_set_version != FEATURE_SET_VERSION
+            {
+                return Err(TrainError::Mismatch(format!(
+                    "{} was trained with {} features (feature-set version {}) but this build has {} (version {}); \
+                     its genomes cannot be built on, though `--resume` can still continue it with the old build",
+                    source.display(),
+                    checkpoint.feature_count,
+                    checkpoint.feature_set_version,
+                    FEATURE_COUNT,
+                    FEATURE_SET_VERSION
+                )));
+            }
+            let source_size = checkpoint.config.neat.population_size;
+            if source_size != config.neat.population_size {
+                return Err(TrainError::Mismatch(format!(
+                    "{} has a population of {source_size} but this run asks for {}; \
+                     a warm start keeps the genomes it is given",
+                    source.display(),
+                    config.neat.population_size
+                )));
+            }
+            let population =
+                Population::warm_start(checkpoint.population, config.neat.clone(), seed)
+                    .map_err(|e| TrainError::Checkpoint(e.to_string()))?;
+            (population, Some(source.display().to_string()))
+        } else {
+            let population = Population::new(FEATURE_COUNT, config.neat.clone(), seed)
+                .map_err(|e| TrainError::Config(e.to_string()))?;
+            (population, None)
+        };
         let dir = RunDir::create_new(dir)?;
         dir.write_config(&config)?;
-        let population = Population::new(
-            FEATURE_COUNT,
-            config.neat.clone(),
-            match_seed(config.seed, u64::MAX, 0),
-        )
-        .map_err(|e| TrainError::Config(e.to_string()))?;
         let trainer = Self {
             config,
             opponents,
@@ -183,6 +243,7 @@ impl Trainer {
             total_rounds: 0,
             elapsed_before: 0.0,
             resumed_from: None,
+            warm_started_from,
         };
         // A run killed during generation 0 must still be resumable (and
         // must not look like a run to overwrite), so the directory holds a
@@ -261,6 +322,7 @@ impl Trainer {
             total_rounds: checkpoint.total_rounds,
             elapsed_before: checkpoint.elapsed_secs,
             resumed_from: Some(completed),
+            warm_started_from: None,
         })
     }
 
@@ -287,6 +349,7 @@ impl Trainer {
             opponents: self.opponents.iter().map(|o| o.name.clone()).collect(),
             feature_names: FEATURE_NAMES.iter().map(|&n| n.to_owned()).collect(),
             resumed_from_generation: self.resumed_from,
+            warm_started_from: self.warm_started_from.clone(),
         };
         self.dir
             .append_event(&Event::RunStart(Box::new(start.clone())))?;
