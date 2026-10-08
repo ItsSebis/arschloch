@@ -449,6 +449,14 @@ function onAdviceClick(event) {
 }
 
 // ------------------------------------------------------------------ records
+// Which older rules a recorded game was played under, empty for the current ones.
+function rulesNote(entry) {
+  const old = [];
+  if (entry.pass_rule === "free") old.push("free passing");
+  if (entry.exchange_rule === "free") old.push("free exchange");
+  return old.length ? ` <span class="muted">(${old.join(", ")})</span>` : "";
+}
+
 async function loadRecords() {
   const box = $("records");
   try {
@@ -458,8 +466,8 @@ async function loadRecords() {
       return;
     }
     const bar = (score) => `<div class="bar"><i style="left:${(Math.min(barFraction(score), 0.5) * 100).toFixed(0)}%;width:${(Math.abs(barFraction(score) - 0.5) * 100).toFixed(0)}%;${score < 0 ? "background:var(--neg)" : "background:var(--pos)"}"></i></div>`;
-    const opp = data.by_opponent.map((o) => `<tr><td>${esc(o.opponent)}${o.pass_rule === "free" || o.exchange_rule === "free" ? ' <span class="muted">(older rules)</span>' : ""}</td><td>${o.games}</td><td>${formatScore(o.mean_score)}</td><td>${bar(o.mean_score)}</td></tr>`).join("");
-    const tables = data.by_table.map((t) => `<tr><td>${t.players}${t.pass_rule === "free" || t.exchange_rule === "free" ? ' <span class="muted">(older rules)</span>' : ""}</td><td>${t.opponents.map(esc).join(", ")}</td><td>${t.games}</td><td>${formatScore(t.mean_score)}</td><td>${(t.president_rate * 100).toFixed(0)}%</td><td>${(t.last_rate * 100).toFixed(0)}%</td></tr>`).join("");
+    const opp = data.by_opponent.map((o) => `<tr><td>${esc(o.opponent)}${rulesNote(o)}</td><td>${o.games}</td><td>${formatScore(o.mean_score)}</td><td>${bar(o.mean_score)}</td></tr>`).join("");
+    const tables = data.by_table.map((t) => `<tr><td>${t.players}${rulesNote(t)}</td><td>${t.opponents.map(esc).join(", ")}</td><td>${t.games}</td><td>${formatScore(t.mean_score)}</td><td>${(t.president_rate * 100).toFixed(0)}%</td><td>${(t.last_rate * 100).toFixed(0)}%</td></tr>`).join("");
     const recent = data.recent.map((r) => `<tr><td>${new Date(r.finished_unix * 1000).toLocaleString()}</td><td>${r.player_count}p vs ${r.opponents.map(esc).join(", ")}</td><td>${formatScore(r.score)}</td></tr>`).join("");
     box.innerHTML = `<h2>Your record</h2>
       ${data.write_error ? `<p class="bad">${esc(data.write_error)} — new games are not being saved.</p>` : ""}

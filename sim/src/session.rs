@@ -553,8 +553,9 @@ impl Session {
         if involved {
             let gave = match human_selection {
                 Some(selection) => views(&self.ids, &selection),
-                // The human was the higher role: they hand back their lowest
-                // cards, which is whatever left their hand.
+                // No selection: the exchange was forced (a lower role gives its
+                // highest cards) or the human was the higher role (hands back
+                // its lowest): in both cases whatever left their hand.
                 None => views(
                     &self.ids,
                     &before

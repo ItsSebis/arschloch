@@ -23,7 +23,7 @@ pub struct Record {
     #[serde(default = "legacy_pass_rule")]
     pub pass_rule: String,
     /// `forced` or `free`; records from before the rule existed read as `free`.
-    #[serde(default = "legacy_pass_rule")]
+    #[serde(default = "legacy_exchange_rule")]
     pub exchange_rule: String,
     pub rounds: usize,
     /// The opponents' labels, in seat order (the human's seat skipped).
@@ -51,6 +51,10 @@ pub struct RecordStore {
 }
 
 fn legacy_pass_rule() -> String {
+    "free".to_owned()
+}
+
+fn legacy_exchange_rule() -> String {
     "free".to_owned()
 }
 
@@ -305,6 +309,7 @@ mod tests {
         // A line written before the field existed.
         let mut old: serde_json::Value = serde_json::to_value(&free_game).unwrap();
         old.as_object_mut().unwrap().remove("pass_rule");
+        old.as_object_mut().unwrap().remove("exchange_rule");
         let mut file = std::fs::OpenOptions::new()
             .append(true)
             .open(&path)
