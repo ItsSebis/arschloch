@@ -1,0 +1,111 @@
+{
+  "matches": 600,
+  "player_count": 6,
+  "results": [
+    {
+      "cells": [
+        {
+          "matches": 600,
+          "mean": 0.42108333333333337,
+          "opponent": "LowestLegal",
+          "placements": [
+            1588,
+            1235,
+            911,
+            544,
+            352,
+            170
+          ],
+          "std_error": 0.015740911099095947
+        },
+        {
+          "matches": 600,
+          "mean": 0.5858333333333337,
+          "opponent": "EndgameDenial",
+          "placements": [
+            2021,
+            1454,
+            756,
+            329,
+            183,
+            57
+          ],
+          "std_error": 0.01109785775140305
+        },
+        {
+          "matches": 600,
+          "mean": 0.5549166666666668,
+          "opponent": "Adaptive(reading,tempo,bully)",
+          "placements": [
+            1879,
+            1479,
+            785,
+            404,
+            185,
+            68
+          ],
+          "std_error": 0.011977882120041826
+        },
+        {
+          "matches": 600,
+          "mean": 0.8379166666666652,
+          "opponent": "HoldBackPairs",
+          "placements": [
+            3452,
+            938,
+            282,
+            84,
+            29,
+            15
+          ],
+          "std_error": 0.005700729686410476
+        },
+        {
+          "matches": 600,
+          "mean": 0.8950833333333318,
+          "opponent": "GreedyHighest",
+          "placements": [
+            3832,
+            756,
+            151,
+            46,
+            12,
+            3
+          ],
+          "std_error": 0.004613014130622104
+        },
+        {
+          "matches": 600,
+          "mean": 0.7444999999999999,
+          "opponent": "RandomLegal",
+          "placements": [
+            3064,
+            964,
+            415,
+            204,
+            105,
+            48
+          ],
+          "std_error": 0.008488568043167447
+        },
+        {
+          "matches": 600,
+          "mean": 0.596,
+          "opponent": "mixed (all opponents)",
+          "placements": [
+            2196,
+            1294,
+            709,
+            345,
+            179,
+            77
+          ],
+          "std_error": 0.01196247145985874
+        }
+      ],
+      "genome": "docs/baselines/neat-v1/champion.json"
+    }
+  ],
+  "rounds": 8,
+  "seed": 99
+}

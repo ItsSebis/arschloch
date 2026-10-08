@@ -1,0 +1,90 @@
+{
+  "matches": 600,
+  "player_count": 3,
+  "results": [
+    {
+      "cells": [
+        {
+          "matches": 600,
+          "mean": 0.4683333333333333,
+          "opponent": "LowestLegal",
+          "placements": [
+            2613,
+            1822,
+            365
+          ],
+          "std_error": 0.012092504626859632
+        },
+        {
+          "matches": 600,
+          "mean": 0.534375,
+          "opponent": "EndgameDenial",
+          "placements": [
+            2847,
+            1671,
+            282
+          ],
+          "std_error": 0.010553068402737412
+        },
+        {
+          "matches": 600,
+          "mean": 0.4675,
+          "opponent": "Adaptive(reading,tempo,bully)",
+          "placements": [
+            2652,
+            1740,
+            408
+          ],
+          "std_error": 0.012274397076633905
+        },
+        {
+          "matches": 600,
+          "mean": 0.9110416666666666,
+          "opponent": "HoldBackPairs",
+          "placements": [
+            4417,
+            339,
+            44
+          ],
+          "std_error": 0.004982921293194569
+        },
+        {
+          "matches": 600,
+          "mean": 0.9597916666666667,
+          "opponent": "GreedyHighest",
+          "placements": [
+            4614,
+            179,
+            7
+          ],
+          "std_error": 0.0029701721386015977
+        },
+        {
+          "matches": 600,
+          "mean": 0.96,
+          "opponent": "RandomLegal",
+          "placements": [
+            4617,
+            174,
+            9
+          ],
+          "std_error": 0.003096594607565861
+        },
+        {
+          "matches": 600,
+          "mean": 0.6385416666666667,
+          "opponent": "mixed (all opponents)",
+          "placements": [
+            3225,
+            1415,
+            160
+          ],
+          "std_error": 0.012324798776502732
+        }
+      ],
+      "genome": "docs/baselines/neat-v1/champion.json"
+    }
+  ],
+  "rounds": 8,
+  "seed": 99
+}
