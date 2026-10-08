@@ -196,6 +196,12 @@ caller-supplied scratch buffer), `InnovationTracker`, `NeatConfig` and
 `NeatError`. Randomness comes only from the population's seeded
 `StdRng`.
 
+`sim` depends on `neat` for `NeatStrategy`
+(`sim/src/strategies/neat_player/`): per turn it builds 20 features
+per legal move (including pass), scores each with the compiled network
+and plays the highest. `GenomeFile` stores a genome with the feature
+names it was trained on.
+
 ### `web` (starts in Phase 10d, extended in Phase 11)
 
 Not built yet. Phase 10d starts it with the NEAT training dashboard

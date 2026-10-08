@@ -186,7 +186,7 @@ sitting; a phase that grows beyond that should be split.
 - The pre-NEAT state is preserved as git tag `baseline-pre-neat` plus
   frozen result summaries in `docs/baselines/pre-neat/`; existing
   strategies are not modified by this phase.
-- 10a (done): generic `neat` crate. 10b: `NeatStrategy` (scores each legal
+- 10a (done): generic `neat` crate. 10b (done): `NeatStrategy` (scores each legal
   move) and the `neat:<genome.json>` spec. 10c: fitness evaluation and
   a `train` subcommand with checkpoint/resume, a per-generation
   terminal progress line and a JSONL event log. 10d: live browser

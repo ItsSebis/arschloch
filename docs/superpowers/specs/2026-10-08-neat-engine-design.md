@@ -81,7 +81,9 @@ impossible by construction.
   card, fraction that could beat it at the same combo size, number of
   active opponents whose pass ceiling is below the play (from
   `TurnContext::opponents[].pass_ceilings`), own pass ceiling signal;
-- role: previous-round role as a normalized ordinal (if available).
+- role: *deferred to v2.* `TurnContext` does not carry the acting
+  seat's role, and adding it touches every strategy's context
+  construction; it only matters once the exchange step is evolved too.
 
 The exact set is fixed in the implementation plan; the invariants are
 that features are deterministic functions of `(move, TurnContext,

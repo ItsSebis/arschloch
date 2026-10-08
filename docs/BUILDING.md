@@ -19,6 +19,11 @@ cargo clippy --workspace --all-targets -- -D warnings
 All four are the phase-done gate from `docs/CODING_GUIDELINES.md` and
 should be clean before any phase is considered finished.
 
+Trained genomes play like any other strategy via `--strategy
+neat:PATH` (the player appears in results as `Neat(<file name>)`); the
+file records the feature set it was trained on, and a file from a
+different build is refused with an error instead of silently misplaying.
+
 The `neat` crate has no game dependency: `cargo test -p neat` runs its
 unit tests and the XOR end-to-end evolution test in about a second.
 
