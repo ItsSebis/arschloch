@@ -375,7 +375,11 @@ mod tests {
             !text.contains("+0.652"),
             "the selection score is not the headline: {text}"
         );
-        assert!(text.contains("neat:runs/a/best.json"), "{text}");
+        let played = std::path::Path::new("runs/a").join("best.json");
+        assert!(
+            text.contains(&format!("neat:{}", played.display())),
+            "{text}"
+        );
         let none = RunEnd {
             best_generation: None,
             best_reeval: None,

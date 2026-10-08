@@ -84,9 +84,9 @@ fn the_javascript_tests_pass() {
         "node --test failed:\n{text}\n{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    assert!(text.contains("# fail 0"), "{text}");
+    assert!(text.contains("fail 0"), "{text}");
     assert!(
-        !text.contains("# skipped 1"),
+        !text.contains("skipped 1"),
         "the replay test must run against the real run:\n{text}"
     );
     std::fs::remove_dir_all(run).ok();
