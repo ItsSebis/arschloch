@@ -794,8 +794,10 @@ impl Session {
         let human = self.human();
         let rule = self.config.duplicate_rule;
         let names = self.seat_names();
-        let round = self.round.as_ref();
         let in_exchange = self.phase == Phase::Exchange;
+        // During the exchange the previous round is over and the next has not
+        // started: no table, no places, nobody to move.
+        let round = if in_exchange { None } else { self.round.as_ref() };
 
         let mut hand: Vec<Card> = if in_exchange {
             self.pending
@@ -1295,6 +1297,34 @@ mod tests {
                 .expect("the human sees their own exchange");
             assert_eq!(yours.0.iter().map(|c| c.id).collect::<Vec<_>>(), ids);
             assert_eq!(yours.1.len(), view.give_count);
+            return;
+        }
+        panic!("the human never ended lower in 300 seeds");
+    }
+
+    #[test]
+    fn the_exchange_view_shows_a_fresh_table_not_the_last_round() {
+        for seed in 0..300 {
+            let mut cfg = config(4, DeckVariant::Single, 3, 0);
+            cfg.seed = seed;
+            let mut session = Session::new(cfg, ai(3)).unwrap();
+            while session.phase() == Phase::Playing {
+                match scripted_move(&session) {
+                    Move::Pass => session.pass().unwrap(),
+                    Move::Play(c) => {
+                        let ids: Vec<u8> = c.cards().iter().map(|c| c.deal_index).collect();
+                        session.play(&ids).unwrap();
+                    }
+                }
+            }
+            session.next_round().unwrap();
+            if session.phase() != Phase::Exchange {
+                continue;
+            }
+            let view = session.view();
+            assert!(view.table.is_none(), "last round's final combo is still shown");
+            assert!(view.seats.iter().all(|s| s.place.is_none()), "last round's places are still shown");
+            assert!(view.to_move.is_none() && !view.must_lead && view.playable.is_empty());
             return;
         }
         panic!("the human never ended lower in 300 seeds");

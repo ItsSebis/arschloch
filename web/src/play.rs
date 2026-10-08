@@ -108,12 +108,39 @@ fn session_error(error: &SessionError) -> Response {
     bad(400, &error.to_string())
 }
 
-fn query_value<'a>(query: &'a str, key: &str) -> Option<&'a str> {
+/// Decodes `%XX` escapes and `+` (a space) in a query-string value;
+/// malformed escapes are kept as they are.
+fn percent_decode(text: &str) -> String {
+    let bytes = text.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'+' => out.push(b' '),
+            b'%' if bytes.len() >= i + 3 => {
+                let hex = std::str::from_utf8(&bytes[i + 1..i + 3])
+                    .ok()
+                    .and_then(|h| u8::from_str_radix(h, 16).ok());
+                if let Some(value) = hex {
+                    out.push(value);
+                    i += 2;
+                } else {
+                    out.push(b'%');
+                }
+            }
+            other => out.push(other),
+        }
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+fn query_value(query: &str, key: &str) -> Option<String> {
     query
         .split('&')
         .filter_map(|pair| pair.split_once('='))
         .find(|(k, _)| *k == key)
-        .map(|(_, v)| v)
+        .map(|(_, v)| percent_decode(v))
 }
 
 fn new_id() -> String {
@@ -398,7 +425,7 @@ impl PlayApp {
     }
 
     fn advice(&self, id: &str, query: &str) -> Response {
-        let Some(entry) = query_value(query, "model").and_then(|m| self.entry(m)) else {
+        let Some(entry) = query_value(query, "model").and_then(|m| self.entry(&m)) else {
             return bad(400, "model must be a catalog id");
         };
         let Some(model) = &entry.model else {
@@ -786,6 +813,22 @@ mod tests {
             .0,
             404
         );
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn percent_encoded_query_values_are_decoded() {
+        let (app, path) = app("encoded");
+        let (id, _) = new_game(&app, 4, 1, &["lowest-legal", "lowest-legal", "lowest-legal"]);
+        // Browsers encode the colon of `model:champion` in a query string.
+        let (status, reply) = call(
+            &app,
+            "GET",
+            &format!("/api/games/{id}/advice?model=model%3Achampion"),
+            "",
+        );
+        assert_eq!(status, 200, "{reply}");
+        assert_eq!(percent_decode("a%3Ab%2Fc+d%zz%4"), "a:b/c d%zz%4");
         std::fs::remove_file(path).ok();
     }
 

@@ -1,1 +1,75 @@
-
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Arschloch</title>
+  <link rel="stylesheet" href="/play.css">
+</head>
+<body>
+  <header>
+    <h1>Arschloch</h1>
+    <nav>
+      <button class="tab active" data-tab="play" type="button">Play</button>
+      <button class="tab" data-tab="records" type="button">Your record</button>
+    </nav>
+    <span id="status" class="pill">connecting…</span>
+  </header>
+  <main>
+    <section id="tab-play">
+      <form id="setup" class="card" autocomplete="off">
+        <h2>New game</h2>
+        <div class="field"><span class="label">Players</span><div id="players" class="choice"></div></div>
+        <div class="field"><label class="label" for="deck">Deck</label>
+          <select id="deck"><option value="single">Single deck (52)</option><option value="double">Double deck (104)</option></select>
+          <select id="rule" hidden title="Which of two identical cards wins">
+            <option value="first_dealt_wins">first dealt wins</option><option value="last_dealt_wins">last dealt wins</option>
+          </select>
+        </div>
+        <div class="field"><label class="label" for="rounds">Rounds</label><input id="rounds" type="number" min="1" max="50" value="8"></div>
+        <div class="field"><label class="label" for="seat">Your seat</label><select id="seat"></select></div>
+        <div class="field"><span class="label">Opponents</span><div id="opponents" class="opponents"></div></div>
+        <div class="field"><button id="start" type="submit" class="primary">Start game</button>
+          <button id="continue" type="button" hidden>Continue last game</button>
+          <span id="setup-error" class="bad"></span></div>
+        <p class="muted">Models are trained players; the strongest built-in one is Neat(champion-v1). Your finished games are recorded under “Your record”.</p>
+      </form>
+      <div id="game" hidden>
+        <div class="card topbar">
+          <strong id="round-info"></strong>
+          <span id="phase-info" class="muted"></span>
+          <span class="spacer"></span>
+          <label class="muted">Replay speed
+            <select id="speed"><option value="0">instant</option><option value="2">fast</option><option value="1" selected>normal</option><option value="0.5">slow</option></select></label>
+          <button id="new-game" type="button">New game</button>
+        </div>
+        <div class="card table-card">
+          <div id="seats" class="seats"></div>
+          <div id="table" class="felt" aria-live="polite"></div>
+        </div>
+        <div class="card" id="hand-area">
+          <div id="message" class="message" role="status"></div>
+          <div id="hand" class="hand"></div>
+          <div class="actions">
+            <button id="play" type="button" class="primary">Play</button>
+            <button id="pass" type="button">Pass</button>
+            <button id="clear" type="button">Clear</button>
+            <span class="muted keys">Enter plays, Esc clears; click a rank’s label to pick it as a whole.</span>
+          </div>
+          <div id="round-over"></div>
+        </div>
+        <div class="two">
+          <div class="card" id="advice-card">
+            <h2>Ask a model</h2>
+            <div class="controls"><select id="advisor"></select><button id="ask" type="button">What would it play?</button></div>
+            <div id="advice" class="muted">The model sees only what you see. Click a suggestion to select those cards.</div>
+          </div>
+          <div class="card" id="log-card"><h2>What happened</h2><div id="log" class="log"></div></div>
+        </div>
+      </div>
+    </section>
+    <section id="tab-records" hidden><div id="records" class="card"></div></section>
+  </main>
+  <script type="module" src="/play.js"></script>
+</body>
+</html>
