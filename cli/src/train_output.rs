@@ -61,6 +61,13 @@ pub fn render_banner(start: &RunStart, out: &std::path::Path) -> String {
         .map(|(i, name)| format!("o{}={name}", i + 1))
         .collect();
     let _ = writeln!(text, "opponents: {}", legend.join("  "));
+    if let Some(source) = &start.warm_started_from {
+        let _ = writeln!(
+            text,
+            "warm start: {source} (its final population of {} genomes)",
+            config.neat.population_size
+        );
+    }
     let _ = write!(text, "output: {}", out.display());
     if let Some(generation) = start.resumed_from_generation {
         let _ = write!(text, "  (resumed from generation {generation})");

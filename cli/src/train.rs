@@ -103,7 +103,7 @@ fn new_config(args: &TrainArgs, specs: Vec<String>) -> TrainConfig {
 }
 
 pub fn run(raw_args: impl Iterator<Item = String>) -> anyhow::Result<()> {
-    let args = TrainArgs::parse_from(std::iter::once("cli train".to_owned()).chain(raw_args));
+    let mut args = TrainArgs::parse_from(std::iter::once("cli train".to_owned()).chain(raw_args));
     if args.threads > 0 {
         rayon::ThreadPoolBuilder::new()
             .num_threads(args.threads)
@@ -135,6 +135,18 @@ pub fn run(raw_args: impl Iterator<Item = String>) -> anyhow::Result<()> {
         } else {
             args.opponent.clone()
         };
+        if let Some(from) = &args.from {
+            // The genomes are kept as they are, so the size is the source's.
+            args.population = load_config(from)
+                .with_context(|| {
+                    format!(
+                        "cannot build on {}: it holds no usable run (to continue a run unchanged use --resume)",
+                        from.display()
+                    )
+                })?
+                .neat
+                .population_size;
+        }
         // Fail on a bad spec before anything is written, and never touch a
         // directory that already holds a run.
         anyhow::ensure!(
@@ -154,7 +166,11 @@ pub fn run(raw_args: impl Iterator<Item = String>) -> anyhow::Result<()> {
             .map_err(|reason| anyhow::anyhow!("invalid training setup: {reason}"))?;
         let frozen = freeze_neat_specs(&specs, &args.out)?;
         let opponents = build_opponents(&frozen, &args.out)?;
-        Trainer::new(new_config(&args, frozen), opponents, &args.out)?
+        let config = new_config(&args, frozen);
+        match &args.from {
+            Some(from) => Trainer::new_from(config, opponents, &args.out, from)?,
+            None => Trainer::new(config, opponents, &args.out)?,
+        }
     };
 
     let mut observer = TerminalObserver::new(args.out.clone(), args.quiet);

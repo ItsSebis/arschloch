@@ -57,6 +57,14 @@ pub struct TrainArgs {
     )]
     pub resume: bool,
 
+    /// Start from the final population of the earlier run in this
+    /// directory instead of a random one (the earlier run is only read).
+    /// The settings of the new run are the ones given here; its
+    /// population size is the earlier run's, so --population cannot be
+    /// given. To continue the earlier run itself unchanged, use --resume.
+    #[arg(long, value_name = "RUN_DIR", conflicts_with_all = ["resume", "population"])]
+    pub from: Option<PathBuf>,
+
     /// Table size (3-6 seats).
     #[arg(long, default_value_t = 4, value_parser = clap::value_parser!(u8).range(3..=6))]
     pub player_count: u8,
@@ -159,6 +167,15 @@ mod tests {
         assert_eq!(args.generations, None);
         assert_eq!(args.opponent, [] as [String; 0]);
         assert!(!args.resume && !args.quiet);
+    }
+
+    #[test]
+    fn from_conflicts_with_resume_and_population() {
+        let ok = parse(&["--out", "d", "--from", "old"]).unwrap();
+        assert_eq!(ok.from.as_deref(), Some(std::path::Path::new("old")));
+        assert!(parse(&["--out", "d", "--from", "old", "--resume"]).is_err());
+        assert!(parse(&["--out", "d", "--from", "old", "--population", "20"]).is_err());
+        assert_eq!(parse(&["--out", "d"]).unwrap().from, None);
     }
 
     #[test]

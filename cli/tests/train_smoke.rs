@@ -434,3 +434,71 @@ fn a_tiny_population_works_with_the_default_candidate_count() {
     assert!(result.status.success(), "stderr: {}", text(&result.stderr));
     std::fs::remove_dir_all(&out).unwrap();
 }
+
+fn train_from(out: &Path, source: &Path, extra: &[&str]) -> Output {
+    let mut args = vec![
+        "train",
+        "--out",
+        out.to_str().unwrap(),
+        "--from",
+        source.to_str().unwrap(),
+        "--matches-per-genome",
+        "4",
+        "--reeval-matches",
+        "6",
+        "--rounds",
+        "3",
+        "--threads",
+        "2",
+    ];
+    args.extend_from_slice(extra);
+    cli(&args)
+}
+
+#[test]
+fn a_run_can_build_on_an_earlier_run() {
+    let base = run_dir("warm");
+    let source = base.join("a");
+    assert!(train(&source, &["--generations", "3"]).status.success());
+    let out = base.join("b");
+    let result = train_from(&out, &source, &["--generations", "2", "--seed", "9"]);
+    assert!(result.status.success(), "{}", text(&result.stderr));
+    let stdout = text(&result.stdout);
+    assert!(stdout.contains("warm start"), "{stdout}");
+    assert_eq!(row_generations(&stdout), vec![0, 1], "{stdout}");
+    let log = std::fs::read_to_string(out.join("events.jsonl")).unwrap();
+    assert!(
+        log.lines().next().unwrap().contains("warm_started_from"),
+        "{log}"
+    );
+    // The new run is an ordinary run: it can be resumed.
+    assert!(cli(&[
+        "train",
+        "--out",
+        out.to_str().unwrap(),
+        "--resume",
+        "--generations",
+        "3"
+    ])
+    .status
+    .success());
+    let _ = std::fs::remove_dir_all(&base);
+}
+
+#[test]
+fn a_bad_from_leaves_nothing_behind_and_points_at_resume_or_the_size() {
+    let base = run_dir("warm-bad");
+    let out = base.join("b");
+    let missing = train_from(&out, &base.join("nowhere"), &["--generations", "1"]);
+    assert!(!missing.status.success());
+    assert!(!text(&missing.stderr).contains("panicked"));
+    assert!(!out.exists(), "a refused start creates nothing");
+    let source = base.join("a");
+    assert!(train(&source, &["--generations", "1"]).status.success());
+    let sized = train_from(&out, &source, &["--population", "20"]);
+    assert!(!sized.status.success());
+    assert!(!out.exists());
+    let resumed = train_from(&out, &source, &["--resume"]);
+    assert!(!resumed.status.success());
+    let _ = std::fs::remove_dir_all(&base);
+}
