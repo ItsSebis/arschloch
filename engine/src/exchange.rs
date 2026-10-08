@@ -1,8 +1,50 @@
 //! The mandatory pre-round card exchange ("Drücken"). See docs/RULES.md,
 //! "Card Exchange (\"Drücken\")".
 
+use std::fmt;
+use std::str::FromStr;
+
+use serde::{Deserialize, Serialize};
+
 use crate::card::{Card, DuplicateRule};
 use crate::role::{exchange_counts_for_player_count, roles_for_player_count, Role};
+
+/// Whether the lower role of an exchange pair chooses which cards to give.
+///
+/// Under `Forced` (the rules of the game, and the default) it must hand over
+/// its highest cards; under `Free` (how the simulator behaved until Phase 15,
+/// kept to reproduce earlier results and as a game modifier) it, or its
+/// strategy, may give any cards.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ExchangeRule {
+    Free,
+    #[default]
+    Forced,
+}
+
+impl fmt::Display for ExchangeRule {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::Free => "free",
+            Self::Forced => "forced",
+        })
+    }
+}
+
+impl FromStr for ExchangeRule {
+    type Err = String;
+
+    fn from_str(text: &str) -> Result<Self, String> {
+        match text.trim().to_ascii_lowercase().as_str() {
+            "free" => Ok(Self::Free),
+            "forced" => Ok(Self::Forced),
+            other => Err(format!(
+                "unknown exchange rule `{other}`; expected free or forced"
+            )),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExchangeError {
@@ -163,6 +205,28 @@ pub fn exchange(
             sorted.split_off(sorted.len() - count)
         },
     )
+}
+
+/// The exchange under `rule`: `Forced` hands over the highest cards and never
+/// calls `choose_cards_to_give`; `Free` asks it (see
+/// [`exchange_with_selection`]).
+///
+/// # Errors
+///
+/// As [`exchange_with_selection`].
+pub fn exchange_with_rule(
+    hands: &mut [Vec<Card>],
+    role_by_seat: &[Role],
+    duplicate_rule: DuplicateRule,
+    rule: ExchangeRule,
+    choose_cards_to_give: impl FnMut(usize, &[Card], usize, DuplicateRule) -> Vec<Card>,
+) -> Result<(), ExchangeError> {
+    match rule {
+        ExchangeRule::Forced => exchange(hands, role_by_seat, duplicate_rule),
+        ExchangeRule::Free => {
+            exchange_with_selection(hands, role_by_seat, duplicate_rule, choose_cards_to_give)
+        }
+    }
 }
 
 fn validate_role_mapping(role_by_seat: &[Role], roles: &[Role]) -> Result<(), ExchangeError> {
@@ -370,6 +434,144 @@ mod tests {
         // LOWEST card (Six) instead of the naive highest (Seven).
         assert!(hands[1].contains(&card(Rank::Six, Suit::Clubs)));
         assert!(!hands[1].contains(&card(Rank::Seven, Suit::Clubs)));
+    }
+
+    fn lowest_giver(_seat: usize, hand: &[Card], count: usize, rule: DuplicateRule) -> Vec<Card> {
+        let mut sorted = hand.to_vec();
+        sorted.sort_by(|a, b| a.compare(b, rule));
+        sorted.truncate(count);
+        sorted
+    }
+
+    fn inner_pair_scenario() -> (Vec<Role>, Vec<Vec<Card>>) {
+        (
+            vec![
+                Role::President,
+                Role::Vize,
+                Role::ViceArschloch,
+                Role::Arschloch,
+            ],
+            vec![
+                vec![card(Rank::Two, Suit::Clubs), card(Rank::Three, Suit::Clubs)],
+                vec![card(Rank::Four, Suit::Clubs), card(Rank::Five, Suit::Clubs)],
+                vec![card(Rank::Six, Suit::Clubs), card(Rank::Seven, Suit::Clubs)],
+                vec![card(Rank::King, Suit::Clubs), card(Rank::Ace, Suit::Clubs)],
+            ],
+        )
+    }
+
+    #[test]
+    fn the_forced_rule_never_asks_the_chooser_and_gives_the_highest_cards() {
+        let (roles, mut hands) = inner_pair_scenario();
+        let mut asked = false;
+        exchange_with_rule(
+            &mut hands,
+            &roles,
+            DuplicateRule::FirstDealtWins,
+            ExchangeRule::Forced,
+            |seat, hand, count, rule| {
+                asked = true;
+                lowest_giver(seat, hand, count, rule)
+            },
+        )
+        .unwrap();
+        assert!(!asked, "a forced exchange has nothing to choose");
+        // Seat 2 gave its HIGHEST card (Seven), not the lowest the chooser would.
+        assert!(hands[1].contains(&card(Rank::Seven, Suit::Clubs)));
+        assert!(!hands[1].contains(&card(Rank::Six, Suit::Clubs)));
+        // And it is exactly the old `exchange`.
+        let (roles, mut plain) = inner_pair_scenario();
+        exchange(&mut plain, &roles, DuplicateRule::FirstDealtWins).unwrap();
+        assert_eq!(hands, plain);
+    }
+
+    #[test]
+    fn the_free_rule_honours_the_chooser() {
+        let (roles, mut hands) = inner_pair_scenario();
+        exchange_with_rule(
+            &mut hands,
+            &roles,
+            DuplicateRule::FirstDealtWins,
+            ExchangeRule::Free,
+            lowest_giver,
+        )
+        .unwrap();
+        assert!(hands[1].contains(&card(Rank::Six, Suit::Clubs)));
+    }
+
+    #[test]
+    fn the_forced_rule_takes_the_n_highest_at_every_table_size() {
+        use crate::role::{exchange_counts_for_player_count, roles_for_player_count};
+        for players in 3..=6u8 {
+            let roles = roles_for_player_count(players).unwrap().to_vec();
+            let counts = exchange_counts_for_player_count(players).unwrap();
+            // Seat s holds ranks s*13/n .. so the hands are strictly ordered.
+            let mut hands: Vec<Vec<Card>> = (0..usize::from(players))
+                .map(|seat| {
+                    (0..8)
+                        .map(|i| {
+                            let rank = [
+                                Rank::Two,
+                                Rank::Three,
+                                Rank::Four,
+                                Rank::Five,
+                                Rank::Six,
+                                Rank::Seven,
+                                Rank::Eight,
+                                Rank::Nine,
+                            ][i];
+                            Card::new(
+                                rank,
+                                [Suit::Diamonds, Suit::Hearts, Suit::Spades, Suit::Clubs][seat % 4],
+                                u8::try_from(seat * 8 + i).unwrap(),
+                            )
+                        })
+                        .collect()
+                })
+                .collect();
+            let before = hands.clone();
+            let mut seat_roles = roles.clone();
+            seat_roles.rotate_left(1); // roles by seat: seat 0 is not the President
+            exchange_with_rule(
+                &mut hands,
+                &seat_roles,
+                DuplicateRule::FirstDealtWins,
+                ExchangeRule::Forced,
+                lowest_giver,
+            )
+            .unwrap();
+            for (i, &count) in counts.iter().enumerate() {
+                if count == 0 {
+                    continue;
+                }
+                let high = seat_roles.iter().position(|&r| r == roles[i]).unwrap();
+                let low = seat_roles
+                    .iter()
+                    .position(|&r| r == roles[roles.len() - 1 - i])
+                    .unwrap();
+                let mut giver = before[low].clone();
+                giver.sort_by(|a, b| a.compare(b, DuplicateRule::FirstDealtWins));
+                let top: Vec<Card> = giver[giver.len() - usize::from(count)..].to_vec();
+                assert!(
+                    top.iter().all(|c| hands[high].contains(c)),
+                    "{players}p: the {count} highest went to the higher role"
+                );
+                assert!(top.iter().all(|c| !hands[low].contains(c)));
+            }
+        }
+    }
+
+    #[test]
+    fn the_rule_names_round_trip() {
+        assert_eq!(ExchangeRule::default(), ExchangeRule::Forced);
+        assert_eq!("free".parse::<ExchangeRule>(), Ok(ExchangeRule::Free));
+        assert_eq!(" FORCED ".parse::<ExchangeRule>(), Ok(ExchangeRule::Forced));
+        assert!("sometimes".parse::<ExchangeRule>().is_err());
+        assert_eq!(ExchangeRule::Forced.to_string(), "forced");
+        assert_eq!(
+            serde_json::to_string(&ExchangeRule::Free).unwrap(),
+            "\"free\""
+        );
     }
 
     #[test]
