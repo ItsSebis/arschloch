@@ -372,6 +372,7 @@ mod tests {
                 mean_enabled_connections: 0.0,
                 innovation_count: 0,
             },
+            timings: None,
         }))
     }
 

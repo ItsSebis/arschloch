@@ -900,3 +900,43 @@ fn a_nonzero_weight_changes_the_fitness_and_the_old_weight_zero_path_is_untouche
     fs::remove_dir_all(&off).unwrap();
     fs::remove_dir_all(&on).unwrap();
 }
+
+#[test]
+fn generation_events_carry_stage_timings_and_old_events_still_load() {
+    let run = dir("timings");
+    Trainer::new(config(2), opponents(), &run)
+        .unwrap()
+        .run(&mut Recorder::default())
+        .unwrap();
+    for event in generation_events(&run) {
+        let t = event.timings.expect("a new event has timings");
+        let stages = [
+            t.training_evaluation,
+            t.champion_selection,
+            t.speciation_and_reproduction,
+            t.reevaluation_mixed,
+            t.reevaluation_per_opponent,
+            t.hall_of_fame,
+            t.confirmation,
+            t.decision_sample,
+            t.checkpoint_and_files,
+        ];
+        assert!(stages.iter().all(|s| s.is_finite() && *s >= 0.0), "{t:?}");
+        assert!(t.training_evaluation > 0.0);
+        assert!(
+            stages.iter().sum::<f64>() <= event.generation_secs + 1e-6,
+            "the stages run one after the other: {t:?} vs {}",
+            event.generation_secs
+        );
+    }
+    // An event line from before the field existed has no `timings` key.
+    let text = fs::read_to_string(run.join("events.jsonl")).unwrap();
+    let line = text.lines().nth(1).unwrap();
+    let mut value: serde_json::Value = serde_json::from_str(line).unwrap();
+    assert!(value.as_object_mut().unwrap().remove("timings").is_some());
+    match serde_json::from_value::<Event>(value).unwrap() {
+        Event::Generation(g) => assert!(g.timings.is_none()),
+        other => panic!("{other:?}"),
+    }
+    fs::remove_dir_all(&run).unwrap();
+}

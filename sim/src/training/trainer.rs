@@ -20,7 +20,7 @@ use super::decisions::record_decisions;
 use super::evaluate::{evaluate, evaluate_with_round1, match_seed, Opponents, Round1Obs, Score};
 use super::events::{
     ChampionStats, Complexity, Event, FitnessStats, GenerationEvent, OpponentStat, RunEnd,
-    RunStart, SkillTermStats, SCHEMA_VERSION,
+    RunStart, SkillTermStats, StageTimings, SCHEMA_VERSION,
 };
 use super::run_dir::{BestRecord, Checkpoint, HallMember, RunDir, TrainError};
 use super::skill_term::combine;
@@ -518,16 +518,23 @@ impl Trainer {
     /// The champion on the fixed matches: against the mixed fixed pool,
     /// against each fixed opponent alone and, once the hall has members,
     /// against the hall alone. These matches played no part in choosing it.
-    fn reevaluate(&self, champion: &Genome) -> (Score, Vec<OpponentStat>, Option<Score>) {
+    fn reevaluate(
+        &self,
+        champion: &Genome,
+        timings: &mut StageTimings,
+    ) -> (Score, Vec<OpponentStat>, Option<Score>) {
         let table = self.config.table();
         let seeds = reeval_seeds(&self.config);
         let candidate = strategy_for(champion);
+        let stage = Instant::now();
         let mixed = evaluate(
             &candidate,
             &table,
             Opponents::Mixed(&self.fixed_pool()),
             &seeds,
         );
+        timings.reevaluation_mixed = stage.elapsed().as_secs_f64();
+        let stage = Instant::now();
         let per_opponent = self
             .opponents
             .par_iter()
@@ -542,9 +549,12 @@ impl Trainer {
                 .into(),
             })
             .collect();
+        timings.reevaluation_per_opponent = stage.elapsed().as_secs_f64();
+        let stage = Instant::now();
         let hall = self.hall_pool();
         let hall_score = (!hall.is_empty())
             .then(|| evaluate(&candidate, &table, Opponents::Mixed(&hall), &seeds));
+        timings.hall_of_fame = stage.elapsed().as_secs_f64();
         (mixed, per_opponent, hall_score)
     }
 
@@ -579,45 +589,38 @@ impl Trainer {
         )
     }
 
-    fn step(
+    /// Writes a new best champion, confirms it on the held-out matches and
+    /// records its decisions; adds the file-writing seconds to `files_secs`.
+    fn record_new_best(
         &mut self,
-        observer: &mut dyn TrainObserver,
-        started: Instant,
-    ) -> Result<(), TrainError> {
-        let step_started = Instant::now();
-        let generation = self.population.generation();
+        generation: u32,
+        champion: &Genome,
+        reeval: &Score,
+        timings: &mut StageTimings,
+        files_secs: &mut f64,
+    ) -> Result<Score, TrainError> {
+        let stage = Instant::now();
+        self.dir.write_best(champion)?;
+        *files_secs += stage.elapsed().as_secs_f64();
+        let stage = Instant::now();
+        let heldout = self.confirm(champion);
+        timings.confirmation = stage.elapsed().as_secs_f64();
+        let stage = Instant::now();
+        let decisions = self.sample_decisions(generation, champion);
+        timings.decision_sample = stage.elapsed().as_secs_f64();
+        let stage = Instant::now();
+        self.dir.write_decisions(&decisions)?;
+        *files_secs += stage.elapsed().as_secs_f64();
+        self.best = Some(BestRecord {
+            generation,
+            reeval: reeval.clone().into(),
+            heldout: heldout.clone().into(),
+        });
+        Ok(heldout)
+    }
 
-        let (fitness, skill_terms) = self.evaluate_population(generation, observer);
-        let (champion_index, training_rank) = self.select_champion(&fitness);
-        // `advance` replaces the genomes, so take the champion first.
-        let champion = self.population.genomes()[champion_index].clone();
-        let hall_generations: Vec<u32> = self.hall.iter().map(|m| m.generation).collect();
-        let stats = fitness_stats(&fitness, skill_terms.as_deref());
-        self.population.set_fitness(fitness.clone());
-        let report = self.population.advance();
-
-        let (reeval, opponents, hall_score) = self.reevaluate(&champion);
-        let is_new_best = self
-            .best
-            .as_ref()
-            .is_none_or(|b| reeval.mean > b.reeval.mean);
-        let genome_file = self.dir.write_champion(generation, &champion)?;
-        let heldout = if is_new_best {
-            self.dir.write_best(&champion)?;
-            let heldout = self.confirm(&champion);
-            self.dir
-                .write_decisions(&self.sample_decisions(generation, &champion))?;
-            self.best = Some(BestRecord {
-                generation,
-                reeval: reeval.clone().into(),
-                heldout: heldout.clone().into(),
-            });
-            Some(heldout)
-        } else {
-            None
-        };
-
-        // The hall takes a fresh champion every `interval` generations.
+    /// The hall takes a fresh champion every `interval` generations.
+    fn update_hall(&mut self, generation: u32, champion: &Genome) {
         if self.config.hall_of_fame_size > 0
             && generation > 0
             && generation.is_multiple_of(self.config.hall_of_fame_interval)
@@ -630,6 +633,58 @@ impl Trainer {
                 self.hall.remove(0);
             }
         }
+    }
+
+    fn step(
+        &mut self,
+        observer: &mut dyn TrainObserver,
+        started: Instant,
+    ) -> Result<(), TrainError> {
+        let step_started = Instant::now();
+        let generation = self.population.generation();
+        let mut timings = StageTimings::default();
+
+        let stage = Instant::now();
+        let (fitness, skill_terms) = self.evaluate_population(generation, observer);
+        timings.training_evaluation = stage.elapsed().as_secs_f64();
+        let stage = Instant::now();
+        let (champion_index, training_rank) = self.select_champion(&fitness);
+        timings.champion_selection = stage.elapsed().as_secs_f64();
+        // `advance` replaces the genomes, so take the champion first.
+        let champion = self.population.genomes()[champion_index].clone();
+        let hall_generations: Vec<u32> = self.hall.iter().map(|m| m.generation).collect();
+        let stats = fitness_stats(&fitness, skill_terms.as_deref());
+        let stage = Instant::now();
+        self.population.set_fitness(fitness.clone());
+        let report = self.population.advance();
+        timings.speciation_and_reproduction = stage.elapsed().as_secs_f64();
+
+        let (reeval, opponents, hall_score) = self.reevaluate(&champion, &mut timings);
+        // File writes are timed on their own and added up; the confirmation
+        // and the decision sample (which also play matches) are separate.
+        let stage = Instant::now();
+        let is_new_best = self
+            .best
+            .as_ref()
+            .is_none_or(|b| reeval.mean > b.reeval.mean);
+        let genome_file = self.dir.write_champion(generation, &champion)?;
+        let mut files_secs = stage.elapsed().as_secs_f64();
+        let heldout = if is_new_best {
+            Some(self.record_new_best(
+                generation,
+                &champion,
+                &reeval,
+                &mut timings,
+                &mut files_secs,
+            )?)
+        } else {
+            None
+        };
+
+        let stage = Instant::now();
+        self.update_hall(generation, &champion);
+        timings.hall_of_fame += stage.elapsed().as_secs_f64();
+        timings.checkpoint_and_files = files_secs;
 
         let table = self.config.table();
         let rounds_per_match = table.rounds as u64;
@@ -646,6 +701,8 @@ impl Trainer {
                 // A new best also plays one match to record its decisions.
                 + heldout.as_ref().map_or(0, |h| h.matches as u64 + 1));
         self.total_rounds += rounds_evaluated;
+        // Neither `generation_secs` nor the timings include writing the
+        // event line and the checkpoint (they come after the event is built).
         let generation_secs = step_started.elapsed().as_secs_f64();
         let elapsed_secs = self.elapsed_before + started.elapsed().as_secs_f64();
 
@@ -679,6 +736,7 @@ impl Trainer {
                 mean_enabled_connections: report.mean_enabled_connections,
                 innovation_count: report.innovation_count,
             },
+            timings: Some(timings),
         };
 
         // The checkpoint comes last: if the process dies earlier, resume

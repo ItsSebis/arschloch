@@ -91,6 +91,20 @@ runs/first/
 A run is reproducible: the same settings and `--seed` give the same result,
 independent of `--threads`.
 
+Each generation line in `events.jsonl` also has an optional `timings` object:
+the wall-clock seconds of every stage, to see where a slow run spends its
+time (it differs from run to run, like `elapsed_secs`, and is the only part of
+the event that is not reproducible). The stages run one after the other:
+`training_evaluation` (all genomes play their matches), `champion_selection`,
+`speciation_and_reproduction`, `reevaluation_mixed`,
+`reevaluation_per_opponent`, `hall_of_fame` (the champion against the hall,
+plus updating it), `confirmation` and `decision_sample` (both 0 unless the
+generation has a new best) and `checkpoint_and_files` (champion, best and
+decision files; the event line and the checkpoint are written afterwards and
+are in no stage). Events from older runs have no `timings`; the terminal table
+does not show them. `docs/baselines/perf/scaling.sh` summarises them per
+thread count.
+
 ## Choosing settings
 
 | option | default | what it does / when to change it |
