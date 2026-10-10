@@ -107,6 +107,7 @@ fn new_config(args: &TrainArgs, specs: Vec<String>) -> TrainConfig {
         hall_of_fame_size: args.hall_of_fame,
         hall_of_fame_interval: args.hall_interval,
         skill_weight: args.fitness_skill_weight,
+        features: args.features,
     }
 }
 
@@ -132,7 +133,7 @@ fn checked_args(args: &TrainArgs) -> anyhow::Result<(TrainArgs, Vec<String>)> {
             .population_size;
     }
     if let Some(from) = &args.from {
-        Trainer::check_warm_source(from, args.population)?;
+        Trainer::check_warm_source(from, args.population, args.features)?;
     }
     for spec in &specs {
         spec.parse::<StrategyArg>()

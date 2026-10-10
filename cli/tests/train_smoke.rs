@@ -782,3 +782,247 @@ fn a_skill_weighted_run_writes_the_weight_and_the_additive_fields_and_resumes_wi
     assert!(!result.status.success());
     assert!(!bad.exists());
 }
+
+/// FNV-1a, to pin the bytes of files without a hashing dependency.
+fn fnv(path: &Path) -> u64 {
+    std::fs::read(path)
+        .unwrap()
+        .iter()
+        .fold(0xcbf2_9ce4_8422_2325, |h, &b| {
+            (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3)
+        })
+}
+
+fn small_run(out: &Path, threads: &str, extra: &[&str]) -> Output {
+    let mut args = vec![
+        "train",
+        "--out",
+        out.to_str().unwrap(),
+        "--population",
+        "20",
+        "--matches-per-genome",
+        "6",
+        "--reeval-matches",
+        "10",
+        "--rounds",
+        "3",
+        "--threads",
+        threads,
+        "--quiet",
+    ];
+    args.extend_from_slice(extra);
+    cli(&args)
+}
+
+/// Runs trained before `--features` existed (captured with the build that
+/// preceded it): the default must reproduce their files byte for byte.
+#[test]
+fn the_default_feature_set_trains_exactly_as_before_the_option_existed() {
+    for (name, extra, hashes) in [
+        (
+            "features-golden-4p",
+            vec!["--generations", "3", "--seed", "7"],
+            [
+                ("config.json", 0x31a9_dd66_51cc_4b2a_u64),
+                ("best.json", 0xddb5_ea26_7675_ff14),
+                ("gen-0000.json", 0x68a4_edb8_1f21_e2b1),
+                ("gen-0002.json", 0x24da_74c1_3169_29f4),
+            ],
+        ),
+        (
+            "features-golden-5p",
+            vec![
+                "--generations",
+                "4",
+                "--seed",
+                "3",
+                "--player-count",
+                "5",
+                "--deck-variant",
+                "double",
+                "--pass-rule",
+                "free",
+            ],
+            [
+                ("config.json", 0x4586_20e5_9a23_5273),
+                ("best.json", 0x5206_24db_58d1_a72c),
+                ("gen-0000.json", 0x7a21_c9cb_6b2e_5f8f),
+                ("gen-0002.json", 0x78f3_660f_7e21_7bfb),
+            ],
+        ),
+    ] {
+        let out = run_dir(name);
+        let result = small_run(&out, "2", &extra);
+        assert!(result.status.success(), "stderr: {}", text(&result.stderr));
+        for (file, expected) in hashes {
+            assert_eq!(fnv(&out.join(file)), expected, "{name}/{file}");
+        }
+        let config = std::fs::read_to_string(out.join("config.json")).unwrap();
+        assert!(!config.contains("features"), "{config}");
+        // Naming the default explicitly changes nothing either.
+        let explicit = run_dir(&format!("{name}-explicit"));
+        let mut again = extra.clone();
+        again.extend(["--features", "base"]);
+        assert!(small_run(&explicit, "1", &again).status.success());
+        for (file, expected) in hashes {
+            assert_eq!(
+                fnv(&explicit.join(file)),
+                expected,
+                "{name}/{file} explicit"
+            );
+        }
+        std::fs::remove_dir_all(&out).unwrap();
+        std::fs::remove_dir_all(&explicit).unwrap();
+    }
+}
+
+fn names_of(path: &Path) -> Vec<String> {
+    let file: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    file["feature_names"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|n| n.as_str().unwrap().to_owned())
+        .collect()
+}
+
+#[test]
+fn every_feature_set_trains_records_its_names_and_plays() {
+    for (set, count) in [("trick", 25), ("hidden", 28), ("all", 31)] {
+        let out = run_dir(&format!("features-{set}"));
+        let result = small_run(
+            &out,
+            "2",
+            &["--generations", "3", "--seed", "5", "--features", set],
+        );
+        assert!(result.status.success(), "{set}: {}", text(&result.stderr));
+        let names = names_of(&out.join("best.json"));
+        assert_eq!(names.len(), count, "{set}");
+        assert_eq!(names[..20], sim::FEATURE_NAMES, "{set}: v1 prefix");
+        assert_eq!(names, sim::FEATURE_NAMES_V2[..count], "{set}");
+        let config = std::fs::read_to_string(out.join("config.json")).unwrap();
+        assert!(
+            config.contains(&format!("\"features\": \"{set}\"")),
+            "{config}"
+        );
+        let checkpoint: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(out.join("checkpoint.json")).unwrap())
+                .unwrap();
+        assert_eq!(checkpoint["feature_count"], count);
+        let start = std::fs::read_to_string(out.join("events.jsonl")).unwrap();
+        let start: serde_json::Value = serde_json::from_str(start.lines().next().unwrap()).unwrap();
+        assert_eq!(start["feature_names"].as_array().unwrap().len(), count);
+        // The champion plays in an ordinary run next to the other sets' players.
+        let played = cli(&[
+            "--player-count",
+            "4",
+            "--matches",
+            "10",
+            "--rounds",
+            "2",
+            "--output",
+            out.join("played.json").to_str().unwrap(),
+            "--strategy",
+            &format!("neat:{}", out.join("best.json").display()),
+            "--strategy",
+            "lowest-legal",
+            "--strategy",
+            "lowest-legal",
+            "--strategy",
+            "adaptive:reading,tempo,bully",
+        ]);
+        assert!(played.status.success(), "{set}: {}", text(&played.stderr));
+        std::fs::remove_dir_all(&out).unwrap();
+    }
+}
+
+#[test]
+fn an_all_features_run_resumes_identically_and_ignores_the_thread_count() {
+    let options = ["--seed", "11", "--features", "all", "--player-count", "4"];
+    let straight = run_dir("features-all-straight");
+    let mut args = vec!["--generations", "3"];
+    args.extend(options);
+    assert!(small_run(&straight, "1", &args).status.success());
+
+    let threaded = run_dir("features-all-threads");
+    assert!(small_run(&threaded, "4", &args).status.success());
+
+    let resumed = run_dir("features-all-resumed");
+    let mut first = vec!["--generations", "2"];
+    first.extend(options);
+    assert!(small_run(&resumed, "2", &first).status.success());
+    let more = cli(&[
+        "train",
+        "--out",
+        resumed.to_str().unwrap(),
+        "--resume",
+        "--generations",
+        "3",
+        "--threads",
+        "3",
+        "--quiet",
+    ]);
+    assert!(more.status.success(), "{}", text(&more.stderr));
+
+    for file in [
+        "config.json",
+        "best.json",
+        "gen-0000.json",
+        "gen-0001.json",
+        "gen-0002.json",
+    ] {
+        assert_eq!(
+            fnv(&straight.join(file)),
+            fnv(&threaded.join(file)),
+            "{file}: threads"
+        );
+        // (config.json keeps the generation total the run started with.)
+        if file != "config.json" {
+            assert_eq!(
+                fnv(&straight.join(file)),
+                fnv(&resumed.join(file)),
+                "{file}: resume"
+            );
+        }
+    }
+    for dir in [&straight, &threaded, &resumed] {
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+}
+
+#[test]
+fn a_warm_start_needs_the_same_feature_set_as_its_source() {
+    let base = run_dir("features-warm");
+    let source = base.join("trick-source");
+    assert!(
+        small_run(&source, "2", &["--generations", "1", "--features", "trick"])
+            .status
+            .success()
+    );
+    // Same set: builds on the source.
+    let same = base.join("same");
+    let result = train_from(
+        &same,
+        &source,
+        &["--generations", "1", "--features", "trick", "--quiet"],
+    );
+    assert!(result.status.success(), "{}", text(&result.stderr));
+    assert_eq!(names_of(&same.join("best.json")).len(), 25);
+    // Another set (including the default) is refused, with the reason, and
+    // nothing is written.
+    for other in [None, Some("all")] {
+        let out = base.join(format!("other-{}", other.unwrap_or("base")));
+        let mut args = vec!["--generations", "1"];
+        if let Some(set) = other {
+            args.extend(["--features", set]);
+        }
+        let result = train_from(&out, &source, &args);
+        assert!(!result.status.success());
+        let stderr = text(&result.stderr);
+        assert!(stderr.contains("--features"), "{stderr}");
+        assert!(!stderr.contains("panicked"), "{stderr}");
+        assert!(!out.exists());
+    }
+    let _ = std::fs::remove_dir_all(&base);
+}

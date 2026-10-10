@@ -12,7 +12,10 @@ use std::cmp::Ordering;
 
 use engine::{Card, DuplicateRule, Move};
 
+use super::feature_set::{FeatureSet, FEATURE_COUNT_V2};
 use crate::strategy::{OpponentHand, TurnContext};
+
+mod extra;
 
 pub const FEATURE_NAMES: [&str; 20] = [
     "is_pass",
@@ -39,7 +42,9 @@ pub const FEATURE_NAMES: [&str; 20] = [
 
 pub const FEATURE_COUNT: usize = FEATURE_NAMES.len();
 
-/// Bumped whenever a feature's formula, scale or meaning changes without
+/// Feature set v1 is the first `FEATURE_COUNT` entries of the full list
+/// (`FEATURE_NAMES_V2`); the groups appended to it leave v1 untouched, so
+/// they do not change this number. Bumped whenever a feature's formula, scale or meaning changes without
 /// its name changing (for example `HAND_SCALE`, `CLOSE_HAND`, the opponent
 /// divisor): saved genomes were trained against the old values and would
 /// load cleanly but misplay. Renaming, adding, removing or reordering
@@ -167,7 +172,12 @@ pub struct TurnSummary<'a> {
     /// Bit `r` of entry `s`: some rank `r` has at least `s` unseen cards.
     unseen_ranks_with: [u16; MAX_COMBO + 1],
     max_hand_rank: Option<usize>,
-    state: [f64; FEATURE_COUNT],
+    /// The candidate-independent features (`extra` fills the trick and
+    /// table groups); entries beyond `set.len()` stay 0.
+    state: [f64; FEATURE_COUNT_V2],
+    /// What the hidden group needs beyond the above (`None` unless the set
+    /// has the group).
+    hidden: Option<extra::HiddenState>,
 }
 
 /// The largest combo size a candidate can have.
@@ -176,6 +186,17 @@ const MAX_COMBO: usize = 8;
 impl<'a> TurnSummary<'a> {
     #[must_use]
     pub fn new(context: &'a TurnContext<'a>, duplicate_rule: DuplicateRule) -> Self {
+        Self::with_features(context, duplicate_rule, FeatureSet::Base)
+    }
+
+    /// A summary for the features of `set`; `context` must hold every
+    /// part `set.needs()` lists.
+    #[must_use]
+    pub fn with_features(
+        context: &'a TurnContext<'a>,
+        duplicate_rule: DuplicateRule,
+        set: FeatureSet,
+    ) -> Self {
         let hand = context.hand;
         let hand_set = SlotSet::new(hand);
         let unseen_set = SlotSet::new(&context.unseen_cards);
@@ -207,7 +228,7 @@ impl<'a> TurnSummary<'a> {
             close |= o.hand_size <= CLOSE_HAND;
         }
 
-        let mut state = [0.0; FEATURE_COUNT];
+        let mut state = [0.0; FEATURE_COUNT_V2];
         state[8] = flag(context.current_combo.is_none());
         state[9] = context
             .current_combo
@@ -227,8 +248,9 @@ impl<'a> TurnSummary<'a> {
             count(hand_sum) / count(active_opponents) / HAND_SCALE
         };
         state[16] = flag(close);
+        extra::fill_state(&mut state, context, set, active_opponents);
 
-        Self {
+        let mut summary = Self {
             duplicate_rule,
             hand,
             unseen: &context.unseen_cards,
@@ -239,7 +261,12 @@ impl<'a> TurnSummary<'a> {
             unseen_ranks_with,
             max_hand_rank,
             state,
+            hidden: None,
+        };
+        if set.has_hidden() {
+            summary.hidden = Some(extra::HiddenState::new(&summary));
         }
+        summary
     }
 
     /// Hand cards below `top` in `Card::compare`.
@@ -269,27 +296,35 @@ impl<'a> TurnSummary<'a> {
             + self.unseen_set.same_slot(top, rule, Ordering::Greater)
     }
 
-    /// Ranks with at least `size` unseen cards, some of which beat `top`.
-    fn unseen_beating_ranks(&self, top: Card, size: usize) -> usize {
+    /// Bit `r`: rank `r` has at least `size` unseen cards, some of which
+    /// beat `top`.
+    fn unseen_beating_rank_mask(&self, top: Card, size: usize) -> u16 {
         let rule = self.duplicate_rule;
         let with_size = self.unseen_ranks_with[size.min(MAX_COMBO)];
-        let above = (u32::from(with_size) >> (top.rank as usize + 1)).count_ones() as usize;
-        let own_rank = usize::from(
-            usize::from(self.unseen_set.per_rank[top.rank as usize]) >= size
-                && if self.unseen_set.overfull {
-                    self.unseen
-                        .iter()
-                        .any(|c| c.rank == top.rank && c.compare(&top, rule) == Ordering::Greater)
-                } else {
-                    self.unseen_set.rank_mate_above(top, rule)
-                },
-        );
-        above + own_rank
+        let shift = top.rank as usize + 1;
+        let above = (with_size >> shift) << shift;
+        let own_rank = usize::from(self.unseen_set.per_rank[top.rank as usize]) >= size
+            && if self.unseen_set.overfull {
+                self.unseen
+                    .iter()
+                    .any(|c| c.rank == top.rank && c.compare(&top, rule) == Ordering::Greater)
+            } else {
+                self.unseen_set.rank_mate_above(top, rule)
+            };
+        above | (u16::from(own_rank) << top.rank as usize)
+    }
+
+    /// Ranks with at least `size` unseen cards, some of which beat `top`.
+    fn unseen_beating_ranks(&self, top: Card, size: usize) -> usize {
+        self.unseen_beating_rank_mask(top, size).count_ones() as usize
     }
 
     /// The feature vector for playing or passing `candidate` this turn.
+    ///
+    /// The first `set.len()` entries are the features of the set; the
+    /// rest are 0.
     #[must_use]
-    pub fn features(&self, candidate: &Move) -> [f64; FEATURE_COUNT] {
+    pub fn features(&self, candidate: &Move) -> [f64; FEATURE_COUNT_V2] {
         let mut f = self.state;
         match candidate {
             Move::Pass => {
@@ -321,6 +356,11 @@ impl<'a> TurnSummary<'a> {
                     self.active_opponents,
                 );
             }
+        }
+        if let Some(hidden) = &self.hidden {
+            let hidden_start =
+                super::feature_set::FEATURE_GROUPS.base + super::feature_set::FEATURE_GROUPS.trick;
+            f[hidden_start..hidden_start + 3].copy_from_slice(&hidden.features(self, candidate));
         }
         f
     }
@@ -458,5 +498,7 @@ pub(super) mod reference {
     }
 }
 
+#[cfg(test)]
+mod extra_tests;
 #[cfg(test)]
 mod tests;

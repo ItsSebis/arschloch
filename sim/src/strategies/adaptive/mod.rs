@@ -313,6 +313,7 @@ mod tests {
                 seat: 1,
                 hand_size: 2,
                 active: true,
+                in_trick: false,
                 pass_ceilings: PassCeilings::default(),
             }],
             unseen_cards: vec![
@@ -321,6 +322,8 @@ mod tests {
             ],
             own_pass_ceilings: PassCeilings::default(),
             current_combo: None,
+            combo_holder: None,
+            table: crate::strategy::TableInfo::default(),
         };
         let legal = vec![
             play(vec![card(Rank::King, Suit::Hearts)]),
@@ -387,11 +390,14 @@ mod tests {
                 seat: 1,
                 hand_size: 2,
                 active: true,
+                in_trick: false,
                 pass_ceilings: PassCeilings::default(),
             }],
             unseen_cards: vec![card(Rank::King, Suit::Clubs), card(Rank::Ace, Suit::Spades)],
             own_pass_ceilings: PassCeilings::default(),
             current_combo: None,
+            combo_holder: None,
+            table: crate::strategy::TableInfo::default(),
         };
         let legal = vec![
             play(vec![card(Rank::Two, Suit::Diamonds)]),

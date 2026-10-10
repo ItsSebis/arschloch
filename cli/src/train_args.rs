@@ -2,7 +2,9 @@
 
 use std::path::PathBuf;
 
+use clap::builder::TypedValueParser as _;
 use clap::Parser;
+use sim::FeatureSet;
 
 use crate::args::{DeckVariantArg, DuplicateRuleArg};
 
@@ -65,7 +67,7 @@ pub struct TrainArgs {
             "player_count", "deck_variant", "duplicate_rule", "pass_rule", "exchange_rule", "rounds", "population",
             "matches_per_genome", "reeval_matches", "seed", "opponent", "target_species",
             "champion_candidates", "hall_of_fame", "hall_interval", "weight_power", "runs",
-            "fitness_skill_weight"
+            "fitness_skill_weight", "features"
         ]
     )]
     pub resume: bool,
@@ -175,6 +177,23 @@ pub struct TrainArgs {
     /// role score. An open experiment, see docs/TRAINING.md.
     #[arg(long, default_value_t = 0.0, value_parser = unit_interval)]
     pub fitness_skill_weight: f64,
+
+    /// Which features the evolved networks see: `base` (the 20 of feature set
+    /// v1, loadable by the casino port), `trick` (+ who is still in the
+    /// trick), `hidden` (+ a probabilistic reading of the unseen cards) or
+    /// `all` (+ player count, deck and pass rule). Each is a prefix of the
+    /// next, and the genome files record the names they were trained with.
+    /// See docs/TRAINING.md.
+    #[arg(
+        long,
+        default_value = "base",
+        value_parser = clap::builder::PossibleValuesParser::new(["base", "trick", "hidden", "all"])
+            .map(|name| FeatureSet::ALL_SETS
+                .into_iter()
+                .find(|set| set.to_string() == name)
+                .expect("the possible values are the feature set names"))
+    )]
+    pub features: FeatureSet,
 
     /// Rayon thread-pool size. 0 lets rayon pick its own default.
     #[arg(long, default_value_t = 0)]
@@ -330,6 +349,24 @@ mod tests {
             );
         }
         assert!(parse(&["--out", "d", "--resume", "--fitness-skill-weight", "0.5"]).is_err());
+    }
+
+    #[test]
+    fn the_feature_set_defaults_to_base_is_validated_and_cannot_change_on_resume() {
+        assert_eq!(parse(&["--out", "d"]).unwrap().features, FeatureSet::Base);
+        for (text, set) in [
+            ("base", FeatureSet::Base),
+            ("trick", FeatureSet::Trick),
+            ("hidden", FeatureSet::Hidden),
+            ("all", FeatureSet::All),
+        ] {
+            assert_eq!(
+                parse(&["--out", "d", "--features", text]).unwrap().features,
+                set
+            );
+        }
+        assert!(parse(&["--out", "d", "--features", "everything"]).is_err());
+        assert!(parse(&["--out", "d", "--resume", "--features", "all"]).is_err());
     }
 
     #[test]

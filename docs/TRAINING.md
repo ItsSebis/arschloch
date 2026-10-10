@@ -122,6 +122,7 @@ thread count.
 | `--weight-power` | 0.2 | size of weight mutations; smaller is gentler fine-tuning |
 | `--hall-of-fame N` | 0 (off) | frozen past champions join the training opponents (`--hall-interval K`: every K generations). No measured benefit against the default pool; worth trying when the pool includes evolved opponents |
 | `--fitness-skill-weight W` | 0 (off) | experimental, 0 to 1: trains on `(1 - W) x mean role score + W x a luck-adjusted round-1 score` (see below). Fixed for the run (`--resume` cannot change it) |
+| `--features base\|trick\|hidden\|all` | base | which inputs the networks see (see "Feature sets" below). Fixed for the run (`--resume` cannot change it); a warm start (`--from`) needs the source's value |
 | `--target-species` | 8 | how many species the speciation steers toward |
 | `--deck-variant`, `--duplicate-rule` | single, first-dealt-wins | table rules |
 | `--exchange-rule` | forced | `forced`: the lower role of an exchange pair must give its highest cards (the rules of the game); `free`: it may choose (the older behaviour). Evolved players give their highest cards either way, so it only changes what the opponents do. Like `--pass-rule` it cannot change on `--resume`; runs written before it existed resume as `free` |
@@ -194,6 +195,60 @@ seeds 11 and 12, `W` = 0 vs 0.5) the held-out champion scores were 0.525 vs
 0.521 and 0.495 vs 0.547 (standard error about 0.03 each), so no effect is
 visible beyond noise. Whether any weight helps is an open Phase 13 experiment;
 treat the option as a way to run it, not as a recommended setting.
+
+## Feature sets (`--features`)
+
+A network's inputs are the features of one candidate move. The full list
+(`FEATURE_NAMES_V2` in `sim/src/strategies/neat_player/features.rs`) is the 20
+features of set v1 (`base`, unchanged: same names, order and formulas) followed
+by three groups; `--features` picks a nested prefix, so each choice is a clean
+ablation with an honest genome size:
+
+| `--features` | inputs | adds |
+|---|---|---|
+| `base` (default) | 20 | the v1 features |
+| `trick` | 25 | `opponents_in_trick`, `fraction_in_trick`, `all_in_trick_close`, `min_hand_in_trick`, `last_to_act_in_trick` |
+| `hidden` | 28 | `p_win_trick`, `expected_beaters`, `my_unbeatable_fraction` |
+| `all` | 31 | `table_players`, `table_double_deck`, `table_pass_final` |
+
+*Trick.* An opponent is "in the trick" while it is active and, under pass rule
+`final`, has not passed in it (under `free` every active seat counts).
+`opponents_in_trick` is their number / 5, `fraction_in_trick` that number over
+all active opponents, `all_in_trick_close` is 1 when there is at least one and
+all of them hold at most 2 cards, `min_hand_in_trick` the smallest of their hands
+/ 13, and `last_to_act_in_trick` is 1 when no opponent in the trick acts after
+you before the trick comes back to the seat holding the table combo (all of them
+act after you when you lead).
+
+*Hidden.* For a candidate play of size s topped by card t, with U unseen cards,
+`m` = the unseen cards lying in rank groups of at least s unseen cards that hold
+a card above t (it counts cards, not combinations: exact for singles, optimistic
+for the opponent for pairs and larger). An opponent with h cards beats the play
+with probability `1 - prod_{j<h} (U - m - j) / (U - j)`, or 0 when its pass
+ceiling proves it cannot. `p_win_trick` is the product of the complements over
+the opponents in the trick (the hands are treated as independent, though they
+partition the unseen cards; 1 when nobody is in the trick, 0 for a pass),
+`expected_beaters` the sum of `h * m / U` over them / 52, and
+`my_unbeatable_fraction` the share of the cards left in your hand (after the
+candidate) in a rank group that no unseen group of at least its size can beat.
+All are exact deterministic functions of the cards counted so far, no randomness.
+
+*Table.* `table_players` = (seats - 3) / 3, `table_double_deck` and
+`table_pass_final` are 0/1. They only vary when one model trains on several
+tables.
+
+A genome file records the feature names it was trained with, and it loads when
+those names are a prefix of the full list ending at a group boundary (20, 25, 28
+or 31) and the genome has exactly that many inputs; anything else (other names,
+other order, a prefix that stops inside a group, 20 names with 22 inputs) is
+refused with both lists named. Every older genome therefore loads and plays
+unchanged, and `--features base` runs reproduce earlier runs byte for byte
+(`config.json` only mentions `features` when it is not `base`). `NeatStrategy`
+builds only the inputs it was trained with and asks the match loop only for the
+context parts they read, so a `base` model costs what it always did. The casino
+TypeScript port implements feature set v1 only: models with `trick`, `hidden` or
+`all` features load in the Rust tools but not in the casino until its port is
+extended.
 
 ## Building on an earlier run
 

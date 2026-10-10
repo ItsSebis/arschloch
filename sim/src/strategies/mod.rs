@@ -16,8 +16,9 @@ pub use greedy_highest::GreedyHighest;
 pub use hold_back_pairs::HoldBackPairs;
 pub use lowest_legal::LowestLegal;
 pub use neat_player::{
-    GenomeFile, GenomeFileError, NeatStrategy, ScoredCandidate, TurnSummary, FEATURE_COUNT,
-    FEATURE_NAMES, FEATURE_SET_VERSION, FORMAT_VERSION,
+    FeatureGroups, FeatureSet, GenomeFile, GenomeFileError, NeatStrategy, ScoredCandidate,
+    TurnSummary, FEATURE_COUNT, FEATURE_COUNT_V2, FEATURE_GROUPS, FEATURE_NAMES, FEATURE_NAMES_V2,
+    FEATURE_SET_VERSION, FORMAT_VERSION,
 };
 pub use random_legal::RandomLegal;
 

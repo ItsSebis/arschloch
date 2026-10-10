@@ -7,8 +7,8 @@
 use std::sync::Arc;
 
 use engine::{
-    assign_roles, deal, exchange_with_rule, lowest_card_holder, standard_deck, Card, Move, Round,
-    SeatId,
+    assign_roles, deal, exchange_with_rule, lowest_card_holder, standard_deck, Card, DeckVariant,
+    Move, Round, SeatId,
 };
 use rand::seq::SliceRandom;
 use rand::SeedableRng;
@@ -18,7 +18,7 @@ use crate::hand_features::HandFeatures;
 use crate::hand_reading::{PassCeilings, PassTracker};
 use crate::match_config::MatchConfig;
 use crate::match_result::MatchResult;
-use crate::strategy::{ContextNeeds, OpponentHand, Strategy, TurnContext};
+use crate::strategy::{ContextNeeds, OpponentHand, Strategy, TableInfo, TurnContext};
 use crate::training::evaluate::mix;
 
 /// Builds the `TurnContext` for `seat`'s upcoming `choose_play` call:
@@ -28,6 +28,9 @@ use crate::training::evaluate::mix;
 /// combo currently on the table (if any). `round_deck` is the full set
 /// of cards dealt this round (see `run_match`'s `round_deck`), used as
 /// the starting point before subtracting what's now visible.
+///
+/// `TableInfo::deck` is read off the round's deck size (a double deck is
+/// the only one with more than 52 cards) and the pass rule off the round.
 ///
 /// Only the parts in `needs` (the seat's `Strategy::needs`) are built;
 /// the rest hold empty/default values. The pass tracker is only advanced
@@ -50,12 +53,14 @@ pub(crate) fn turn_context_for<'a>(
 
     let opponents: Vec<OpponentHand> = if needs.contains(ContextNeeds::OPPONENTS) {
         let with_ceilings = needs.contains(ContextNeeds::OPPONENT_PASS_CEILINGS);
+        let with_trick = needs.contains(ContextNeeds::TRICK);
         (0..player_count)
             .filter(|&s| s != seat)
             .map(|s| OpponentHand {
                 seat: s,
                 hand_size: round.hand_size(s),
                 active: round.is_active(s),
+                in_trick: with_trick && round.is_active(s) && !round.has_passed(s),
                 pass_ceilings: if with_ceilings {
                     all_ceilings[usize::from(s)]
                 } else {
@@ -103,6 +108,24 @@ pub(crate) fn turn_context_for<'a>(
             PassCeilings::default()
         },
         current_combo: round.current_combo(),
+        combo_holder: if needs.contains(ContextNeeds::TRICK) && round.current_combo().is_some() {
+            round.play_history().last().map(|&(holder, _)| holder)
+        } else {
+            None
+        },
+        table: if needs.contains(ContextNeeds::TABLE) {
+            TableInfo {
+                player_count,
+                deck: if round_deck.len() > 52 {
+                    DeckVariant::Double
+                } else {
+                    DeckVariant::Single
+                },
+                pass_rule: round.pass_rule(),
+            }
+        } else {
+            TableInfo::default()
+        },
     }
 }
 

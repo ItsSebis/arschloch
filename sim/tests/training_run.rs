@@ -52,6 +52,7 @@ fn config(generations: u32) -> TrainConfig {
         hall_of_fame_size: 0,
         hall_of_fame_interval: 5,
         skill_weight: 0.0,
+        features: sim::FeatureSet::Base,
     }
 }
 
@@ -816,6 +817,7 @@ fn the_default_skill_weight_reproduces_the_fitness_from_before_it_existed() {
 fn weighted(generations: u32, weight: f64) -> TrainConfig {
     TrainConfig {
         skill_weight: weight,
+        features: sim::FeatureSet::Base,
         ..config(generations)
     }
 }
@@ -981,6 +983,7 @@ fn the_whole_training_loop_is_identical_on_1_4_and_8_threads() {
         hall_of_fame_size: 2,
         hall_of_fame_interval: 1,
         skill_weight: 0.5,
+        features: sim::FeatureSet::Base,
         ..config(4)
     };
     let run_with = |threads: usize| {

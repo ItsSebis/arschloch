@@ -10,9 +10,7 @@ use neat::Genome;
 use serde::{Deserialize, Serialize};
 
 use super::evaluate::TableSpec;
-use crate::{
-    run_match, MatchConfig, NeatStrategy, Strategy, TurnContext, FEATURE_NAMES, FEATURE_SET_VERSION,
-};
+use crate::{run_match, MatchConfig, NeatStrategy, Strategy, TurnContext, FEATURE_SET_VERSION};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CandidateRecord {
@@ -115,7 +113,7 @@ impl Strategy for Recorder {
                 .into_iter()
                 .map(|scored| CandidateRecord {
                     description: move_label(&scored.candidate),
-                    features: scored.features.to_vec(),
+                    features: scored.features.clone(),
                     raw_score: scored.raw_score,
                     activation: scored.activation,
                 })
@@ -209,7 +207,13 @@ pub fn record_decisions(
     DecisionFile {
         generation,
         feature_set_version: FEATURE_SET_VERSION,
-        feature_names: FEATURE_NAMES.iter().map(|&n| n.to_owned()).collect(),
+        feature_names: recorder
+            .inner
+            .feature_set()
+            .names()
+            .iter()
+            .map(|&n| n.to_owned())
+            .collect(),
         decisions,
     }
 }

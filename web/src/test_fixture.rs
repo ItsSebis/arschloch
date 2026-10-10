@@ -44,6 +44,7 @@ pub fn fixture_run_dir() -> PathBuf {
             hall_of_fame_size: 0,
             hall_of_fame_interval: 5,
             skill_weight: 0.0,
+            features: sim::FeatureSet::Base,
         };
         let opponents = vec![
             Opponent {

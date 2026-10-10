@@ -156,6 +156,7 @@ impl Turn {
                 seat: s,
                 hand_size: round.hand_size(s),
                 active: true,
+                in_trick: false,
                 pass_ceilings: PassCeilings::default(),
             })
             .collect();
@@ -175,6 +176,8 @@ impl Turn {
             unseen_cards: self.unseen.clone(),
             own_pass_ceilings: PassCeilings::default(),
             current_combo: self.round.current_combo(),
+            combo_holder: None,
+            table: sim::strategy::TableInfo::default(),
         }
     }
 }

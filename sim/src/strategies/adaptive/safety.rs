@@ -85,6 +85,7 @@ mod tests {
                 seat: 1,
                 hand_size: 2,
                 active: true,
+                in_trick: false,
                 pass_ceilings: ceilings,
             }],
             unseen_cards: vec![
@@ -93,6 +94,8 @@ mod tests {
             ],
             own_pass_ceilings: PassCeilings::default(),
             current_combo: None,
+            combo_holder: None,
+            table: crate::strategy::TableInfo::default(),
         };
         let legal = vec![
             Move::Pass,
@@ -120,12 +123,14 @@ mod tests {
                     seat: 1,
                     hand_size: 2,
                     active: true,
+                    in_trick: false,
                     pass_ceilings: ceilings,
                 },
                 OpponentHand {
                     seat: 2,
                     hand_size: 6,
                     active: true,
+                    in_trick: false,
                     pass_ceilings: PassCeilings::default(),
                 },
             ],
@@ -135,6 +140,8 @@ mod tests {
             ],
             own_pass_ceilings: PassCeilings::default(),
             current_combo: None,
+            combo_holder: None,
+            table: crate::strategy::TableInfo::default(),
         };
         let legal = vec![
             Move::Pass,
@@ -156,11 +163,14 @@ mod tests {
                 seat: 1,
                 hand_size: 6,
                 active: true,
+                in_trick: false,
                 pass_ceilings: PassCeilings::default(),
             }],
             unseen_cards: vec![card(Rank::Ace, Suit::Diamonds)],
             own_pass_ceilings: PassCeilings::default(),
             current_combo: None,
+            combo_holder: None,
+            table: crate::strategy::TableInfo::default(),
         };
         let legal = vec![Move::Pass, play(vec![card(Rank::King, Suit::Hearts)])];
         assert_eq!(
@@ -178,11 +188,14 @@ mod tests {
                 seat: 1,
                 hand_size: 0,
                 active: false,
+                in_trick: false,
                 pass_ceilings: PassCeilings::default(),
             }],
             unseen_cards: vec![],
             own_pass_ceilings: PassCeilings::default(),
             current_combo: None,
+            combo_holder: None,
+            table: crate::strategy::TableInfo::default(),
         };
         let legal = vec![play(vec![card(Rank::Four, Suit::Spades)])];
         assert_eq!(

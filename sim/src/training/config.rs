@@ -6,6 +6,7 @@ use neat::NeatConfig;
 use serde::{Deserialize, Serialize};
 
 use super::evaluate::TableSpec;
+use crate::FeatureSet;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DeckChoice {
@@ -70,6 +71,17 @@ pub struct TrainConfig {
     /// leaves a run bit-for-bit as it was before the option existed.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub skill_weight: f64,
+    /// Which features the evolved networks see (a nested prefix of the
+    /// full list, so the network's input count is `features.len()`). Old
+    /// runs carry no value and used the 20 base features; the default is
+    /// not written, so base runs keep their config files byte for byte.
+    #[serde(default, skip_serializing_if = "is_base")]
+    pub features: FeatureSet,
+}
+
+#[allow(clippy::trivially_copy_pass_by_ref)] // serde's signature
+fn is_base(value: &FeatureSet) -> bool {
+    *value == FeatureSet::Base
 }
 
 #[allow(clippy::trivially_copy_pass_by_ref)] // serde's signature
@@ -182,6 +194,7 @@ pub(crate) mod test_support {
             hall_of_fame_size: 0,
             hall_of_fame_interval: 5,
             skill_weight: 0.0,
+            features: FeatureSet::Base,
         }
     }
 }

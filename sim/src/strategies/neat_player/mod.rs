@@ -7,6 +7,7 @@
 //! strategy holds an immutable compiled network and no other state, so
 //! one instance is shared across parallel matches.
 
+mod feature_set;
 mod features;
 mod genome_file;
 
@@ -17,6 +18,9 @@ use std::path::Path;
 use engine::{Card, DuplicateRule, Move};
 use neat::{Genome, Network};
 
+pub use feature_set::{
+    FeatureGroups, FeatureSet, FEATURE_COUNT_V2, FEATURE_GROUPS, FEATURE_NAMES_V2,
+};
 pub use features::{TurnSummary, FEATURE_COUNT, FEATURE_NAMES, FEATURE_SET_VERSION};
 pub use genome_file::{GenomeFile, GenomeFileError, FORMAT_VERSION};
 
@@ -26,6 +30,8 @@ use crate::strategy::{ContextNeeds, Strategy, TurnContext};
 pub struct NeatStrategy {
     name: String,
     network: Network,
+    /// The features the network was trained on (its inputs, in order).
+    features: FeatureSet,
 }
 
 impl NeatStrategy {
@@ -33,19 +39,31 @@ impl NeatStrategy {
     ///
     /// # Errors
     ///
-    /// Returns `GenomeFileError::Mismatch` if the genome does not take
-    /// exactly `FEATURE_COUNT` inputs.
+    /// Returns `GenomeFileError::Mismatch` if the genome's input count is
+    /// not that of a `FeatureSet` (20, 25, 28 or 31).
     pub fn new(name: impl Into<String>, genome: &Genome) -> Result<Self, GenomeFileError> {
-        if genome.num_inputs() != FEATURE_COUNT {
-            return Err(GenomeFileError::Mismatch(format!(
-                "genome takes {} inputs, this build has {FEATURE_COUNT} features",
-                genome.num_inputs()
-            )));
-        }
+        let features = FeatureSet::from_input_count(genome.num_inputs()).ok_or_else(|| {
+            GenomeFileError::Mismatch(format!(
+                "genome takes {} inputs, but a feature set has {} (base, {} with trick, {} with \
+                 hidden, {} with table)",
+                genome.num_inputs(),
+                FeatureSet::Base.len(),
+                FeatureSet::Trick.len(),
+                FeatureSet::Hidden.len(),
+                FeatureSet::All.len(),
+            ))
+        })?;
         Ok(Self {
             name: name.into(),
             network: Network::compile(genome),
+            features,
         })
+    }
+
+    /// The feature set the network reads.
+    #[must_use]
+    pub fn feature_set(&self) -> FeatureSet {
+        self.features
     }
 
     /// Loads a genome file and names the player `Neat(<file stem>)`.
@@ -96,7 +114,8 @@ fn tie_break(a: &Move, b: &Move, duplicate_rule: DuplicateRule) -> Ordering {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ScoredCandidate {
     pub candidate: Move,
-    pub features: [f64; FEATURE_COUNT],
+    /// The network's inputs, one per feature of its `FeatureSet`.
+    pub features: Vec<f64>,
     /// The output node's sum before `tanh`: what decisions are made on.
     pub raw_score: f64,
     /// `tanh(raw_score)`.
@@ -114,16 +133,17 @@ impl NeatStrategy {
         duplicate_rule: DuplicateRule,
         context: &TurnContext<'_>,
     ) -> Vec<ScoredCandidate> {
-        let summary = TurnSummary::new(context, duplicate_rule);
+        let summary = TurnSummary::with_features(context, duplicate_rule, self.features);
+        let inputs = self.features.len();
         with_scratch(|scratch| {
             legal_moves
                 .iter()
                 .map(|candidate| {
                     let features = summary.features(candidate);
-                    let raw_score = self.network.score(&features, scratch);
+                    let raw_score = self.network.score(&features[..inputs], scratch);
                     ScoredCandidate {
                         candidate: *candidate,
-                        features,
+                        features: features[..inputs].to_vec(),
                         raw_score,
                         activation: raw_score.tanh(),
                     }
@@ -145,13 +165,16 @@ impl Strategy for NeatStrategy {
         context: &TurnContext<'_>,
         _rng: &mut dyn rand::Rng,
     ) -> Move {
-        let summary = TurnSummary::new(context, duplicate_rule);
+        let summary = TurnSummary::with_features(context, duplicate_rule, self.features);
+        let inputs = self.features.len();
         let mut best: Option<(&Move, f64)> = None;
         with_scratch(|scratch| {
             for candidate in legal_moves {
                 // Compare raw scores, not `tanh` activations: the latter
                 // saturate to exactly 1.0 and turn distinct scores into ties.
-                let score = self.network.score(&summary.features(candidate), scratch);
+                let score = self
+                    .network
+                    .score(&summary.features(candidate)[..inputs], scratch);
                 let better = best.is_none_or(|(incumbent, top)| match score.total_cmp(&top) {
                     Ordering::Greater => true,
                     Ordering::Equal => {
@@ -170,7 +193,7 @@ impl Strategy for NeatStrategy {
     }
 
     fn needs(&self) -> ContextNeeds {
-        ContextNeeds::OPPONENT_PASS_CEILINGS.union(ContextNeeds::UNSEEN)
+        self.features.needs()
     }
 
     fn choose_exchange_cards(
@@ -241,6 +264,8 @@ mod tests {
             unseen_cards: Vec::new(),
             own_pass_ceilings: PassCeilings::default(),
             current_combo: None,
+            combo_holder: None,
+            table: crate::strategy::TableInfo::default(),
         }
     }
 
@@ -348,6 +373,127 @@ mod tests {
             NeatStrategy::new("t", &small),
             Err(GenomeFileError::Mismatch(_))
         ));
+    }
+
+    #[test]
+    fn the_v1_needs_are_unchanged_and_the_other_sets_add_only_what_they_read() {
+        let v1 = NeatStrategy::new("t", &linear_genome(&[])).unwrap();
+        assert_eq!(v1.feature_set(), FeatureSet::Base);
+        assert_eq!(
+            v1.needs(),
+            ContextNeeds::OPPONENT_PASS_CEILINGS.union(ContextNeeds::UNSEEN)
+        );
+        assert!(!v1.needs().contains(ContextNeeds::TRICK));
+        assert!(!v1.needs().contains(ContextNeeds::TABLE));
+        let mut tracker = neat::InnovationTracker::new(40);
+        for set in FeatureSet::ALL_SETS {
+            let genome = Genome::minimal(
+                set.len(),
+                &mut tracker,
+                &neat::NeatConfig::default(),
+                &mut rand::rngs::StdRng::seed_from_u64(1),
+            );
+            let strategy = NeatStrategy::new("t", &genome).unwrap();
+            assert_eq!(strategy.feature_set(), set);
+            assert_eq!(strategy.needs(), set.needs());
+        }
+    }
+
+    /// Every genome file committed under docs/baselines that loads is a v1
+    /// file, and plays exactly as the scan-based v1 implementation (the
+    /// test oracle) decides, on thousands of random states.
+    #[test]
+    fn committed_baseline_genomes_decide_as_the_v1_oracle() {
+        use super::features::reference::ReferenceTurnSummary;
+        use crate::hand_reading::PassTracker;
+        use crate::match_runner::turn_context_for;
+        use crate::test_support::for_each_state;
+
+        fn json_files(dir: &Path, out: &mut Vec<std::path::PathBuf>) {
+            for entry in std::fs::read_dir(dir).unwrap().flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    json_files(&path, out);
+                } else if path.extension().is_some_and(|e| e == "json") {
+                    out.push(path);
+                }
+            }
+        }
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../docs/baselines");
+        let mut files = Vec::new();
+        json_files(&root, &mut files);
+        let strategies: Vec<(String, NeatStrategy)> = files
+            .iter()
+            .filter_map(|path| {
+                let file = GenomeFile::load(path).ok()?;
+                assert_eq!(file.feature_names, FEATURE_NAMES, "{}", path.display());
+                Some((
+                    path.display().to_string(),
+                    NeatStrategy::new("b", &file.genome).unwrap(),
+                ))
+            })
+            .collect();
+        assert!(
+            strategies.len() >= 2,
+            "neat-v1 and neat-v2 champions must load, found {}",
+            strategies.len()
+        );
+        assert!(strategies
+            .iter()
+            .all(|(_, s)| s.feature_set() == FeatureSet::Base));
+
+        let mut tracker = None;
+        let mut decisions = 0;
+        for_each_state(23, 12, |state, rng| {
+            let round = state.round;
+            if round.play_history().is_empty() && round.pass_history().is_empty() {
+                tracker = Some(PassTracker::new(usize::from(state.players), state.rule));
+            }
+            let seat = round.seat_to_move().unwrap();
+            let context = turn_context_for(
+                round,
+                seat,
+                state.players,
+                state.round_deck,
+                tracker.as_mut().unwrap(),
+                ContextNeeds::ALL,
+            );
+            let legal = round.legal_moves();
+            let reference = ReferenceTurnSummary::new(&context, state.rule);
+            for (name, strategy) in &strategies {
+                let mut expected: Option<(&Move, f64)> = None;
+                let mut scratch = Vec::new();
+                for candidate in &legal {
+                    let score = strategy
+                        .network
+                        .score(&reference.features(candidate), &mut scratch);
+                    let better =
+                        expected.is_none_or(|(incumbent, top)| match score.total_cmp(&top) {
+                            Ordering::Greater => true,
+                            Ordering::Equal => {
+                                tie_break(candidate, incumbent, state.rule) == Ordering::Less
+                            }
+                            Ordering::Less => false,
+                        });
+                    if better {
+                        expected = Some((candidate, score));
+                    }
+                }
+                // The decision under the strategy's own (minimal) needs.
+                let reduced = turn_context_for(
+                    round,
+                    seat,
+                    state.players,
+                    state.round_deck,
+                    tracker.as_mut().unwrap(),
+                    strategy.needs(),
+                );
+                let chosen = strategy.choose_play(&legal, state.rule, &reduced, rng);
+                assert_eq!(chosen, *expected.unwrap().0, "{name}");
+                decisions += 1;
+            }
+        });
+        assert!(decisions >= 5000, "only {decisions}");
     }
 
     #[test]

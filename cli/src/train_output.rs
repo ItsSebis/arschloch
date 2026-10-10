@@ -518,6 +518,7 @@ mod tests {
             hall_of_fame_size: 0,
             hall_of_fame_interval: 5,
             skill_weight: 0.0,
+            features: sim::FeatureSet::Base,
             pass_rule: sim::PassRule::default(),
             exchange_rule: sim::ExchangeRule::default(),
         }

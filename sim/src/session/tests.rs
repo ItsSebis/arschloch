@@ -38,6 +38,8 @@ fn scripted_move(session: &Session) -> Move {
         unseen_cards: Vec::new(),
         own_pass_ceilings: PassCeilings::default(),
         current_combo: None,
+        combo_holder: None,
+        table: crate::strategy::TableInfo::default(),
     };
     let mut rng = rand::rngs::StdRng::seed_from_u64(0);
     LowestLegal.choose_play(&moves, DuplicateRule::FirstDealtWins, &context, &mut rng)

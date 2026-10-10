@@ -1,6 +1,6 @@
 //! The `Strategy` trait: how a simulated seat picks among legal moves.
 
-use engine::{Card, Combo, DuplicateRule, Move, SeatId};
+use engine::{Card, Combo, DeckVariant, DuplicateRule, Move, PassRule, SeatId};
 
 use crate::hand_reading::PassCeilings;
 
@@ -13,7 +13,32 @@ pub struct OpponentHand {
     pub seat: SeatId,
     pub hand_size: usize,
     pub active: bool,
+    /// Whether this seat can still act in the current trick: active and,
+    /// under `PassRule::Final`, not yet passed in it (under `Free` every
+    /// active seat is in the trick). Only filled with `ContextNeeds::TRICK`.
+    pub in_trick: bool,
     pub pass_ceilings: PassCeilings,
+}
+
+/// The table a hand is played at: static for a whole match. Only filled
+/// with `ContextNeeds::TABLE`; otherwise it holds `TableInfo::default()`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TableInfo {
+    /// Seats at the table (3-6).
+    pub player_count: u8,
+    pub deck: DeckVariant,
+    pub pass_rule: PassRule,
+}
+
+impl Default for TableInfo {
+    /// The placeholder of an unrequested field (not a real table: no seats).
+    fn default() -> Self {
+        Self {
+            player_count: 0,
+            deck: DeckVariant::Single,
+            pass_rule: PassRule::Final,
+        }
+    }
 }
 
 /// Which parts of a `TurnContext` a `Strategy` reads (`Strategy::needs`).
@@ -36,8 +61,13 @@ impl ContextNeeds {
     pub const UNSEEN: Self = Self(4);
     /// `own_pass_ceilings`.
     pub const OWN_PASS_CEILINGS: Self = Self(8);
+    /// `OpponentHand::in_trick` and `TurnContext::combo_holder` (implies
+    /// `OPPONENTS`).
+    pub const TRICK: Self = Self(16 | 1);
+    /// `TurnContext::table`.
+    pub const TABLE: Self = Self(32);
     /// Everything (the default of `Strategy::needs`).
-    pub const ALL: Self = Self(1 | 2 | 4 | 8);
+    pub const ALL: Self = Self(1 | 2 | 4 | 8 | 16 | 32);
 
     /// Both sets of needs.
     #[must_use]
@@ -84,6 +114,13 @@ pub struct TurnContext<'a> {
     /// The combo currently on the table, or `None` if this seat must
     /// lead (mirrors `engine::Round::current_combo`).
     pub current_combo: Option<&'a Combo>,
+    /// The seat that played `current_combo` (the trick's current winner);
+    /// `None` when this seat leads a fresh trick. Only filled with
+    /// `ContextNeeds::TRICK`.
+    pub combo_holder: Option<SeatId>,
+    /// Player count, deck and pass rule. Only filled with
+    /// `ContextNeeds::TABLE`.
+    pub table: TableInfo,
 }
 
 /// Chooses a move from the moves `engine` reports as legal. Implementors
@@ -160,9 +197,15 @@ mod tests {
         assert!(!ContextNeeds::OPPONENTS
             .union(ContextNeeds::UNSEEN)
             .pass_ceilings());
+        assert!(all.contains(ContextNeeds::TRICK));
+        assert!(all.contains(ContextNeeds::TABLE));
+        assert!(ContextNeeds::TRICK.contains(ContextNeeds::OPPONENTS));
+        assert!(!ContextNeeds::TRICK.contains(ContextNeeds::TABLE));
+        assert!(!ContextNeeds::OPPONENTS.contains(ContextNeeds::TRICK));
+        assert!(!ContextNeeds::TABLE.contains(ContextNeeds::OPPONENTS));
     }
 
-    fn evolved_genomes(count: usize) -> Vec<neat::Genome> {
+    fn evolved_genomes(count: usize, inputs: usize) -> Vec<neat::Genome> {
         let config = NeatConfig {
             population_size: 40,
             add_node_rate: 0.3,
@@ -170,7 +213,7 @@ mod tests {
             toggle_enable_rate: 0.1,
             ..NeatConfig::default()
         };
-        let mut population = Population::new(crate::FEATURE_COUNT, config, 5).unwrap();
+        let mut population = Population::new(inputs, config, 5).unwrap();
         let mut rng = rand::rngs::StdRng::seed_from_u64(9);
         for _ in 0..15 {
             let fitness = (0..40).map(|_| rng.random_range(0.0..1.0)).collect();
@@ -189,10 +232,12 @@ mod tests {
             Box::new(CardCounter),
             Box::new(EndgameDenial),
         ];
-        for (i, genome) in evolved_genomes(4).iter().enumerate() {
-            all.push(Box::new(
-                NeatStrategy::new(format!("n{i}"), genome).unwrap(),
-            ));
+        for set in crate::FeatureSet::ALL_SETS {
+            for (i, genome) in evolved_genomes(4, set.len()).iter().enumerate() {
+                all.push(Box::new(
+                    NeatStrategy::new(format!("n{set}{i}"), genome).unwrap(),
+                ));
+            }
         }
         for counting in [false, true] {
             for denial in [
@@ -244,13 +289,37 @@ mod tests {
             unseen_cards: full.unseen_cards.clone(),
             own_pass_ceilings: full.own_pass_ceilings,
             current_combo: full.current_combo,
+            combo_holder: full.combo_holder,
+            table: full.table,
         };
+        if !needs.contains(ContextNeeds::TRICK) {
+            for o in &mut poisoned.opponents {
+                o.in_trick = rng.random_bool(0.5);
+            }
+            poisoned.combo_holder = Some(rng.random_range(0..6));
+        }
+        if !needs.contains(ContextNeeds::TABLE) {
+            poisoned.table = TableInfo {
+                player_count: rng.random_range(3..=6),
+                deck: if rng.random_bool(0.5) {
+                    DeckVariant::Single
+                } else {
+                    DeckVariant::Double
+                },
+                pass_rule: if rng.random_bool(0.5) {
+                    PassRule::Free
+                } else {
+                    PassRule::Final
+                },
+            };
+        }
         if !needs.contains(ContextNeeds::OPPONENTS) {
             poisoned.opponents = (0..rng.random_range(0..6u8))
                 .map(|s| OpponentHand {
                     seat: s,
                     hand_size: rng.random_range(0..4),
                     active: rng.random_bool(0.5),
+                    in_trick: rng.random_bool(0.5),
                     pass_ceilings: poison_ceilings(),
                 })
                 .collect();
@@ -282,6 +351,7 @@ mod tests {
     /// not asked and catching up later), and from the full context with
     /// every undeclared field replaced by garbage.
     #[test]
+    #[allow(clippy::too_many_lines)] // one scenario, three contexts compared per field
     fn strategies_read_only_what_they_declare() {
         let strategies = strategies_under_test();
         let mut trackers: Vec<PassTracker> = Vec::new();
@@ -331,6 +401,23 @@ mod tests {
                             .map(|o| o.pass_ceilings)
                             .collect::<Vec<_>>()
                     );
+                }
+                if needs.contains(ContextNeeds::TRICK) {
+                    assert_eq!(
+                        reduced
+                            .opponents
+                            .iter()
+                            .map(|o| o.in_trick)
+                            .collect::<Vec<_>>(),
+                        full.opponents
+                            .iter()
+                            .map(|o| o.in_trick)
+                            .collect::<Vec<_>>()
+                    );
+                    assert_eq!(reduced.combo_holder, full.combo_holder);
+                }
+                if needs.contains(ContextNeeds::TABLE) {
+                    assert_eq!(reduced.table, full.table);
                 }
                 if needs.contains(ContextNeeds::OPPONENTS) {
                     assert_eq!(reduced.opponents.len(), full.opponents.len());

@@ -34,7 +34,7 @@ use super::events::{
     SCHEMA_VERSION,
 };
 use super::run_dir::{BestRecord, Checkpoint, HallMember, RunDir, TrainError};
-use crate::{NeatStrategy, Strategy, FEATURE_COUNT, FEATURE_NAMES, FEATURE_SET_VERSION};
+use crate::{FeatureSet, NeatStrategy, Strategy, FEATURE_SET_VERSION};
 
 /// One member of the opponent pool.
 #[derive(Clone)]
@@ -112,29 +112,33 @@ impl Trainer {
     }
 
     /// Reads the run in `source` and checks that a warm start of a run
-    /// with `population_size` genomes can be built on it, without writing
+    /// with `population_size` genomes and the feature set `features` can
+    /// be built on it, without writing
     /// anything. Callers use it to refuse a bad source before creating
     /// any file.
     ///
     /// # Errors
     ///
     /// `TrainError::Checkpoint` if `source` holds no usable run,
-    /// `TrainError::Mismatch` for another feature set or population size.
+    /// `TrainError::Mismatch` for another feature set or population size
+    /// (a warm start keeps the genomes as they are, so it cannot add or
+    /// drop inputs: train with the source's `--features`).
     pub fn check_warm_source(
         source: &Path,
         population_size: usize,
+        features: FeatureSet,
     ) -> Result<Checkpoint, TrainError> {
         let checkpoint = RunDir::open_existing(source)?.read_checkpoint()?;
-        if checkpoint.feature_count != FEATURE_COUNT
+        if checkpoint.feature_count != features.len()
             || checkpoint.feature_set_version != FEATURE_SET_VERSION
         {
             return Err(TrainError::Mismatch(format!(
-                "{} was trained with {} features (feature-set version {}) but this build has {} (version {}); \
-                 its genomes cannot be built on, though `--resume` can still continue it with the old build",
+                "{} was trained with {} features (feature-set version {}) but this run uses `--features {features}` ({} features, version {}); \
+                 a warm start keeps its genomes as they are, so give it the same --features as the source (`--resume` can still continue it)",
                 source.display(),
                 checkpoint.feature_count,
                 checkpoint.feature_set_version,
-                FEATURE_COUNT,
+                features.len(),
                 FEATURE_SET_VERSION
             )));
         }
@@ -167,13 +171,14 @@ impl Trainer {
         // Everything that can refuse the source happens before the new
         // directory is touched.
         let (population, warm_started_from) = if let Some(source) = source {
-            let checkpoint = Self::check_warm_source(source, config.neat.population_size)?;
+            let checkpoint =
+                Self::check_warm_source(source, config.neat.population_size, config.features)?;
             let population =
                 Population::warm_start(checkpoint.population, config.neat.clone(), seed)
                     .map_err(|e| TrainError::Checkpoint(e.to_string()))?;
             (population, Some(source.display().to_string()))
         } else {
-            let population = Population::new(FEATURE_COUNT, config.neat.clone(), seed)
+            let population = Population::new(config.features.len(), config.neat.clone(), seed)
                 .map_err(|e| TrainError::Config(e.to_string()))?;
             (population, None)
         };
@@ -201,7 +206,7 @@ impl Trainer {
     fn checkpoint(&self, elapsed_secs: f64) -> Checkpoint {
         Checkpoint {
             schema_version: SCHEMA_VERSION,
-            feature_count: FEATURE_COUNT,
+            feature_count: self.config.features.len(),
             feature_set_version: FEATURE_SET_VERSION,
             config: self.config.clone(),
             opponent_names: self.opponents.iter().map(|o| o.name.clone()).collect(),
@@ -227,13 +232,17 @@ impl Trainer {
     ) -> Result<Self, TrainError> {
         let dir = RunDir::open_existing(dir)?;
         let checkpoint = dir.read_checkpoint()?;
-        if checkpoint.feature_count != FEATURE_COUNT
+        if checkpoint.feature_count != checkpoint.config.features.len()
             || checkpoint.feature_set_version != FEATURE_SET_VERSION
         {
             return Err(TrainError::Mismatch(format!(
-                "the run was trained with {} features (feature-set version {}) but this build has {} (version {}); \
+                "the run was trained with {} features (feature-set version {}) but this build has {} (version {}) for its `{}` feature set; \
                  its genomes cannot be continued",
-                checkpoint.feature_count, checkpoint.feature_set_version, FEATURE_COUNT, FEATURE_SET_VERSION
+                checkpoint.feature_count,
+                checkpoint.feature_set_version,
+                checkpoint.config.features.len(),
+                FEATURE_SET_VERSION,
+                checkpoint.config.features
             )));
         }
         let names: Vec<&str> = opponents.iter().map(|o| o.name.as_str()).collect();
@@ -293,7 +302,13 @@ impl Trainer {
             schema_version: SCHEMA_VERSION,
             config: self.config.clone(),
             opponents: self.opponents.iter().map(|o| o.name.clone()).collect(),
-            feature_names: FEATURE_NAMES.iter().map(|&n| n.to_owned()).collect(),
+            feature_names: self
+                .config
+                .features
+                .names()
+                .iter()
+                .map(|&n| n.to_owned())
+                .collect(),
             resumed_from_generation: self.resumed_from,
             warm_started_from: self.warm_started_from.clone(),
         };
