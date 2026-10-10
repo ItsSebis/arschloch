@@ -107,8 +107,24 @@ fn four_player_invariants() {
         .sum::<f64>()
         / 3.0;
     assert!(mean.abs() < 1e-9);
-    // A holds two seats per match: 3 series per... 2 matches x 2 seats.
-    assert_eq!(stats.by_strategy["A"].avg_rank.n, 4);
+    // A holds two seats in each match, but a match is one series (the
+    // seats of one name are negatively correlated, not independent): n = 2.
+    // Match 1 (seats 0 and 2) places: seat 0 = 1,4 and seat 2 = 3,2, both
+    // mean 2.5. Match 2 (seats 1 and 3) places 1 and 3, mean 2.0.
+    let a = &stats.by_strategy["A"];
+    assert_eq!(a.avg_rank.n, 2);
+    assert_eq!(a.mean_role_score.n, 2);
+    assert_eq!(a.rounds, 6);
+    // `value` stays round-weighted: (1 + 4 + 3 + 2 + 1 + 3) / 6.
+    assert!(close(a.avg_rank.value, 14.0 / 6.0));
+    assert!(close(a.avg_rank.std_error, standard_error(&[2.5, 2.0])));
+    // role scores for places 1..4 are 1, 1/3, -1/3, -1.
+    // Match 1: seat 0 (1 - 1)/2 = 0, seat 2 (-1/3 + 1/3)/2 = 0 -> mean 0;
+    // match 2: (1 - 1/3)/2 = 1/3.
+    assert!(close(
+        a.mean_role_score.std_error,
+        standard_error(&[0.0, 1.0 / 3.0])
+    ));
 }
 
 #[test]
@@ -180,10 +196,12 @@ fn bradley_terry_recovers_known_strengths() {
             elo(n),
             expected(s) - mean_expected
         );
-        assert!(close(
-            stats.by_strategy[*n].strength_rating.unwrap().std_error,
-            0.0
-        ));
+        // No resampling: no error estimate (not a genuine 0).
+        assert!(stats.by_strategy[*n]
+            .strength_rating
+            .unwrap()
+            .std_error
+            .is_none());
     }
     assert!(
         elo("A") > elo("B") && elo("B") > elo("C") && elo("C") > elo("D") && elo("D") > elo("E")
@@ -230,7 +248,13 @@ fn bootstrap_is_deterministic_and_positive() {
         .collect();
     let a = aggregate_extended(&r);
     let b = aggregate_extended(&r);
-    let se = |s: &ExtendedStatistics| s.by_strategy["A"].strength_rating.unwrap().std_error;
+    let se = |s: &ExtendedStatistics| {
+        s.by_strategy["A"]
+            .strength_rating
+            .unwrap()
+            .std_error
+            .unwrap()
+    };
     assert!(se(&a) > 0.0);
     assert!(close(se(&a), se(&b)));
 }

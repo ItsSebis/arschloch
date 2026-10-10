@@ -349,9 +349,11 @@ mod tests {
                 min: 0.0,
                 std_dev: 0.0,
                 histogram: vec![],
+                skill_term: None,
             },
             champion: super::super::events::ChampionStats {
                 train_fitness: 0.0,
+                skill_term: None,
                 reeval: stat,
                 heldout: None,
                 training_rank: 0,

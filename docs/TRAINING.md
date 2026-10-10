@@ -105,6 +105,7 @@ independent of `--threads`.
 | `--champion-candidates` | 5 | the champion is the best of the top N genomes (by training fitness) re-scored on other matches; 1 trusts the noisy training fitness |
 | `--weight-power` | 0.2 | size of weight mutations; smaller is gentler fine-tuning |
 | `--hall-of-fame N` | 0 (off) | frozen past champions join the training opponents (`--hall-interval K`: every K generations). No measured benefit against the default pool; worth trying when the pool includes evolved opponents |
+| `--fitness-skill-weight W` | 0 (off) | experimental, 0 to 1: trains on `(1 - W) x mean role score + W x a luck-adjusted round-1 score` (see below). Fixed for the run (`--resume` cannot change it) |
 | `--target-species` | 8 | how many species the speciation steers toward |
 | `--deck-variant`, `--duplicate-rule` | single, first-dealt-wins | table rules |
 | `--exchange-rule` | forced | `forced`: the lower role of an exchange pair must give its highest cards (the rules of the game); `free`: it may choose (the older behaviour). Evolved players give their highest cards either way, so it only changes what the opponents do. Like `--pass-rule` it cannot change on `--resume`; runs written before it existed resume as `free` |
@@ -140,6 +141,43 @@ target/release/cli train --out runs/six --player-count 6 \
   --opponent endgame-denial --opponent adaptive:reading,tempo,bully \
   --opponent adaptive:counting,reading
 ```
+
+## The luck-adjusted fitness term (experimental)
+
+`--fitness-skill-weight W` (default 0) blends a second term into the training
+fitness: `fitness = (1 - W) x mean_role_score + W x luck_adjusted_score`. The
+mean role score is the usual one, over all rounds of all matches. The
+luck-adjusted score of a genome uses **round 1 only**: in each match its
+round-1 role score minus `beta . (hand features - mean hand features)`,
+averaged over the matches. The six hand features are the ones of the
+statistics estimator (`docs/STATISTICS.md`). `beta` is one least-squares fit
+(with an intercept) over the round-1 data of **all genomes of the
+generation**, which all play the same deals, so it describes how hand strength
+affects the result at this table and a genome cannot explain away its own
+result. With `W = 0` nothing extra is computed and a run is byte-for-byte what
+it was before the option existed (no new event fields, same files).
+
+With `W > 0` the generation's `fitness` carries a `skill_term` (mean and
+standard deviation of the term over the genomes) and the champion carries its
+own `skill_term` (both additive, absent otherwise). The `fitness` numbers and
+`train_fitness` are then the blend. Everything that judges a champion keeps
+using the plain mean role score: the choice among the top candidates, the
+fixed re-evaluation, the held-out confirmation and `best.json`. The term only
+steers selection pressure inside a generation.
+
+**Honest caveat: what it can and cannot do.** Every genome of a generation
+plays the same matches, so every genome has the same deals and the same
+feature rows, and the mean of `beta . (features - mean features)` over those
+matches is exactly zero. The adjusted score of a genome therefore equals its
+plain round-1 mean score, and `W > 0` can only change which genomes are
+selected by weighting round 1 more heavily than the later rounds; it does not
+(and cannot) cancel deal luck between genomes, which common random numbers
+already do. What the adjustment reduces is the spread of the per-match values.
+In a first measurement (population 60, 30 generations, 40 matches, 6 rounds,
+seeds 11 and 12, `W` = 0 vs 0.5) the held-out champion scores were 0.525 vs
+0.521 and 0.495 vs 0.547 (standard error about 0.03 each), so no effect is
+visible beyond noise. Whether any weight helps is an open Phase 13 experiment;
+treat the option as a way to run it, not as a recommended setting.
 
 ## Building on an earlier run
 

@@ -8,13 +8,14 @@ use crate::linalg::ols;
 use crate::match_result::MatchResult;
 use crate::training::evaluate::role_score;
 
-const FEATURE_NAMES: [&str; 6] = [
+const FEATURE_NAMES: [&str; 7] = [
     "high_cards",
     "pairs",
     "triples",
     "quads",
     "lowest_strength",
-    "total_strength",
+    "mean_strength",
+    "hand_size",
 ];
 
 /// Estimator result for one strategy name.
@@ -44,6 +45,9 @@ pub struct EstimatorReport {
     pub match_count: usize,
     pub feature_names: Vec<&'static str>,
     /// One OLS coefficient per feature (strategy fixed effects omitted).
+    /// Note `hand_size` is constant (collinear with the fixed effects, so
+    /// its coefficient is arbitrary but harmless) when all hands have the
+    /// same size.
     pub feature_coefficients: Vec<f64>,
     /// Partial R^2 of the features over the fixed-effects-only model:
     /// `1 - SSR(full) / SSR(fixed effects only)`.
@@ -55,7 +59,7 @@ pub struct EstimatorReport {
 struct Observation {
     match_index: usize,
     name: usize,
-    features: [f64; 6],
+    features: [f64; 7],
     score: f64,
 }
 
@@ -75,7 +79,9 @@ fn empty_report() -> EstimatorReport {
 
 /// Fits the estimator on `results` (matches without
 /// `first_hand_features` are ignored; no usable match gives an empty
-/// report). Deterministic.
+/// report). When every seat uses the same strategy name there is no
+/// per-strategy result: `strategies` is empty (the CLI prints "n/a: a
+/// single strategy name"). Deterministic.
 ///
 /// # Panics
 ///
@@ -102,7 +108,7 @@ pub fn estimator_report(results: &[MatchResult]) -> EstimatorReport {
             obs.push(Observation {
                 match_index: match_count,
                 name: idx,
-                features: HandFeatures::as_vector(&features[seat]),
+                features: HandFeatures::design_vector(&features[seat]),
                 score: role_score(round1[seat], m.player_count),
             });
         }
@@ -110,6 +116,14 @@ pub fn estimator_report(results: &[MatchResult]) -> EstimatorReport {
     }
     if obs.is_empty() {
         return empty_report();
+    }
+    // One strategy name in every seat: nothing to separate from the
+    // table, and the fixed effect would absorb the mean (spurious SE).
+    if names.len() < 2 {
+        return EstimatorReport {
+            match_count,
+            ..empty_report()
+        };
     }
 
     let p = FEATURE_NAMES.len();
@@ -127,7 +141,7 @@ pub fn estimator_report(results: &[MatchResult]) -> EstimatorReport {
 
     #[allow(clippy::cast_precision_loss)] // observation counts are far below 2^52
     let n_obs = obs.len() as f64;
-    let mut feature_mean = [0.0; 6];
+    let mut feature_mean = [0.0; 7];
     for o in &obs {
         for (acc, v) in feature_mean.iter_mut().zip(o.features) {
             *acc += v / n_obs;

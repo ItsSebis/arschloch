@@ -113,7 +113,7 @@ fn strong_beats_weak_with_smaller_error_than_plain() {
 
 fn synthetic(n: usize, skill: &[f64]) -> Vec<MatchResult> {
     // 4 seats, strategy i has true skill skill[i]. A seat's round-1 score is
-    // skill + 0.3 * luck, where luck is carried by total_strength; the rank
+    // skill + 0.3 * luck, where luck is carried by mean_strength; the rank
     // order of the scores gives the roles.
     let mut state = 12345_u64;
     let mut next = move || {
@@ -148,7 +148,8 @@ fn synthetic(n: usize, skill: &[f64]) -> Vec<MatchResult> {
                             triples: 0,
                             quads: 0,
                             lowest_strength: 0.0,
-                            total_strength: l,
+                            mean_strength: l,
+                            hand_size: 13,
                         })
                         .collect(),
                 ),
@@ -192,4 +193,24 @@ fn estimator_and_duplicate_agree_on_real_matches() {
     assert!((cmp.rank_agreement - 1.0).abs() < 1e-12);
     assert!(!cmp.verdict.is_empty());
     assert!(serde_json::to_string(&cmp).is_ok());
+}
+
+#[test]
+fn estimator_skips_a_table_with_a_single_strategy_name() {
+    let mut matches = synthetic(50, &[0.0; 4]);
+    for m in &mut matches {
+        m.strategy_names = vec!["same".to_owned(); 4];
+    }
+    let report = estimator_report(&matches);
+    assert_eq!(report.match_count, 50);
+    assert!(report.strategies.is_empty());
+}
+
+#[test]
+fn hand_size_is_a_design_column() {
+    let hand = [engine::Card::new(engine::Rank::Two, engine::Suit::Clubs, 0); 5];
+    let f = HandFeatures::from_hand(&hand);
+    assert_eq!(f.hand_size, 5);
+    assert!((f.design_vector()[6] - 5.0).abs() < 1e-12);
+    assert_eq!(f.as_vector().len(), 6);
 }

@@ -22,7 +22,12 @@ pub struct HandFeatures {
     /// Strength of the weakest card (0 for an empty hand).
     pub lowest_strength: f64,
     /// Sum of card strengths divided by the hand size (0 if empty).
-    pub total_strength: f64,
+    pub mean_strength: f64,
+    /// Cards in the dealt hand. Uneven deals give the first seats one
+    /// extra card (at 3, 5 and 6 players), a real seat effect. Absent in
+    /// results saved before the feature existed (reads as 0).
+    #[serde(default)]
+    pub hand_size: u32,
 }
 
 fn strength(card: Card) -> f64 {
@@ -49,7 +54,7 @@ impl HandFeatures {
         let groups = |pred: fn(u32) -> bool| {
             u32::try_from(per_rank.iter().filter(|&&n| pred(n)).count()).expect("at most 13")
         };
-        let (lowest_strength, total_strength) = if hand.is_empty() {
+        let (lowest_strength, mean_strength) = if hand.is_empty() {
             (0.0, 0.0)
         } else {
             #[allow(clippy::cast_precision_loss)] // hands hold at most 26 cards
@@ -61,11 +66,14 @@ impl HandFeatures {
             triples: groups(|n| n == 3),
             quads: groups(|n| n >= 4),
             lowest_strength,
-            total_strength,
+            mean_strength,
+            hand_size: u32::try_from(hand.len()).expect("at most 26"),
         }
     }
 
-    /// The regression design columns, in a fixed order.
+    /// The six hand-quality columns, in a fixed order (everything except
+    /// `hand_size`). The luck-adjusted fitness term of the trainer
+    /// (`crate::training`) regresses on exactly these.
     #[must_use]
     pub fn as_vector(&self) -> [f64; 6] {
         [
@@ -74,7 +82,23 @@ impl HandFeatures {
             f64::from(self.triples),
             f64::from(self.quads),
             self.lowest_strength,
-            self.total_strength,
+            self.mean_strength,
+        ]
+    }
+
+    /// The estimator's regression design columns: `as_vector` followed by
+    /// `hand_size`.
+    #[must_use]
+    pub fn design_vector(&self) -> [f64; 7] {
+        let q = self.as_vector();
+        [
+            q[0],
+            q[1],
+            q[2],
+            q[3],
+            q[4],
+            q[5],
+            f64::from(self.hand_size),
         ]
     }
 }
@@ -106,13 +130,14 @@ mod tests {
         assert_eq!((f.high_cards, f.pairs, f.triples, f.quads), (8, 1, 1, 1));
         assert!((f.lowest_strength - 0.0).abs() < 1e-12);
         let expected: f64 = hand.iter().map(|&x| strength(x)).sum::<f64>() / 10.0;
-        assert!((f.total_strength - expected).abs() < 1e-12);
+        assert!((f.mean_strength - expected).abs() < 1e-12);
+        assert_eq!(f.hand_size, 10);
     }
 
     #[test]
     fn strongest_card_has_strength_one() {
         let f = HandFeatures::from_hand(&[c(Rank::Ace, Suit::Clubs)]);
         assert!((f.lowest_strength - 1.0).abs() < 1e-12);
-        assert!((f.total_strength - 1.0).abs() < 1e-12);
+        assert!((f.mean_strength - 1.0).abs() < 1e-12);
     }
 }

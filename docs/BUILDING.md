@@ -49,7 +49,8 @@ Compare genomes (or a genome against hand-written strategies) with
 scores against a default battery of opponents; add `--opponent SPEC` to
 choose them, repeat `--genome` to compare several). Learning options:
 `--champion-candidates` (default 5), `--hall-of-fame` (default off) and
-`--weight-power` (default 0.2); the evidence for the defaults is in
+`--weight-power` (default 0.2). `--fitness-skill-weight W` (0 to 1, default 0 = off, fixed for
+the run) is an experimental luck-adjusted fitness term, see `docs/TRAINING.md`; the evidence for the defaults is in
 `docs/baselines/neat-v1/experiments.md`, and `docs/baselines/neat-v1`
 holds a committed champion with its comparison against the pre-NEAT
 strategies.
@@ -186,14 +187,20 @@ number; `cli stats-doc` regenerates it.
   sections.
 - `--bootstrap-resamples N` (default 200) is the number of resamples behind
   the rating's standard error; `0` skips it (the rating is then printed
-  without `±`).
+  without `±` and its JSON `std_error` is `null`: no resampling, no error
+  estimate, which is not the same as an error of 0).
 - `--skill-score off|estimate|duplicate|both` (default `off`: no extra
   simulation, no extra table). It adds the table `Strategy | plain score
   ±SE | skill (duplicate) ±SE | skill (estimate) ±SE | variance reduction M
   | luck share`:
   - `estimate`: ordinary matches that also record the round-1 hand
     features; a regression removes the part of the first-round result that
-    the dealt hand explains. Nearly free, round 1 only.
+    the dealt hand explains (cards of Queen or higher, pairs, triples,
+    quads, lowest and mean card strength, and the hand size, since the
+    uneven deal at 3, 5 and 6 players gives the first seats an extra card).
+    Nearly free, round 1 only. With a single strategy name at the table
+    there is nothing to adjust against and the estimate prints `n/a: a
+    single strategy name`.
   - `duplicate`: groups of `--player-count` matches play identical deals
     with the strategies rotated through every seat, so every strategy plays
     every hand once. **`--matches` must be a multiple of `--player-count`**
@@ -221,7 +228,13 @@ number; `cli stats-doc` regenerates it.
   exchanged cards carried over depend partly on earlier play. The duplicate
   columns, M and luck share cover all rounds; the estimate covers round 1
   only (an `estimate`-only run reports its plain score, M and luck share for
-  round 1 too).
+  round 1 too). In duplicate mode the *plain score* column equals the
+  duplicate skill value by construction (the mean of the group means is the
+  mean of the matches); its `±` is the counterfactual standard error of an
+  ordinary run of the same size, not an independent estimate. When one
+  strategy name occupies several seats of a table, its standard errors use
+  one series per match (the name's seats averaged), because those seats are
+  negatively correlated.
 
 - `--useful-passes K` (off unless given, `K >= 1`) measures whether voluntary
   passes (a pass although a play was legal) are useful. For a sample of them
@@ -243,8 +256,9 @@ number; `cli stats-doc` regenerates it.
   when the flag is given.
 
 New keys of `results.json` (additive; `matches` and `statistics` are
-unchanged, `matches[].first_hand_features` appears only with `estimate` or
-`both`):
+unchanged, `matches[].first_hand_features` appears only with `estimate`; in
+`both` the run's matches are the duplicate groups, which carry no features,
+and the features live only in the separate estimator batch):
 
 ```json
 {

@@ -51,6 +51,7 @@ fn config(generations: u32) -> TrainConfig {
         champion_candidates: 1,
         hall_of_fame_size: 0,
         hall_of_fame_interval: 5,
+        skill_weight: 0.0,
     }
 }
 
@@ -757,4 +758,145 @@ fn a_warm_start_from_a_missing_run_is_a_clear_error() {
         .expect("no source");
     assert!(matches!(error, TrainError::Checkpoint(_)), "{error}");
     assert!(!target.exists());
+}
+
+/// Bit patterns of `(best, mean, median, min, std_dev, champion train
+/// fitness, champion re-evaluation)` of `config(2)`'s two generations,
+/// captured from the code before the skill weight existed.
+const GOLDEN_W0: [[u64; 7]; 2] = [
+    [
+        13_820_796_656_462_157_140,
+        13_827_681_065_267_538_602,
+        13_828_677_955_810_055_508,
+        13_830_366_805_670_319_445,
+        4_597_716_784_971_618_455,
+        13_820_796_656_462_157_140,
+        13_823_048_456_275_842_388,
+    ],
+    [
+        4_605_305_918_955_279_701,
+        4_579_410_221_097_899_364,
+        13_811_038_857_269_521_061,
+        13_828_302_655_841_107_968,
+        4_602_104_100_315_806_600,
+        4_605_305_918_955_279_701,
+        4_602_428_619_193_348_549,
+    ],
+];
+
+#[test]
+fn the_default_skill_weight_reproduces_the_fitness_from_before_it_existed() {
+    let out = dir("golden-w0");
+    Trainer::new(config(2), opponents(), &out)
+        .unwrap()
+        .run(&mut Recorder::default())
+        .unwrap();
+    let got: Vec<[u64; 7]> = generation_events(&out)
+        .iter()
+        .map(|e| {
+            [
+                e.fitness.best.to_bits(),
+                e.fitness.mean.to_bits(),
+                e.fitness.median.to_bits(),
+                e.fitness.min.to_bits(),
+                e.fitness.std_dev.to_bits(),
+                e.champion.train_fitness.to_bits(),
+                e.champion.reeval.mean.to_bits(),
+            ]
+        })
+        .collect();
+    assert_eq!(got, GOLDEN_W0);
+    for text in ["events.jsonl", "config.json", "checkpoint.json"] {
+        let content = fs::read_to_string(out.join(text)).unwrap();
+        assert!(!content.contains("skill"), "{text} mentions the skill term");
+    }
+    fs::remove_dir_all(&out).unwrap();
+}
+
+fn weighted(generations: u32, weight: f64) -> TrainConfig {
+    TrainConfig {
+        skill_weight: weight,
+        ..config(generations)
+    }
+}
+
+#[test]
+fn a_skill_weighted_run_completes_resumes_exactly_and_emits_the_additive_fields() {
+    let straight = dir("skill-straight");
+    Trainer::new(weighted(3, 0.5), opponents(), &straight)
+        .unwrap()
+        .run(&mut Recorder::default())
+        .unwrap();
+    let split = dir("skill-split");
+    Trainer::new(weighted(2, 0.5), opponents(), &split)
+        .unwrap()
+        .run(&mut Recorder::default())
+        .unwrap();
+    let mut resumed = Trainer::resume(&split, opponents(), Some(3)).unwrap();
+    assert!((resumed.config().skill_weight - 0.5).abs() < f64::EPSILON);
+    resumed.run(&mut Recorder::default()).unwrap();
+    assert_eq!(
+        checkpoint_population(&split),
+        checkpoint_population(&straight)
+    );
+    for e in generation_events(&split) {
+        let stats = e.fitness.skill_term.expect("fitness skill term");
+        assert!(stats.mean.is_finite() && stats.std_dev >= 0.0);
+        assert!(e.champion.skill_term.is_some());
+    }
+    // The champion records are still plain mean role scores on fixed matches.
+    let first = &generation_events(&straight)[0];
+    assert!(first.champion.reeval.mean.abs() <= 1.0);
+    fs::remove_dir_all(&straight).unwrap();
+    fs::remove_dir_all(&split).unwrap();
+}
+
+#[test]
+fn a_skill_weighted_run_does_not_depend_on_the_thread_count() {
+    let run_with = |threads: usize, name: &str| {
+        let run = dir(name);
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(threads)
+            .build()
+            .unwrap();
+        pool.install(|| {
+            Trainer::new(weighted(2, 0.7), opponents(), &run)
+                .unwrap()
+                .run(&mut Recorder::default())
+                .unwrap();
+        });
+        let population = checkpoint_population(&run);
+        let events = fs::read_to_string(run.join("events.jsonl")).unwrap();
+        // Wall-clock fields differ between runs; compare the fitness part.
+        let fitness: Vec<String> = generation_events(&run)
+            .iter()
+            .map(|e| format!("{:?} {:?}", e.fitness, e.champion.skill_term))
+            .collect();
+        assert!(events.contains("skill_term"));
+        fs::remove_dir_all(&run).unwrap();
+        (population, fitness)
+    };
+    assert_eq!(run_with(1, "skill-threads1"), run_with(4, "skill-threads4"));
+}
+
+#[test]
+fn a_nonzero_weight_changes_the_fitness_and_the_old_weight_zero_path_is_untouched() {
+    let off = dir("skill-off");
+    let on = dir("skill-on");
+    Trainer::new(weighted(1, 0.0), opponents(), &off)
+        .unwrap()
+        .run(&mut Recorder::default())
+        .unwrap();
+    Trainer::new(weighted(1, 1.0), opponents(), &on)
+        .unwrap()
+        .run(&mut Recorder::default())
+        .unwrap();
+    let (a, b) = (&generation_events(&off)[0], &generation_events(&on)[0]);
+    assert!(a.fitness.skill_term.is_none() && a.champion.skill_term.is_none());
+    // With weight 1 the fitness is the (round-1) skill term itself.
+    let stats = b.fitness.skill_term.as_ref().unwrap();
+    assert!((stats.mean - b.fitness.mean).abs() < 1e-12);
+    assert!((a.fitness.mean - b.fitness.mean).abs() > 1e-12);
+    fs::remove_dir_all(&off).unwrap();
+    fs::remove_dir_all(&on).unwrap();
 }

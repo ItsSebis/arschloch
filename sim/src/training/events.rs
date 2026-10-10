@@ -64,12 +64,29 @@ pub struct FitnessStats {
     pub std_dev: f64,
     /// Ten equal-width buckets from `min` to `best`.
     pub histogram: Vec<u32>,
+    /// Only with a non-zero `skill_weight`: the generation's luck-adjusted
+    /// terms (the fitness above is the blend).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skill_term: Option<SkillTermStats>,
+}
+
+/// Mean and spread of the luck-adjusted round-1 term over a generation.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SkillTermStats {
+    pub mean: f64,
+    pub std_dev: f64,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ChampionStats {
     /// The champion's fitness in the generation that selected it.
     pub train_fitness: f64,
+    /// Only with a non-zero `skill_weight`: the champion's luck-adjusted
+    /// term in that generation (`train_fitness` is the blend). Champion
+    /// choice, re-evaluation and held-out scores use the plain mean role
+    /// score either way.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skill_term: Option<f64>,
     /// Its score against the mixed pool on a fixed set of matches that
     /// training never plays, that is the same every generation (so
     /// champions of different generations are compared on the same deals)

@@ -27,6 +27,18 @@ fn positive_finite(text: &str) -> Result<f64, String> {
     }
 }
 
+/// A finite number from 0 to 1.
+fn unit_interval(text: &str) -> Result<f64, String> {
+    let value: f64 = text
+        .parse()
+        .map_err(|e| format!("`{text}` is not a number: {e}"))?;
+    if (0.0..=1.0).contains(&value) {
+        Ok(value)
+    } else {
+        Err(format!("`{text}` must be between 0 and 1"))
+    }
+}
+
 /// Evolve a NEAT player, generation by generation.
 #[derive(Parser, Debug, Clone)]
 #[command(
@@ -52,7 +64,8 @@ pub struct TrainArgs {
         conflicts_with_all = [
             "player_count", "deck_variant", "duplicate_rule", "pass_rule", "exchange_rule", "rounds", "population",
             "matches_per_genome", "reeval_matches", "seed", "opponent", "target_species",
-            "champion_candidates", "hall_of_fame", "hall_interval", "weight_power", "runs"
+            "champion_candidates", "hall_of_fame", "hall_interval", "weight_power", "runs",
+            "fitness_skill_weight"
         ]
     )]
     pub resume: bool,
@@ -154,6 +167,14 @@ pub struct TrainArgs {
     /// 0.2 (see docs/baselines/neat-v1).
     #[arg(long, default_value_t = 0.2, value_parser = positive_finite)]
     pub weight_power: f64,
+
+    /// Weight W (0 to 1) of a luck-adjusted term in the training fitness:
+    /// `(1 - W) * mean role score + W * luck-adjusted round-1 score`. Default
+    /// 0 trains on the plain mean role score, exactly as before. Champion
+    /// choice, re-evaluation and held-out scores always use the plain mean
+    /// role score. An open experiment, see docs/TRAINING.md.
+    #[arg(long, default_value_t = 0.0, value_parser = unit_interval)]
+    pub fitness_skill_weight: f64,
 
     /// Rayon thread-pool size. 0 lets rayon pick its own default.
     #[arg(long, default_value_t = 0)]
@@ -295,6 +316,20 @@ mod tests {
             args.extend(conflicting);
             assert!(parse(&args).is_err(), "{conflicting:?}");
         }
+    }
+
+    #[test]
+    fn the_skill_weight_defaults_to_zero_is_a_unit_interval_and_cannot_change_on_resume() {
+        assert!(parse(&["--out", "d"]).unwrap().fitness_skill_weight.abs() < f64::EPSILON);
+        let args = parse(&["--out", "d", "--fitness-skill-weight", "0.5"]).unwrap();
+        assert!((args.fitness_skill_weight - 0.5).abs() < f64::EPSILON);
+        for bad in ["-0.1", "1.5", "NaN", "inf", "x"] {
+            assert!(
+                parse(&["--out", "d", "--fitness-skill-weight", bad]).is_err(),
+                "{bad}"
+            );
+        }
+        assert!(parse(&["--out", "d", "--resume", "--fitness-skill-weight", "0.5"]).is_err());
     }
 
     #[test]

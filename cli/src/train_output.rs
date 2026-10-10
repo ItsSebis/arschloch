@@ -342,9 +342,11 @@ mod tests {
                 min: -0.5,
                 std_dev: 0.1,
                 histogram: vec![0; 10],
+                skill_term: None,
             },
             champion: ChampionStats {
                 train_fitness: 0.412,
+                skill_term: None,
                 reeval: stat(0.397),
                 heldout: None,
                 training_rank: 0,
@@ -514,6 +516,7 @@ mod tests {
             champion_candidates: 1,
             hall_of_fame_size: 0,
             hall_of_fame_interval: 5,
+            skill_weight: 0.0,
             pass_rule: sim::PassRule::default(),
             exchange_rule: sim::ExchangeRule::default(),
         }

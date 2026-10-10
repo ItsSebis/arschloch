@@ -43,6 +43,7 @@ pub fn fixture_run_dir() -> PathBuf {
             champion_candidates: 1,
             hall_of_fame_size: 0,
             hall_of_fame_interval: 5,
+            skill_weight: 0.0,
         };
         let opponents = vec![
             Opponent {

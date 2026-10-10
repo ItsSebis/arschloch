@@ -30,6 +30,18 @@ pub struct Estimate {
     pub n: usize,
 }
 
+/// A strength rating with its bootstrap standard error. `std_error` is
+/// `None` (JSON `null`) when no resampling was done
+/// (`bootstrap_resamples < 2`): then there is no error estimate, which is
+/// not the same as an error of 0.
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize)]
+pub struct RatingEstimate {
+    pub value: f64,
+    pub std_error: Option<f64>,
+    /// Number of matches resampled.
+    pub n: usize,
+}
+
 #[derive(Debug, Clone, PartialEq, serde::Serialize)]
 pub struct StrategyStats {
     /// Finishing place, 1 = best .. players = worst.
@@ -41,7 +53,7 @@ pub struct StrategyStats {
     pub rounds: u64,
     /// Bradley-Terry rating in Elo-like points, mean 0 over strategies;
     /// `None` when the batch has a single strategy name.
-    pub strength_rating: Option<Estimate>,
+    pub strength_rating: Option<RatingEstimate>,
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize)]
@@ -82,35 +94,50 @@ struct Acc {
     score_sum: f64,
     rounds: u64,
     places: Vec<u64>,
+    /// One entry per series: a (match, strategy name) pair, or a seat.
     series_rank: Vec<f64>,
     series_score: Vec<f64>,
 }
 
 impl Acc {
-    fn add_series(&mut self, places: &[usize], player_count: u8) {
-        if places.is_empty() {
+    /// Adds one series: the places one strategy name (or one seat)
+    /// finished in over the rounds of a match. `seats` holds one place
+    /// list per seat the name occupied in that match (all of equal
+    /// length). Rounds are counted per seat (so `value` is weighted by
+    /// rounds), but the match yields a single series entry, the mean of
+    /// the seats' per-match means: seats of one name in the same match
+    /// are negatively correlated and must not count as independent.
+    fn add_series(&mut self, seats: &[Vec<usize>], player_count: u8) {
+        if seats.is_empty() || seats[0].is_empty() {
             return;
         }
         let roles = roles_for_player_count(player_count).expect("supported table size");
-        let (mut rank, mut score) = (0.0, 0.0);
         if self.places.len() < roles.len() {
             self.places.resize(roles.len(), 0);
         }
-        for &p in places {
+        let (mut series_rank, mut series_score) = (0.0, 0.0);
+        for places in seats {
+            let (mut rank, mut score) = (0.0, 0.0);
+            for &p in places {
+                #[allow(clippy::cast_precision_loss)]
+                let place_rank = (p + 1) as f64;
+                let s = role_score(roles[p], player_count);
+                rank += place_rank;
+                score += s;
+                self.places[p] += 1;
+            }
             #[allow(clippy::cast_precision_loss)]
-            let place_rank = (p + 1) as f64;
-            let s = role_score(roles[p], player_count);
-            rank += place_rank;
-            score += s;
-            self.places[p] += 1;
+            let len = places.len() as f64;
+            self.rank_sum += rank;
+            self.score_sum += score;
+            self.rounds += places.len() as u64;
+            series_rank += rank / len;
+            series_score += score / len;
         }
         #[allow(clippy::cast_precision_loss)]
-        let len = places.len() as f64;
-        self.rank_sum += rank;
-        self.score_sum += score;
-        self.rounds += places.len() as u64;
-        self.series_rank.push(rank / len);
-        self.series_score.push(score / len);
+        let seat_count = seats.len() as f64;
+        self.series_rank.push(series_rank / seat_count);
+        self.series_score.push(series_score / seat_count);
     }
 
     #[allow(clippy::cast_precision_loss)]
@@ -183,18 +210,23 @@ pub fn aggregate_extended_with(
         if seat_acc.len() < seats {
             seat_acc.resize_with(seats, Acc::default);
         }
+        // Places of every seat over the rounds, grouped by strategy name.
+        let mut by_name: BTreeMap<&str, Vec<Vec<usize>>> = BTreeMap::new();
         for seat in 0..seats {
             let series: Vec<usize> = places.iter().map(|round| round[seat]).collect();
             let name = &result.strategy_names[seat];
-            strategy_acc
-                .entry(name.clone())
-                .or_default()
-                .add_series(&series, result.player_count);
-            seat_acc[seat].add_series(&series, result.player_count);
+            seat_acc[seat].add_series(std::slice::from_ref(&series), result.player_count);
+            by_name.entry(name).or_default().push(series);
 
             let entry = passes.entry(name.clone()).or_insert((0, 0));
             entry.0 += u64::from(result.voluntary_pass_counts[seat]);
             entry.1 += u64::from(result.pass_counts[seat]);
+        }
+        for (name, seat_series) in by_name {
+            strategy_acc
+                .entry(name.to_owned())
+                .or_default()
+                .add_series(&seat_series, result.player_count);
         }
         for window in result.role_history.windows(2) {
             for (seat, &role) in window[0].iter().enumerate() {
@@ -249,7 +281,7 @@ pub fn aggregate_extended_with(
                 .collect();
             let strength_rating = ratings.as_ref().map(|r| {
                 let (value, std_error) = r[index_of(name)];
-                Estimate {
+                RatingEstimate {
                     value,
                     std_error,
                     n: results.len(),

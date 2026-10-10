@@ -96,15 +96,15 @@ impl SplitMix64 {
 }
 
 /// Ratings and bootstrap standard errors, one entry per strategy.
-/// `per_match` holds one `PairCounts` per match. With
-/// `bootstrap_resamples == 0` every standard error is `0.0`.
+/// `per_match` holds one `PairCounts` per match. Without resampling
+/// (`bootstrap_resamples < 2`) every standard error is `None`.
 #[must_use]
 pub fn rate(
     per_match: &[PairCounts],
     k: usize,
     bootstrap_resamples: usize,
     bootstrap_seed: u64,
-) -> Vec<(f64, f64)> {
+) -> Vec<(f64, Option<f64>)> {
     let mut total = PairCounts::new(k);
     for m in per_match {
         total.add(m);
@@ -128,7 +128,7 @@ pub fn rate(
     point
         .into_iter()
         .zip(&samples)
-        .map(|(p, s)| (p, if s.len() < 2 { 0.0 } else { std_dev(s) }))
+        .map(|(p, s)| (p, (s.len() >= 2).then(|| std_dev(s))))
         .collect()
 }
 

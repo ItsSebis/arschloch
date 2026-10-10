@@ -3,6 +3,8 @@
 # change that also changes a result is caught. Usage (repository root, after
 # `cargo build --release -p cli`):
 #   docs/baselines/perf/bench.sh
+# The statistics sections appended by Phase 12 (from the line 'Average place (1 = best)')
+# are not part of the checksum, so the checksums of the committed baselines stay valid.
 # Times are wall-clock seconds of the single-threaded run (THREADS=1 default)
 # and of all cores; checksums must stay identical across code changes.
 set -euo pipefail
@@ -23,7 +25,7 @@ timed() { # label, then the command; prints "label seconds checksum"
   "$@" > "$TMP/out.txt"
   end=$(date +%s.%N)
   printf '%-28s %7.2fs  %s\n' "$label" "$(echo "$end - $start" | bc -l)" \
-    "$(tail -n +2 "$TMP/out.txt" | sha256sum | cut -c1-16)"
+    "$(tail -n +2 "$TMP/out.txt" | sed '/^Average place (1 = best)/,$d' | sed '$d' | sha256sum | cut -c1-16)"
 }
 
 table() { # threads, strategy specs...

@@ -226,7 +226,26 @@ and the training-advisor form (Phase 18).
   against each model can be viewed and compared with the models' own
   scores.
 
-## Phase 12 — Richer scoring and statistics
+## Phase 12 — Richer scoring and statistics (done)
+
+**Status:** built (design: `docs/superpowers/specs/2026-10-09-phase-12-statistics-skill-score-design.md`).
+Every statistic is catalogued once in `sim::stats_catalog` (meaning, formula, how to
+read it, caveats, JSON path) and the catalogue generates `docs/STATISTICS.md`, the
+`--explain` text, the `statistics_catalog` key of `results.json` and
+`GET /api/statistics-catalog` for the later website page. New numbers: average rank and
+mean role score per strategy and per seat, rank distribution, the opponent-adjusted
+Bradley-Terry strength rating (bootstrap errors), Wilson intervals, useful passes
+(`--useful-passes K`, counterfactual rollouts), and the luck/skill statistic
+(`--skill-score off|estimate|duplicate|both`: duplicate deals as ground truth, a cheap
+hand-feature regression as estimator, compared in `both`). The training hook `--fitness-skill-weight` is built but off by default; whether it helps is a Phase 13 experiment. Findings: duplicate deals leave the point estimate of a strategy's score
+unchanged (only its error shrinks); deal luck is only about 0-50% of the single-match
+variance (the champion about 6% over six rounds, weaker strategies up to 50%), because
+carried-over roles dominate later rounds; the estimator costs no extra time and agrees
+with the duplicate result within about 1 standard error at 4 players (it removes less of
+the luck at 5 players with the double deck); `card-counter` plays identically to
+`lowest-legal` in every setup tested (its "precious card" branch never fires).
+
+Original plan, kept for reference:
 
 From `docs/Notes.md`. Today the CLI summary reports mainly President
 retention, and training scores a player by its mean finishing role

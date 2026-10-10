@@ -17,12 +17,13 @@ use rayon::prelude::*;
 
 use super::config::TrainConfig;
 use super::decisions::record_decisions;
-use super::evaluate::{evaluate, match_seed, Opponents, Score};
+use super::evaluate::{evaluate, evaluate_with_round1, match_seed, Opponents, Round1Obs, Score};
 use super::events::{
     ChampionStats, Complexity, Event, FitnessStats, GenerationEvent, OpponentStat, RunEnd,
-    RunStart, SCHEMA_VERSION,
+    RunStart, SkillTermStats, SCHEMA_VERSION,
 };
 use super::run_dir::{BestRecord, Checkpoint, HallMember, RunDir, TrainError};
+use super::skill_term::combine;
 use crate::{NeatStrategy, Strategy, FEATURE_COUNT, FEATURE_NAMES, FEATURE_SET_VERSION};
 
 /// One member of the opponent pool.
@@ -113,7 +114,7 @@ fn top_indices(values: &[f64], k: usize) -> Vec<usize> {
 }
 
 #[allow(clippy::cast_precision_loss)] // counts are far below 2^52
-fn fitness_stats(fitness: &[f64]) -> FitnessStats {
+fn fitness_stats(fitness: &[f64], skill: Option<&[f64]>) -> FitnessStats {
     let count = fitness.len() as f64;
     let mean = fitness.iter().sum::<f64>() / count;
     let mut sorted = fitness.to_vec();
@@ -143,6 +144,14 @@ fn fitness_stats(fitness: &[f64]) -> FitnessStats {
         min,
         std_dev,
         histogram,
+        skill_term: skill.map(|terms| {
+            let n = terms.len() as f64;
+            let mean = terms.iter().sum::<f64>() / n;
+            SkillTermStats {
+                mean,
+                std_dev: (terms.iter().map(|t| (t - mean).powi(2)).sum::<f64>() / n).sqrt(),
+            }
+        }),
     }
 }
 
@@ -412,30 +421,64 @@ impl Trainer {
         pool
     }
 
-    fn evaluate_population(&self, generation: u32, observer: &mut dyn TrainObserver) -> Vec<f64> {
+    /// Every genome's training fitness and, with a non-zero `skill_weight`,
+    /// its luck-adjusted term (the fitness is then the blend, see
+    /// `skill_term`). With weight zero this is the plain mean role score
+    /// and nothing extra is recorded or computed.
+    fn evaluate_population(
+        &self,
+        generation: u32,
+        observer: &mut dyn TrainObserver,
+    ) -> (Vec<f64>, Option<Vec<f64>>) {
         let table = self.config.table();
         let pool = self.training_pool();
         let seeds = training_seeds(&self.config, generation);
         let genomes = self.population.genomes();
         let batch = genomes.len().div_ceil(PROGRESS_STEPS);
+        let with_skill = self.config.skill_weight > 0.0;
         let mut fitness = Vec::with_capacity(genomes.len());
+        let mut round1: Vec<Vec<Round1Obs>> = Vec::new();
         for chunk in genomes.chunks(batch) {
-            let scores: Vec<f64> = chunk
-                .par_iter()
-                .map(|genome| {
-                    evaluate(
-                        &strategy_for(genome),
-                        &table,
-                        Opponents::Mixed(&pool),
-                        &seeds,
-                    )
-                    .mean
-                })
-                .collect();
-            fitness.extend(scores);
+            if with_skill {
+                let scores: Vec<(f64, Vec<Round1Obs>)> = chunk
+                    .par_iter()
+                    .map(|genome| {
+                        let (score, obs) = evaluate_with_round1(
+                            &strategy_for(genome),
+                            &table,
+                            Opponents::Mixed(&pool),
+                            &seeds,
+                        );
+                        (score.mean, obs)
+                    })
+                    .collect();
+                for (mean, obs) in scores {
+                    fitness.push(mean);
+                    round1.push(obs);
+                }
+            } else {
+                let scores: Vec<f64> = chunk
+                    .par_iter()
+                    .map(|genome| {
+                        evaluate(
+                            &strategy_for(genome),
+                            &table,
+                            Opponents::Mixed(&pool),
+                            &seeds,
+                        )
+                        .mean
+                    })
+                    .collect();
+                fitness.extend(scores);
+            }
             observer.on_eval_progress(generation, fitness.len(), genomes.len());
         }
-        fitness
+        if with_skill {
+            let (total, skill) = combine(self.config.skill_weight, &fitness, &round1);
+            (total, Some(skill))
+        } else {
+            (fitness, None)
+        }
     }
 
     /// Picks the generation's champion: the best of the `k` genomes with
@@ -544,12 +587,12 @@ impl Trainer {
         let step_started = Instant::now();
         let generation = self.population.generation();
 
-        let fitness = self.evaluate_population(generation, observer);
+        let (fitness, skill_terms) = self.evaluate_population(generation, observer);
         let (champion_index, training_rank) = self.select_champion(&fitness);
         // `advance` replaces the genomes, so take the champion first.
         let champion = self.population.genomes()[champion_index].clone();
         let hall_generations: Vec<u32> = self.hall.iter().map(|m| m.generation).collect();
-        let stats = fitness_stats(&fitness);
+        let stats = fitness_stats(&fitness, skill_terms.as_deref());
         self.population.set_fitness(fitness.clone());
         let report = self.population.advance();
 
@@ -617,6 +660,7 @@ impl Trainer {
             fitness: stats,
             champion: ChampionStats {
                 train_fitness: fitness[champion_index],
+                skill_term: skill_terms.as_ref().map(|t| t[champion_index]),
                 reeval: reeval.into(),
                 heldout: heldout.map(Into::into),
                 training_rank,

@@ -106,6 +106,7 @@ fn new_config(args: &TrainArgs, specs: Vec<String>) -> TrainConfig {
         champion_candidates: args.champion_candidates.min(args.population),
         hall_of_fame_size: args.hall_of_fame,
         hall_of_fame_interval: args.hall_interval,
+        skill_weight: args.fitness_skill_weight,
     }
 }
 

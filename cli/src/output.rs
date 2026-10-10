@@ -247,11 +247,9 @@ mod tests {
         assert!(!resolves(&v, "e.[].v") && !resolves(&v, "q"));
     }
 
-    /// Every catalogued statistic must be where the catalogue says, in the
-    /// JSON of a real run with every skill mode and the useful-pass
+    /// The JSON of a real run with every skill mode and the useful-pass
     /// analysis on (their keys only exist with their flags).
-    #[test]
-    fn every_catalogue_json_path_resolves_in_a_real_run() {
+    fn real_run_json() -> serde_json::Value {
         let strategies: Vec<std::sync::Arc<dyn sim::Strategy>> = vec![
             std::sync::Arc::new(sim::LowestLegal),
             std::sync::Arc::new(sim::GreedyHighest),
@@ -300,6 +298,15 @@ mod tests {
         let value: serde_json::Value =
             serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
         std::fs::remove_file(&path).ok();
+        value
+    }
+
+    /// Every catalogued statistic must be where the catalogue says, in the
+    /// JSON of a real run with every skill mode and the useful-pass
+    /// analysis on (their keys only exist with their flags).
+    #[test]
+    fn every_catalogue_json_path_resolves_in_a_real_run() {
+        let value = real_run_json();
 
         let mut checked = 0;
         for stat in sim::stats_catalog::catalog() {
@@ -315,5 +322,79 @@ mod tests {
         assert!(checked >= 15, "only {checked} paths checked");
         let catalog = value["statistics_catalog"].as_array().unwrap();
         assert_eq!(catalog.len(), sim::stats_catalog::catalog().len());
+    }
+
+    /// Expands `{a,b}` leaf groups of a catalogue path into plain paths.
+    fn expand(path: &str) -> Vec<String> {
+        match path.split_once('{') {
+            Some((prefix, rest)) => {
+                let (fields, tail) = rest.split_once('}').unwrap();
+                fields
+                    .split(',')
+                    .flat_map(|f| expand(&format!("{prefix}{f}{tail}")))
+                    .collect()
+            }
+            None => vec![path.to_owned()],
+        }
+    }
+
+    /// Keys of `extended.skill` that only describe the run's structure and
+    /// need no entry of their own.
+    const STRUCTURAL_SKILL_KEYS: [&str; 6] = [
+        "mode",
+        "name",
+        "group_count",
+        "k",
+        "rounds_per_match",
+        "match_count",
+    ];
+
+    fn collect_keys(value: &serde_json::Value, path: &str, depth: usize, out: &mut Vec<String>) {
+        match value {
+            serde_json::Value::Object(map) => {
+                for (key, v) in map {
+                    let full = format!("{path}.{key}");
+                    out.push(full.clone());
+                    if depth < 3 {
+                        collect_keys(v, &full, depth + 1, out);
+                    }
+                }
+            }
+            // Arrays add no depth: their elements' keys count as the array's.
+            serde_json::Value::Array(items) => {
+                if let Some(first) = items.first() {
+                    collect_keys(first, &format!("{path}.[]"), depth, out);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Everything emitted under `extended.skill` (to depth 3, arrays
+    /// transparent) is either a structural key or covered by a catalogue
+    /// entry whose `json_path` starts with it.
+    #[test]
+    fn every_emitted_skill_key_has_a_catalogue_entry() {
+        let value = real_run_json();
+        let skill = &value["extended"]["skill"];
+        assert!(skill.is_object());
+        let mut keys = Vec::new();
+        collect_keys(skill, "extended.skill", 1, &mut keys);
+        assert!(keys.len() > 20, "walked only {} keys", keys.len());
+        let catalogued: Vec<String> = sim::stats_catalog::catalog()
+            .iter()
+            .flat_map(|s| s.json_path.split("; "))
+            .flat_map(expand)
+            .collect();
+        for key in keys {
+            let last = key.rsplit('.').next().unwrap();
+            let covered = catalogued
+                .iter()
+                .any(|p| p == &key || p.starts_with(&format!("{key}.")));
+            assert!(
+                covered || STRUCTURAL_SKILL_KEYS.contains(&last),
+                "`{key}` is emitted but no catalogue entry covers it"
+            );
+        }
     }
 }

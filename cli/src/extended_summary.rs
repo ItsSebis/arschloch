@@ -66,12 +66,7 @@ fn section(out: &mut String, args: &Args, body: &str, ids: &[&str]) {
     }
 }
 
-fn strategy_table(
-    args: &Args,
-    statistics: &sim::Statistics,
-    extended: &ExtendedStatistics,
-) -> String {
-    let rated = args.bootstrap_resamples > 0;
+fn strategy_table(statistics: &sim::Statistics, extended: &ExtendedStatistics) -> String {
     let rows: Vec<Vec<String>> = extended
         .by_strategy
         .iter()
@@ -99,9 +94,13 @@ fn strategy_table(
                 name.clone(),
                 with_error(&s.avg_rank, 2, false, true),
                 with_error(&s.mean_role_score, 3, true, true),
-                s.strength_rating
-                    .as_ref()
-                    .map_or_else(|| "n/a".to_owned(), |r| with_error(r, 0, true, rated)),
+                s.strength_rating.as_ref().map_or_else(
+                    || "n/a".to_owned(),
+                    |r| match r.std_error {
+                        Some(e) => format!("{:+.0} ±{e:.0}", r.value),
+                        None => format!("{:+.0}", r.value),
+                    },
+                ),
                 president,
             ]
         })
@@ -134,6 +133,7 @@ fn seat_lines(extended: &ExtendedStatistics) -> String {
     table(&["Seat", "avg rank ±SE", "mean score ±SE"], &rows)
 }
 
+#[allow(clippy::too_many_lines)] // one linear render of the skill table and its notes
 fn skill_section(skill: &SkillOutput) -> String {
     let mut out = String::new();
     let mode = skill.mode;
@@ -205,6 +205,16 @@ fn skill_section(skill: &SkillOutput) -> String {
         out.push_str(
             "Duplicate deals cancel the luck of the deal in round 1; later rounds are luck-reduced, not luck-free.\n",
         );
+        out.push_str(
+            "In duplicate mode the plain score equals the duplicate skill value by construction (the mean of the group means is the mean of the matches); its ±SE is what an ordinary run of the same size would show, not an independent estimate.\n",
+        );
+    }
+    if skill
+        .estimate
+        .as_ref()
+        .is_some_and(|e| e.match_count > 0 && e.strategies.is_empty())
+    {
+        out.push_str("Estimate: n/a: a single strategy name.\n");
     }
     if skill.estimate.is_some() {
         let note = if skill.duplicate.is_some() {
@@ -214,7 +224,11 @@ fn skill_section(skill: &SkillOutput) -> String {
         };
         let _ = writeln!(out, "{note}");
     }
-    if let Some(cmp) = &skill.comparison {
+    if let Some(cmp) = skill
+        .comparison
+        .as_ref()
+        .filter(|c| !c.strategies.is_empty())
+    {
         let _ = writeln!(out, "Comparison (round 1): {}", cmp.verdict);
         for s in &cmp.strategies {
             let _ = writeln!(
@@ -295,7 +309,7 @@ pub fn render_extended_summary(
         args,
         &format!(
             "Average place (1 = best), mean score (+1 best .. -1 worst), strength rating (Elo-like points, field mean 0), share of rounds as President; ± = standard error over matches:\n{}",
-            strategy_table(args, statistics, extended)
+            strategy_table(statistics, extended)
         ),
         &["avg_rank", "mean_role_score", "strength_rating", "retention_interval"],
     );
