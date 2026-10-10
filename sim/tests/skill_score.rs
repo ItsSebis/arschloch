@@ -191,7 +191,7 @@ fn estimator_and_duplicate_agree_on_real_matches() {
     let cmp = compare(&dup, &est);
     assert_eq!(cmp.strategies.len(), 2);
     assert!((cmp.rank_agreement - 1.0).abs() < 1e-12);
-    assert!(!cmp.verdict.is_empty());
+    assert_ne!(cmp.verdict, "");
     assert!(serde_json::to_string(&cmp).is_ok());
 }
 
@@ -203,7 +203,7 @@ fn estimator_skips_a_table_with_a_single_strategy_name() {
     }
     let report = estimator_report(&matches);
     assert_eq!(report.match_count, 50);
-    assert!(report.strategies.is_empty());
+    assert_eq!(report.strategies, vec![]);
 }
 
 #[test]

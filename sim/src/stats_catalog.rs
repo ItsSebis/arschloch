@@ -528,7 +528,7 @@ mod tests {
     #[test]
     fn every_scope_is_listed_in_all_and_used_or_titled() {
         for scope in Scope::ALL {
-            assert!(!scope.title().is_empty());
+            assert_ne!(scope.title(), "");
         }
         for s in catalog() {
             assert!(Scope::ALL.contains(&s.scope));
@@ -563,7 +563,7 @@ mod tests {
         let text = render_explain(&["avg_rank", "bogus", "luck_share"]);
         assert_eq!(text.lines().count(), 2);
         assert!(text.starts_with("Average finishing place: "));
-        assert!(render_explain(&["bogus"]).is_empty());
+        assert_eq!(render_explain(&["bogus"]), "");
     }
 
     #[test]
