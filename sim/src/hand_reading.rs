@@ -1,4 +1,4 @@
-//! Pass-based hand reading (docs/ROADMAP.md, Phase 7).
+//! Pass-based hand reading.
 //!
 //! A seat that passed against a size-`s` combo topped by `c` held no
 //! size-`s` combo topped above `c` at that moment; hands only shrink

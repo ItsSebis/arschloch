@@ -1,7 +1,7 @@
 //! A pure card-counting strategy: every decision is driven by exact
 //! knowledge of which cards remain unseen (unplayed and not in this
 //! seat's own hand) — this is a closed deck with no draw pile, so
-//! "unseen" is exact, not an estimate (docs/ROADMAP.md, Phase 6).
+//! "unseen" is exact, not an estimate.
 //!
 //! **Precious combos.** A legal combo's top card is "precious" when no
 //! unseen card beats it under `Card::compare` (the same total order —
@@ -38,6 +38,7 @@ use std::cmp::Ordering;
 
 use engine::{Card, DuplicateRule, Move};
 
+use crate::strategies::lowest_play;
 use crate::strategy::{ContextNeeds, Strategy, TurnContext};
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -62,31 +63,15 @@ impl Strategy for CardCounter {
                 .is_none_or(|highest| top.compare(&highest, duplicate_rule) != Ordering::Less)
         };
 
-        // The `LowestLegal` order (smallest size, then lowest top card) over
-        // the non-precious plays, else over all plays; the first of equals.
-        let mut lowest_any: Option<(usize, Card, &Move)> = None;
-        let mut lowest_non_precious: Option<(usize, Card, &Move)> = None;
-        let precedes = |a: (usize, Card), b: (usize, Card)| {
-            a.0.cmp(&b.0)
-                .then_with(|| a.1.compare(&b.1, duplicate_rule))
-                == Ordering::Less
-        };
-        for mv in legal_moves {
-            let Move::Play(combo) = mv else { continue };
-            let top = combo.top_card(duplicate_rule);
-            let key = (combo.size(), top);
-            if lowest_any.is_none_or(|(size, card, _)| precedes(key, (size, card))) {
-                lowest_any = Some((key.0, key.1, mv));
-            }
-            if !is_precious(top)
-                && lowest_non_precious.is_none_or(|(size, card, _)| precedes(key, (size, card)))
-            {
-                lowest_non_precious = Some((key.0, key.1, mv));
-            }
-        }
-        lowest_non_precious
-            .or(lowest_any)
-            .map_or(Move::Pass, |(_, _, mv)| *mv)
+        // The `LowestLegal` order over the non-precious plays, else over all
+        // plays.
+        let non_precious = legal_moves.iter().filter(|mv| match mv {
+            Move::Play(combo) => !is_precious(combo.top_card(duplicate_rule)),
+            Move::Pass => false,
+        });
+        lowest_play(non_precious, duplicate_rule)
+            .or_else(|| lowest_play(legal_moves, duplicate_rule))
+            .map_or(Move::Pass, |mv| *mv)
     }
 
     fn needs(&self) -> ContextNeeds {
@@ -100,10 +85,8 @@ impl Strategy for CardCounter {
         duplicate_rule: DuplicateRule,
         _rng: &mut dyn rand::Rng,
     ) -> Vec<Card> {
-        // Card-counting-aware exchange selection is out of this
-        // phase's scope (Global Constraints) — reuse the naive
-        // highest-N give-up.
-        crate::strategies::take_highest_naive(hand, count, duplicate_rule)
+        // No card-counting-aware exchange: give up the highest cards.
+        engine::take_highest(hand, count, duplicate_rule)
     }
 }
 

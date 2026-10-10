@@ -59,8 +59,7 @@ impl ContextNeeds {
 }
 
 /// Everything beyond `legal_moves` a `Strategy` needs for card
-/// counting and endgame denial (docs/ROADMAP.md, Phase 6). Built fresh
-/// every turn by `match_runner::run_match`, and only the parts the acting
+/// counting and endgame denial. Built every turn by `match_runner::run_match`, and only the parts the acting
 /// seat's strategy declares in `Strategy::needs`: `opponents`,
 /// `unseen_cards` and the pass ceilings hold empty/default values when
 /// not requested, and reading them then is a bug in the strategy (its
@@ -79,7 +78,7 @@ pub struct TurnContext<'a> {
     /// with no draw pile.
     pub unseen_cards: Vec<Card>,
     /// This seat's own pass ceilings, as read by anyone else — needed
-    /// by `Adaptive`'s deception modifier (a later task) to avoid a
+    /// by `Adaptive`'s deception modifier to avoid a
     /// redundant bluff.
     pub own_pass_ceilings: PassCeilings,
     /// The combo currently on the table, or `None` if this seat must
@@ -120,7 +119,7 @@ pub trait Strategy: Send + Sync {
 
     /// Chooses which `count` cards to give up when this seat holds a
     /// role required to hand over its best cards during the exchange
-    /// (`docs/ROADMAP.md`, Phase 5, "Smart exchange"). Must return
+    /// ("Smart exchange" in `docs/ROADMAP.md`). Must return
     /// exactly `count` distinct cards, each present in `hand`;
     /// `engine::exchange_with_selection` treats anything else as a bug
     /// (`ExchangeError::InvalidSelection`).

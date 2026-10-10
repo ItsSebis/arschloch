@@ -1,6 +1,5 @@
 //! Aggregating a batch of `MatchResult`s into per-strategy role counts,
-//! diversification, role-sustainment, and luck-vs-skill signals. See
-//! docs/ROADMAP.md, Phase 2 and 4.
+//! diversification, role-sustainment, and luck-vs-skill signals.
 
 use std::collections::BTreeMap;
 
@@ -9,7 +8,7 @@ use engine::{roles_for_player_count, Role};
 use crate::match_result::MatchResult;
 
 /// Round-to-round role-sustainment counts for one role held by one
-/// strategy (docs/ROADMAP.md, Phase 4, "Role-sustainment tracking").
+/// strategy ("Role-sustainment tracking" in docs/ROADMAP.md).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize)]
 pub struct RoleRetention {
     /// Round-to-next-round transitions where a strategy held this role
@@ -26,13 +25,13 @@ pub struct Statistics {
     /// `sum(voluntary_pass_counts) / sum(pass_counts)` across every match
     /// and seat (`0.0` if no passes occurred at all).
     pub voluntary_pass_rate: f64,
-    /// Same ratio, broken out per strategy name (docs/ROADMAP.md, Phase 4,
-    /// "Strategy diversification").
+    /// Same ratio, broken out per strategy name ("Strategy diversification" in
+    /// docs/ROADMAP.md).
     pub voluntary_pass_rate_by_strategy: BTreeMap<String, f64>,
     /// Role-sustainment: of the times a strategy held a role with at
     /// least one more round left in the match, how often it held the
-    /// *same* role the next round too (docs/ROADMAP.md, Phase 4,
-    /// "Role-sustainment tracking"). A strategy that only ever appeared
+    /// *same* role the next round too ("Role-sustainment tracking" in
+    /// docs/ROADMAP.md). A strategy that only ever appeared
     /// in single-round matches has no entry here at all (there is no
     /// "next round" to check).
     pub role_retention_by_strategy: BTreeMap<String, BTreeMap<Role, RoleRetention>>,
@@ -40,8 +39,8 @@ pub struct Statistics {
     /// placement (0 = the table's best role, per
     /// `engine::roles_for_player_count`'s order) across matches that
     /// seated it identically (the same `MatchResult::strategy_names`)
-    /// but necessarily shuffled differently (docs/ROADMAP.md, Phase 4,
-    /// "Luck-vs-skill signal"). `None` if every seating this strategy
+    /// but necessarily shuffled differently ("Luck-vs-skill signal" in
+    /// docs/ROADMAP.md). `None` if every seating this strategy
     /// appeared in had fewer than 2 matches to compare (nothing to take a
     /// variance of) — e.g. any batch smaller than roughly
     /// `2 * strategies.len()` matches.

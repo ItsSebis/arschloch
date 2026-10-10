@@ -1,6 +1,5 @@
 //! Uniformly samples among every legal move, including `Pass` — this is
-//! the strategy that produces the "voluntary pass" signal (see
-//! docs/ROADMAP.md, Phase 4).
+//! the strategy that produces the "voluntary pass" signal.
 
 use engine::{Card, DuplicateRule, Move};
 use rand::seq::{IndexedRandom, SliceRandom};

@@ -46,7 +46,7 @@ impl Strategy for GreedyHighest {
         duplicate_rule: DuplicateRule,
         _rng: &mut dyn rand::Rng,
     ) -> Vec<Card> {
-        crate::strategies::take_highest_naive(hand, count, duplicate_rule)
+        engine::take_highest(hand, count, duplicate_rule)
     }
 }
 

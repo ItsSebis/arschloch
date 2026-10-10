@@ -2,29 +2,38 @@
 //! matches, let `neat` breed the next generation, re-evaluate the
 //! champion on fresh matches, and record everything.
 //!
-//! A run is a pure function of its `TrainConfig`: genomes are evaluated
-//! independently (so thread count cannot change results), match seeds
-//! derive only from `(run seed, generation, index)`, and the population's
-//! state is checkpointed after every generation, so a resumed run is
-//! identical to one that never stopped.
+//! The scores, champions and genomes of a run are a function of its
+//! `TrainConfig` alone: genomes are evaluated independently (so thread
+//! count cannot change results), match seeds derive only from
+//! `(run seed, generation, index)`, and the population's state is
+//! checkpointed after every generation, so a resumed run is identical to
+//! one that never stopped. Only the wall-clock fields of the events
+//! (elapsed time, rounds per second, stage timings) vary between runs.
+//!
+//! The stage functions live in `stages`, the seed sets in `seeds`, the
+//! parallel pass with progress reports in `progress`.
 
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use neat::{Genome, Population};
-use rayon::prelude::*;
 
+mod progress;
+mod seeds;
+mod stages;
+mod stats;
+#[cfg(test)]
+mod tests;
+
+use self::stats::fitness_stats;
 use super::config::TrainConfig;
-use super::decisions::record_decisions;
-use super::evaluate::{evaluate, evaluate_with_round1, match_seed, Opponents, Round1Obs, Score};
+use super::evaluate::match_seed;
 use super::events::{
-    ChampionStats, Complexity, Event, FitnessStats, GenerationEvent, OpponentStat, RunEnd,
-    RunStart, SkillTermStats, StageTimings, SCHEMA_VERSION,
+    ChampionStats, Complexity, Event, GenerationEvent, RunEnd, RunStart, StageTimings,
+    SCHEMA_VERSION,
 };
 use super::run_dir::{BestRecord, Checkpoint, HallMember, RunDir, TrainError};
-use super::skill_term::combine;
 use crate::{NeatStrategy, Strategy, FEATURE_COUNT, FEATURE_NAMES, FEATURE_SET_VERSION};
 
 /// One member of the opponent pool.
@@ -58,177 +67,13 @@ pub struct Trainer {
     warm_started_from: Option<String>,
 }
 
-/// `f()` and the wall seconds it took.
-fn timed<R>(f: impl FnOnce() -> R) -> (R, f64) {
-    let stage = Instant::now();
-    let value = f();
-    (value, stage.elapsed().as_secs_f64())
-}
-
-/// The training evaluation reports progress in this many steps (the
-/// observer sees `done` at multiples of `ceil(total / PROGRESS_STEPS)`,
-/// then `total`).
-const PROGRESS_STEPS: usize = 10;
-
-/// Maps `work` over `items` as one parallel pass (rayon tasks, results
-/// in item order) while the calling thread, which is the only one that may
-/// touch the observer, calls `report(done)` at the progress steps: the
-/// multiples of `ceil(len / PROGRESS_STEPS)` and finally `len`, each once,
-/// in order, as soon as that many items are finished.
-///
-/// The pass is spawned into an `in_place_scope`, so the caller keeps its
-/// own thread; if the caller is itself a worker of the pool (for example
-/// inside `ThreadPool::install`) it lends that thread to the pool between
-/// polls via `yield_now`, so a one-thread pool still makes progress (its
-/// progress then arrives in fewer, later steps). A caller outside the pool
-/// sleeps briefly between polls.
-fn run_with_progress<T, R>(
-    items: &[T],
-    work: impl Fn(&T) -> R + Sync,
-    mut report: impl FnMut(usize),
-) -> Vec<R>
-where
-    T: Sync,
-    R: Send,
-{
-    let total = items.len();
-    let batch = total.div_ceil(PROGRESS_STEPS).max(1);
-    let done = AtomicUsize::new(0);
-    let ended = AtomicBool::new(false);
-    let mut results = Vec::new();
-    rayon::in_place_scope(|scope| {
-        scope.spawn(|_| {
-            // Also set when `work` panics, so the polling loop cannot spin
-            // forever (the scope then re-raises the panic).
-            struct Ended<'a>(&'a AtomicBool);
-            impl Drop for Ended<'_> {
-                fn drop(&mut self) {
-                    self.0.store(true, Ordering::Release);
-                }
-            }
-            let _ended = Ended(&ended);
-            results = items
-                .par_iter()
-                .map(|item| {
-                    let value = work(item);
-                    done.fetch_add(1, Ordering::Release);
-                    value
-                })
-                .collect();
-        });
-        let mut reported = 0;
-        while reported < total {
-            let over = ended.load(Ordering::Acquire);
-            let finished = done.load(Ordering::Acquire);
-            if over && finished < total {
-                break;
-            }
-            let mut progressed = false;
-            while reported < total && finished >= (reported + batch).min(total) {
-                reported = (reported + batch).min(total);
-                report(reported);
-                progressed = true;
-            }
-            if !progressed && !matches!(rayon::yield_now(), Some(rayon::Yield::Executed)) {
-                std::thread::sleep(Duration::from_millis(2));
-            }
-        }
-    });
-    results
-}
-
 /// Decisions recorded for each new best champion.
 const DECISIONS_PER_BEST: usize = 12;
-
-/// Training matches of `generation`: different every generation, so a
-/// genome cannot be tuned to one set of deals.
-fn training_seeds(config: &TrainConfig, generation: u32) -> Vec<u64> {
-    (0..config.matches_per_genome as u64)
-        .map(|i| match_seed(config.seed, 2 * u64::from(generation), i))
-        .collect()
-}
-
-/// The fixed set every generation's champion is compared on: the same
-/// deals every time (so champions are compared like for like) and never
-/// part of training.
-fn reeval_seeds(config: &TrainConfig) -> Vec<u64> {
-    (0..config.reeval_matches as u64)
-        .map(|i| match_seed(config.seed, u64::MAX - 1, i))
-        .collect()
-}
-
-/// The set the champion *candidates* are ranked on. It is separate from
-/// `reeval_seeds` so that the champion's reported score is measured on
-/// matches that played no part in choosing it (a score measured on the
-/// selection matches would be inflated by the selection).
-fn selection_seeds(config: &TrainConfig) -> Vec<u64> {
-    (0..config.reeval_matches as u64)
-        .map(|i| match_seed(config.seed, u64::MAX - 4, i))
-        .collect()
-}
-
-/// A second fixed set, used only to confirm a new best champion: it was
-/// not used to pick it, so its score is not inflated by the selection.
-fn heldout_seeds(config: &TrainConfig) -> Vec<u64> {
-    (0..config.reeval_matches as u64 * 2)
-        .map(|i| match_seed(config.seed, u64::MAX - 2, i))
-        .collect()
-}
 
 fn strategy_for(genome: &Genome) -> Arc<dyn Strategy> {
     Arc::new(
         NeatStrategy::new("candidate", genome).expect("trained genomes use this build's features"),
     )
-}
-
-/// The indices of the `k` highest values, best first (ties: lower index).
-fn top_indices(values: &[f64], k: usize) -> Vec<usize> {
-    let mut order: Vec<usize> = (0..values.len()).collect();
-    order.sort_by(|&a, &b| values[b].total_cmp(&values[a]));
-    order.truncate(k);
-    order
-}
-
-#[allow(clippy::cast_precision_loss)] // counts are far below 2^52
-fn fitness_stats(fitness: &[f64], skill: Option<&[f64]>) -> FitnessStats {
-    let count = fitness.len() as f64;
-    let mean = fitness.iter().sum::<f64>() / count;
-    let mut sorted = fitness.to_vec();
-    sorted.sort_by(f64::total_cmp);
-    let (min, best) = (sorted[0], sorted[sorted.len() - 1]);
-    let median = if sorted.len() % 2 == 1 {
-        sorted[sorted.len() / 2]
-    } else {
-        f64::midpoint(sorted[sorted.len() / 2 - 1], sorted[sorted.len() / 2])
-    };
-    let std_dev = (fitness.iter().map(|f| (f - mean).powi(2)).sum::<f64>() / count).sqrt();
-    let mut histogram = vec![0u32; 10];
-    for &value in fitness {
-        let bucket = if best > min {
-            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-            let bucket = (((value - min) / (best - min)) * 10.0) as usize;
-            bucket.min(9)
-        } else {
-            0
-        };
-        histogram[bucket] += 1;
-    }
-    FitnessStats {
-        best,
-        mean,
-        median,
-        min,
-        std_dev,
-        histogram,
-        skill_term: skill.map(|terms| {
-            let n = terms.len() as f64;
-            let mean = terms.iter().sum::<f64>() / n;
-            SkillTermStats {
-                mean,
-                std_dev: (terms.iter().map(|t| (t - mean).powi(2)).sum::<f64>() / n).sqrt(),
-            }
-        }),
-    }
 }
 
 impl Trainer {
@@ -472,242 +317,6 @@ impl Trainer {
         Ok(end)
     }
 
-    /// The fixed opponents only: what champions are compared against, so
-    /// scores stay comparable across generations as the hall changes.
-    fn fixed_pool(&self) -> Vec<Arc<dyn Strategy>> {
-        self.opponents.iter().map(|o| o.strategy.clone()).collect()
-    }
-
-    fn hall_pool(&self) -> Vec<Arc<dyn Strategy>> {
-        self.hall
-            .iter()
-            .map(|member| -> Arc<dyn Strategy> {
-                Arc::new(
-                    NeatStrategy::new(format!("HoF({})", member.generation), &member.genome)
-                        .expect("hall members use this build's features"),
-                )
-            })
-            .collect()
-    }
-
-    /// What genomes train against: the fixed opponents plus the hall.
-    fn training_pool(&self) -> Vec<Arc<dyn Strategy>> {
-        let mut pool = self.fixed_pool();
-        pool.extend(self.hall_pool());
-        pool
-    }
-
-    /// Every genome's training fitness and, with a non-zero `skill_weight`,
-    /// its luck-adjusted term (the fitness is then the blend, see
-    /// `skill_term`). With weight zero this is the plain mean role score
-    /// and nothing extra is recorded or computed.
-    fn evaluate_population(
-        &self,
-        generation: u32,
-        observer: &mut dyn TrainObserver,
-    ) -> (Vec<f64>, Option<Vec<f64>>) {
-        let table = self.config.table();
-        let pool = self.training_pool();
-        let seeds = training_seeds(&self.config, generation);
-        let genomes = self.population.genomes();
-        let with_skill = self.config.skill_weight > 0.0;
-        // One parallel pass over all genomes (a rayon task per genome,
-        // collected in genome order); the calling thread meanwhile reports
-        // progress.
-        let per_genome: Vec<(f64, Vec<Round1Obs>)> = run_with_progress(
-            genomes,
-            |genome| {
-                let candidate = strategy_for(genome);
-                if with_skill {
-                    let (score, obs) =
-                        evaluate_with_round1(&candidate, &table, Opponents::Mixed(&pool), &seeds);
-                    (score.mean, obs)
-                } else {
-                    let score = evaluate(&candidate, &table, Opponents::Mixed(&pool), &seeds);
-                    (score.mean, Vec::new())
-                }
-            },
-            |done| observer.on_eval_progress(generation, done, genomes.len()),
-        );
-        let mut fitness = Vec::with_capacity(genomes.len());
-        let mut round1: Vec<Vec<Round1Obs>> = Vec::new();
-        for (mean, obs) in per_genome {
-            fitness.push(mean);
-            if with_skill {
-                round1.push(obs);
-            }
-        }
-        if with_skill {
-            let (total, skill) = combine(self.config.skill_weight, &fitness, &round1);
-            (total, Some(skill))
-        } else {
-            (fitness, None)
-        }
-    }
-
-    /// Picks the generation's champion: the best of the `k` genomes with
-    /// the highest training fitness, ranked on the selection matches.
-    /// Returns its index and its rank by training fitness (0 = the training
-    /// best). With one candidate no matches are played.
-    fn select_champion(&self, fitness: &[f64]) -> (usize, usize) {
-        let ranked = top_indices(fitness, self.config.champion_candidates);
-        if ranked.len() == 1 {
-            return (ranked[0], 0);
-        }
-        let table = self.config.table();
-        let pool = self.fixed_pool();
-        let seeds = selection_seeds(&self.config);
-        let genomes = self.population.genomes();
-        let scores: Vec<Score> = ranked
-            .par_iter()
-            .map(|&index| {
-                evaluate(
-                    &strategy_for(&genomes[index]),
-                    &table,
-                    Opponents::Mixed(&pool),
-                    &seeds,
-                )
-            })
-            .collect();
-        let winner = scores.iter().enumerate().fold(0, |best, (rank, score)| {
-            if score.mean > scores[best].mean {
-                rank
-            } else {
-                best
-            }
-        });
-        (ranked[winner], winner)
-    }
-
-    /// The champion on the fixed matches: against the mixed fixed pool,
-    /// against each fixed opponent alone and, once the hall has members,
-    /// against the hall alone. These matches played no part in choosing it.
-    fn reevaluate(
-        &self,
-        champion: &Genome,
-        timings: &mut StageTimings,
-    ) -> (Score, Vec<OpponentStat>, Option<Score>) {
-        let table = self.config.table();
-        let seeds = reeval_seeds(&self.config);
-        let candidate = strategy_for(champion);
-        // The three evaluations only share their inputs, so they run
-        // concurrently (each is itself parallel over matches); the timings
-        // are each stage's own wall time and therefore overlap.
-        let mixed_stage = || {
-            evaluate(
-                &candidate,
-                &table,
-                Opponents::Mixed(&self.fixed_pool()),
-                &seeds,
-            )
-        };
-        let per_opponent_stage = || -> Vec<OpponentStat> {
-            self.opponents
-                .par_iter()
-                .map(|opponent| OpponentStat {
-                    name: opponent.name.clone(),
-                    score: evaluate(
-                        &candidate,
-                        &table,
-                        Opponents::Only(&opponent.strategy),
-                        &seeds,
-                    )
-                    .into(),
-                })
-                .collect()
-        };
-        let hall_stage = || {
-            let hall = self.hall_pool();
-            (!hall.is_empty())
-                .then(|| evaluate(&candidate, &table, Opponents::Mixed(&hall), &seeds))
-        };
-        let (mixed, (per_opponent, hall_score)) = rayon::join(
-            || timed(mixed_stage),
-            || rayon::join(|| timed(per_opponent_stage), || timed(hall_stage)),
-        );
-        timings.reevaluation_mixed = mixed.1;
-        timings.reevaluation_per_opponent = per_opponent.1;
-        timings.hall_of_fame = hall_score.1;
-        (mixed.0, per_opponent.0, hall_score.0)
-    }
-
-    /// A few real decisions of the champion (for the dashboard's decision
-    /// inspector), from one held-out match.
-    fn sample_decisions(
-        &self,
-        generation: u32,
-        champion: &Genome,
-    ) -> super::decisions::DecisionFile {
-        let pool: Vec<Arc<dyn Strategy>> =
-            self.opponents.iter().map(|o| o.strategy.clone()).collect();
-        record_decisions(
-            champion,
-            &self.config.table(),
-            &pool,
-            heldout_seeds(&self.config)[0],
-            DECISIONS_PER_BEST,
-            generation,
-        )
-    }
-
-    /// The champion's score on the held-out matches (see `heldout_seeds`).
-    fn confirm(&self, champion: &Genome) -> Score {
-        let pool: Vec<Arc<dyn Strategy>> =
-            self.opponents.iter().map(|o| o.strategy.clone()).collect();
-        evaluate(
-            &strategy_for(champion),
-            &self.config.table(),
-            Opponents::Mixed(&pool),
-            &heldout_seeds(&self.config),
-        )
-    }
-
-    /// Writes a new best champion, confirms it on the held-out matches and
-    /// records its decisions; adds the file-writing seconds to `files_secs`.
-    fn record_new_best(
-        &mut self,
-        generation: u32,
-        champion: &Genome,
-        reeval: &Score,
-        timings: &mut StageTimings,
-        files_secs: &mut f64,
-    ) -> Result<Score, TrainError> {
-        let stage = Instant::now();
-        self.dir.write_best(champion)?;
-        *files_secs += stage.elapsed().as_secs_f64();
-        let stage = Instant::now();
-        let heldout = self.confirm(champion);
-        timings.confirmation = stage.elapsed().as_secs_f64();
-        let stage = Instant::now();
-        let decisions = self.sample_decisions(generation, champion);
-        timings.decision_sample = stage.elapsed().as_secs_f64();
-        let stage = Instant::now();
-        self.dir.write_decisions(&decisions)?;
-        *files_secs += stage.elapsed().as_secs_f64();
-        self.best = Some(BestRecord {
-            generation,
-            reeval: reeval.clone().into(),
-            heldout: heldout.clone().into(),
-        });
-        Ok(heldout)
-    }
-
-    /// The hall takes a fresh champion every `interval` generations.
-    fn update_hall(&mut self, generation: u32, champion: &Genome) {
-        if self.config.hall_of_fame_size > 0
-            && generation > 0
-            && generation.is_multiple_of(self.config.hall_of_fame_interval)
-        {
-            self.hall.push(HallMember {
-                generation,
-                genome: champion.clone(),
-            });
-            while self.hall.len() > self.config.hall_of_fame_size {
-                self.hall.remove(0);
-            }
-        }
-    }
-
     fn step(
         &mut self,
         observer: &mut dyn TrainObserver,
@@ -819,65 +428,5 @@ impl Trainer {
         self.dir.write_checkpoint(&self.checkpoint(elapsed_secs))?;
         observer.on_generation(&event);
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::super::config::test_support::sample;
-    use super::*;
-
-    #[test]
-    fn top_indices_orders_best_first_with_ties_going_to_the_lower_index() {
-        let values = [0.5, 0.9, 0.5, -1.0, 0.9];
-        assert_eq!(top_indices(&values, 3), vec![1, 4, 0]);
-        assert_eq!(top_indices(&values, 1), vec![1]);
-        assert_eq!(top_indices(&values, 99), vec![1, 4, 0, 2, 3]);
-        assert_eq!(top_indices(&[], 3), [] as [usize; 0]);
-    }
-
-    #[test]
-    fn champion_selection_has_its_own_seed_stream() {
-        // The candidates are ranked on `selection_seeds`; the champion's
-        // reported score is then measured on `reeval_seeds`. If they shared
-        // matches, the reported score would be inflated by the very
-        // selection that chose the champion.
-        let config = sample();
-        let selection = selection_seeds(&config);
-        assert_eq!(selection.len(), config.reeval_matches);
-        assert_eq!(
-            selection,
-            selection_seeds(&config),
-            "fixed, not per generation"
-        );
-        for seed in &selection {
-            assert!(!reeval_seeds(&config).contains(seed));
-            assert!(!heldout_seeds(&config).contains(seed));
-            for generation in 0..200 {
-                assert!(!training_seeds(&config, generation).contains(seed));
-            }
-        }
-    }
-
-    #[test]
-    fn champions_are_compared_on_one_fixed_seed_set_that_training_never_uses() {
-        let config = sample();
-        let fixed = reeval_seeds(&config);
-        let held_out = heldout_seeds(&config);
-        assert_eq!(fixed.len(), config.reeval_matches);
-        assert_eq!(held_out.len(), config.reeval_matches * 2);
-        // The same every generation (paired comparison between champions).
-        assert_eq!(fixed, reeval_seeds(&config));
-        // Disjoint from each other and from every generation's training matches.
-        for seed in fixed.iter().chain(&held_out) {
-            assert_eq!(
-                fixed.iter().chain(&held_out).filter(|s| *s == seed).count(),
-                1,
-                "{seed}"
-            );
-            for generation in 0..200 {
-                assert!(!training_seeds(&config, generation).contains(seed));
-            }
-        }
     }
 }

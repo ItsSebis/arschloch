@@ -1,7 +1,6 @@
 //! `Adaptive`: a single configurable strategy that layers card-counting,
 //! endgame denial, deception, trick-lead tempo, and lead-order bullying
-//! on top of a `LowestLegal`/`CardCounter` base (docs/ROADMAP.md, Phase 7,
-//! Phase 8, and Phase 9). See `config` for the toggles,
+//! on top of a `LowestLegal`/`CardCounter` base (docs/ROADMAP.md). See `config` for the toggles,
 //! `denial`/`deception`/`tempo`/`bully` for the modifiers themselves, and
 //! `safety` for the proof `denial` and `tempo` share.
 

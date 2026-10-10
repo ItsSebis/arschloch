@@ -1,6 +1,6 @@
 //! The shared proof both `denial` and `tempo` build on: which legal
 //! play, if any, is provably unbeatable by every still-active opponent
-//! right now (docs/ROADMAP.md, Phase 7 and Phase 8).
+//! right now.
 //!
 //! The two modifiers ask this for different reasons — `denial` to deny
 //! an opponent close to finishing, `tempo` to seize the next trick's
@@ -21,7 +21,7 @@ use std::cmp::Ordering;
 
 use engine::{Card, DuplicateRule, Move};
 
-use crate::strategies::highest_unseen;
+use crate::strategies::{highest_unseen, lowest_play};
 use crate::strategy::TurnContext;
 
 /// The cheapest legal play that's provably unbeatable by every
@@ -42,18 +42,11 @@ pub(super) fn cheapest_universally_safe_play(
             })
     };
 
-    legal_moves
-        .iter()
-        .filter_map(|mv| match mv {
-            Move::Play(combo) => Some((combo.size(), combo.top_card(duplicate_rule), mv)),
-            Move::Pass => None,
-        })
-        .filter(|&(size, top, _)| locks_out_every_opponent(size, top))
-        .min_by(|a, b| {
-            a.0.cmp(&b.0)
-                .then_with(|| a.1.compare(&b.1, duplicate_rule))
-        })
-        .map(|(_, _, mv)| *mv)
+    let locking = legal_moves.iter().filter(|mv| match mv {
+        Move::Play(combo) => locks_out_every_opponent(combo.size(), combo.top_card(duplicate_rule)),
+        Move::Pass => false,
+    });
+    lowest_play(locking, duplicate_rule).copied()
 }
 
 #[cfg(test)]

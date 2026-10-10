@@ -250,3 +250,26 @@ played its lowest play). Faster of two runs:
 
 `TurnSummary::new` costs as much as move generation, and scoring every move
 costs several times both.
+
+### Allocator trial
+
+`mimalloc` as `#[global_allocator]` behind an optional cargo feature
+(`fast-alloc`, off by default), built in a scratch copy of the tree so the
+workspace, `Cargo.toml` and `Cargo.lock` stayed untouched. Same session,
+same laptop (4 cores / 8 threads), release builds with and without the
+feature, two runs each; every checksum identical (`best.json` equal for all
+thread counts).
+
+| row | system allocator | mimalloc | gain |
+|-----|-----------------:|---------:|-----:|
+| 4x neat, 1 thread           | 1.90-1.92 s | 1.84-1.86 s | 3% |
+| mixed, 1 thread             | 1.15-1.16 s | 1.13 s | 2% |
+| 4x card-counter, 1 thread   | 1.00 s | 0.98-0.99 s | 1-2% |
+| train pop 60 x 4 gen        | 3.35-3.36 s | 3.31-3.32 s | 1% |
+| scaling, 1 thread (rounds/s) | 23,250-23,348 | 23,746-23,841 | 2% |
+| scaling, 4 threads           | 85,838-86,126 | 86,972-87,037 | 1% |
+| scaling, 8 threads           | 99,671-101,856 | 100,512-102,458 | 1% |
+
+At most 3%, below the 5% bar, and mimalloc is C code (the workspace has
+none, for easy cross-compiling). The hot path no longer allocates (steps 4
+and 5), so there is little left for an allocator to speed up. Not kept.

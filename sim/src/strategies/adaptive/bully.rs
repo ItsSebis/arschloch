@@ -1,4 +1,4 @@
-//! Lead-order bullying (docs/ROADMAP.md, Phase 9): while leading, with
+//! Lead-order bullying: while leading, with
 //! this hand shaped mostly as same-rank groups, lead the cheapest
 //! *whole* same-rank group before ever leading a single — banking every
 //! leftover single for the very end of the hand.
@@ -28,8 +28,8 @@
 //! to an opponent who happens to beat it, exactly as validated in this
 //! project's worked example (see this module's tests).
 //!
-//! **Empirical correction from the original design** (docs/ROADMAP.md,
-//! Phase 9): this modifier was originally designed with a third gate —
+//! **Empirical correction from the original design** (see the
+//! lead-order bullying entry in docs/ROADMAP.md): this modifier was originally designed with a third gate —
 //! "some active opponent's `hand_size` is at or below a fixed
 //! `BULLY_CLOSE` threshold" — reasoning by analogy to `denial`/`tempo`,
 //! which both gate on an opponent (or this seat) being close to
@@ -94,6 +94,7 @@
 
 use engine::{rank_groups, Card, Combo, DuplicateRule, Move};
 
+use crate::strategies::lowest_play;
 use crate::strategy::TurnContext;
 
 /// Whether `hand`'s same-rank groups are at least as often multi-card
@@ -128,19 +129,10 @@ pub(super) fn respond(
         return None;
     }
 
-    legal_moves
-        .iter()
-        .filter_map(|mv| match mv {
-            Move::Play(combo) if combo.size() >= 2 && is_whole_rank_group(combo, context.hand) => {
-                Some((combo.size(), combo.top_card(duplicate_rule), mv))
-            }
-            _ => None,
-        })
-        .min_by(|a, b| {
-            a.0.cmp(&b.0)
-                .then_with(|| a.1.compare(&b.1, duplicate_rule))
-        })
-        .map(|(_, _, mv)| *mv)
+    let whole_groups = legal_moves.iter().filter(|mv| {
+        matches!(mv, Move::Play(combo) if combo.size() >= 2 && is_whole_rank_group(combo, context.hand))
+    });
+    lowest_play(whole_groups, duplicate_rule).copied()
 }
 
 #[cfg(test)]

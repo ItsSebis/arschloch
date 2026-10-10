@@ -1,5 +1,5 @@
 //! Counterfactual measurement of whether voluntary passes are *useful*
-//! (Phase 12, docs/STATISTICS.md ids `useful_pass_share` and
+//! (docs/STATISTICS.md ids `useful_pass_share` and
 //! `useful_pass_gain`).
 //!
 //! # Definition
@@ -32,9 +32,10 @@
 //! # Replay
 //!
 //! The analysis never alters the original matches. [`replay_match`]
-//! re-simulates a match with a driver that mirrors `run_match_with` move
-//! for move (same seeds, same rng stream: rollouts use their own
-//! generators and never touch the match stream), so its [`MatchResult`]
+//! re-simulates a match with `run_match_observed`, the driver of
+//! `run_match_with` with a hook on voluntary passes (same seeds, same rng
+//! stream: rollouts use their own generators and never touch the match
+//! stream), so its [`MatchResult`]
 //! equals the original and the voluntary passes occur at the same states.
 //! A voluntary pass is sampled when a hash of (analysis seed, match seed,
 //! match index, round, decision index) falls below `sample_fraction`; the
@@ -43,19 +44,14 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use engine::{
-    assign_roles, deal, exchange_with_rule, lowest_card_holder, Card, Combo, DuplicateRule, Move,
-    Round, SeatId,
-};
+use engine::{Card, Combo, DuplicateRule, Move, Round, SeatId};
 use rand::SeedableRng;
 use rayon::prelude::*;
 
 use crate::extended_stats::{standard_error, wilson_interval, Estimate, Interval};
-use crate::hand_features::HandFeatures;
-use crate::hand_reading::PassTracker;
 use crate::match_config::MatchConfig;
 use crate::match_result::MatchResult;
-use crate::match_runner::{play_out, shuffled_deck, turn_context_for, PlayCounters, RunOptions};
+use crate::match_runner::{play_out, run_match_observed, PlayCounters, RunOptions};
 use crate::strategy::Strategy;
 use crate::training::evaluate::mix;
 
@@ -287,7 +283,6 @@ fn decision_seed(
 /// As `run_match_with`, and if `options.rollouts == 0` while
 /// `sample_fraction > 0`.
 #[must_use]
-#[allow(clippy::too_many_lines)] // mirrors `run_match_with` line for line
 pub fn replay_match(
     config: &MatchConfig,
     strategies: &[Arc<dyn Strategy>],
@@ -295,137 +290,41 @@ pub fn replay_match(
     match_index: usize,
     options: &UsefulPassOptions,
 ) -> (MatchResult, MatchUsefulPasses) {
-    assert_eq!(
-        strategies.len(),
-        usize::from(config.player_count),
-        "one strategy is required per seat"
-    );
-    assert!(config.rounds > 0, "a match needs at least one round");
-
     let mut analysis = MatchUsefulPasses::new();
-    let mut rng = rand::rngs::StdRng::seed_from_u64(config.seed);
-    let mut previous_roles: Option<Vec<engine::Role>> = None;
-    let mut previous_arschloch: Option<SeatId> = None;
-    let mut role_history = Vec::with_capacity(config.rounds);
-    let mut counters = PlayCounters::new(config.player_count);
-    let mut first_hand_features = None;
-
-    for round_index in 0..config.rounds {
-        let deck = shuffled_deck(config, run_options, round_index, &mut rng);
-        let mut hands = deal(deck, config.player_count)
-            .expect("standard_deck always yields enough cards for a supported player count");
-        if round_index == 0 && run_options.record_deal_features {
-            first_hand_features = Some(hands.iter().map(|h| HandFeatures::from_hand(h)).collect());
-        }
-        let leader = match (&previous_roles, previous_arschloch) {
-            (Some(roles), Some(arschloch)) => {
-                exchange_with_rule(
-                    &mut hands,
-                    roles,
-                    config.duplicate_rule,
-                    config.exchange_rule,
-                    |seat, hand, count, duplicate_rule| {
-                        strategies[seat].choose_exchange_cards(
-                            hand,
-                            count,
-                            duplicate_rule,
-                            &mut rng,
-                        )
-                    },
-                )
-                .expect("exchange inputs are valid, as in run_match_with");
-                arschloch
-            }
-            _ => lowest_card_holder(&hands, config.duplicate_rule)
-                .expect("a freshly dealt hand set is never empty"),
-        };
-        let round_deck: Vec<Card> = hands.iter().flatten().copied().collect();
-        let mut round =
-            Round::with_pass_rule(hands, config.duplicate_rule, config.pass_rule, leader)
-                .expect("player_count/leader are always valid for a supported table size");
-
-        // `play_out`'s loop, plus the analysis hook on voluntary passes.
-        let mut tracker = PassTracker::new(usize::from(config.player_count), config.duplicate_rule);
-        let mut decision = 0usize;
-        let mut legal_moves = Vec::new();
-        while !round.is_complete() {
-            let seat = round.seat_to_move().expect("round is not complete");
-            if round.current_combo().is_none() {
-                counters.trick_count += 1;
-            }
-            round.legal_moves_into(&mut legal_moves);
-            let context = turn_context_for(
-                &round,
-                seat,
-                config.player_count,
-                &round_deck,
-                &mut tracker,
-                strategies[usize::from(seat)].needs(),
+    let result = run_match_observed(config, strategies, run_options, |pass| {
+        let tally = analysis
+            .entry(strategies[usize::from(pass.seat)].name().to_string())
+            .or_default();
+        tally.voluntary_total += 1;
+        let draw = unit_hash([
+            options.seed,
+            config.seed,
+            match_index as u64,
+            pass.round_index as u64,
+            pass.decision as u64,
+        ]);
+        if draw < options.sample_fraction {
+            let seed = decision_seed(
+                options,
+                config,
+                match_index,
+                pass.round_index,
+                pass.decision,
             );
-            let chosen = strategies[usize::from(seat)].choose_play(
-                &legal_moves,
-                config.duplicate_rule,
-                &context,
-                &mut rng,
-            );
-            drop(context);
-
-            if chosen == Move::Pass {
-                counters.pass_counts[usize::from(seat)] += 1;
-                if legal_moves.iter().any(|mv| matches!(mv, Move::Play(_))) {
-                    counters.voluntary_pass_counts[usize::from(seat)] += 1;
-                    let tally = analysis
-                        .entry(strategies[usize::from(seat)].name().to_string())
-                        .or_default();
-                    tally.voluntary_total += 1;
-                    let draw = unit_hash([
-                        options.seed,
-                        config.seed,
-                        match_index as u64,
-                        round_index as u64,
-                        decision as u64,
-                    ]);
-                    if draw < options.sample_fraction {
-                        let seed =
-                            decision_seed(options, config, match_index, round_index, decision);
-                        let verdict = evaluate_pass(
-                            &round,
-                            seat,
-                            strategies,
-                            config,
-                            &round_deck,
-                            seed,
-                            options,
-                        )
-                        .expect("a voluntary pass has a legal play");
-                        tally.useful += u64::from(verdict.useful);
-                        tally.gains.push(verdict.gain);
-                    }
-                }
-            }
-            round
-                .submit_move(seat, chosen)
-                .expect("strategies only choose from the moves engine just reported as legal");
-            decision += 1;
+            let verdict = evaluate_pass(
+                pass.round,
+                pass.seat,
+                strategies,
+                config,
+                pass.round_deck,
+                seed,
+                options,
+            )
+            .expect("a voluntary pass has a legal play");
+            tally.useful += u64::from(verdict.useful);
+            tally.gains.push(verdict.gain);
         }
-
-        let finishing_order = round.finishing_order().to_vec();
-        let roles = assign_roles(&finishing_order, config.player_count)
-            .expect("finishing_order is always a valid permutation for a supported player count");
-        previous_arschloch = finishing_order.last().copied();
-        role_history.push(roles.clone());
-        previous_roles = Some(roles);
-    }
-
-    let result = MatchResult {
-        player_count: config.player_count,
-        strategy_names: strategies.iter().map(|s| s.name().to_string()).collect(),
-        role_history,
-        trick_count: counters.trick_count,
-        pass_counts: counters.pass_counts,
-        voluntary_pass_counts: counters.voluntary_pass_counts,
-        first_hand_features,
-    };
+    });
     (result, analysis)
 }
 

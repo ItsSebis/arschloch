@@ -1,4 +1,4 @@
-//! The summary sections added in Phase 12, printed after the original
+//! The extended summary sections, printed after the original
 //! summary (`summary::render_summary`, whose text is unchanged): average
 //! rank, mean score and strength rating per strategy, the position bias per
 //! seat and, when a skill score was asked for, the luck-adjusted scores.
@@ -293,7 +293,7 @@ fn useful_pass_section(
     )
 }
 
-/// The Phase 12 sections, to be printed straight after the original
+/// The extended sections, to be printed straight after the original
 /// summary. Pure, so it can be unit-tested without capturing stdout.
 #[must_use]
 pub fn render_extended_summary(

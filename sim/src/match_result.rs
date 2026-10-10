@@ -15,8 +15,8 @@ pub struct MatchResult {
     /// whole match.
     pub pass_counts: Vec<u32>,
     /// One entry per seat: how many of that seat's passes were voluntary
-    /// (a `Move::Play` was also legal — see docs/ROADMAP.md, Phase 4,
-    /// "Strategy diversification").
+    /// (a `Move::Play` was also legal — see "Strategy diversification" in
+    /// docs/ROADMAP.md).
     pub voluntary_pass_counts: Vec<u32>,
     /// Round-1 hand features per seat, after the deal and before the
     /// exchange; only present when `RunOptions::record_deal_features` was set.

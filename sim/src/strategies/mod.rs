@@ -7,7 +7,7 @@ mod lowest_legal;
 mod neat_player;
 mod random_legal;
 
-use engine::{Card, DuplicateRule};
+use engine::{Card, DuplicateRule, Move};
 
 pub use adaptive::{Adaptive, AdaptiveConfig, DenialMode};
 pub use card_counter::CardCounter;
@@ -31,15 +31,21 @@ pub(crate) fn highest_unseen(unseen: &[Card], duplicate_rule: DuplicateRule) -> 
         .max_by(|a, b| a.compare(b, duplicate_rule))
 }
 
-/// The naive "give up your highest `count` cards" behavior from Phase 1
-/// (`engine::exchange`'s old default), reused by strategies that have no
-/// stronger opinion about which cards to give up.
-pub(crate) fn take_highest_naive(
-    hand: &[Card],
-    count: usize,
+/// The lowest play among `moves`: fewest cards first, then the lowest top
+/// card; the first of equals. `None` without a play.
+pub(crate) fn lowest_play<'a>(
+    moves: impl IntoIterator<Item = &'a Move>,
     duplicate_rule: DuplicateRule,
-) -> Vec<Card> {
-    let mut sorted = hand.to_vec();
-    sorted.sort_by(|a, b| a.compare(b, duplicate_rule));
-    sorted.split_off(sorted.len() - count)
+) -> Option<&'a Move> {
+    moves
+        .into_iter()
+        .filter_map(|mv| match mv {
+            Move::Play(combo) => Some((combo.size(), combo.top_card(duplicate_rule), mv)),
+            Move::Pass => None,
+        })
+        .min_by(|a, b| {
+            a.0.cmp(&b.0)
+                .then_with(|| a.1.compare(&b.1, duplicate_rule))
+        })
+        .map(|(_, _, mv)| mv)
 }
