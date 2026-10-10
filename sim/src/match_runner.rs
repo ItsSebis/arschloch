@@ -140,12 +140,13 @@ pub fn play_out(
     counters: &mut PlayCounters,
 ) {
     let mut tracker = PassTracker::new(usize::from(config.player_count), config.duplicate_rule);
+    let mut legal_moves = Vec::new();
     while !round.is_complete() {
         let seat = round.seat_to_move().expect("round is not complete");
         if round.current_combo().is_none() {
             counters.trick_count += 1;
         }
-        let legal_moves = round.legal_moves();
+        round.legal_moves_into(&mut legal_moves);
 
         let context = turn_context_for(round, seat, config.player_count, round_deck, &mut tracker);
 

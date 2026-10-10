@@ -648,7 +648,7 @@ impl Session {
         let round = self.round.as_mut().expect("a round is in progress");
         let had_combo = round.current_combo().is_some();
         let finished_before = round.finishing_order().len();
-        round.submit_move(seat, mv.clone())?;
+        round.submit_move(seat, *mv)?;
         match mv {
             Move::Pass => self.events.push(GameEvent::Pass { seat }),
             Move::Play(combo) => {

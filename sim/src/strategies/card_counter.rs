@@ -82,7 +82,7 @@ impl Strategy for CardCounter {
                     a.0.cmp(&b.0)
                         .then_with(|| a.1.compare(&b.1, duplicate_rule))
                 })
-                .map(|&(_, _, _, mv)| mv.clone())
+                .map(|&(_, _, _, mv)| *mv)
         };
 
         let non_precious: Vec<_> = plays.iter().copied().filter(|&(_, _, p, _)| !p).collect();

@@ -107,7 +107,7 @@ impl NeatStrategy {
                 let features = summary.features(candidate);
                 let raw_score = self.network.score(&features, &mut scratch);
                 ScoredCandidate {
-                    candidate: candidate.clone(),
+                    candidate: *candidate,
                     features,
                     raw_score,
                     activation: raw_score.tanh(),
@@ -149,9 +149,9 @@ impl Strategy for NeatStrategy {
                 best = Some((candidate, score));
             }
         }
-        best.expect("a seat to move always has at least one legal move")
+        *best
+            .expect("a seat to move always has at least one legal move")
             .0
-            .clone()
     }
 
     fn choose_exchange_cards(

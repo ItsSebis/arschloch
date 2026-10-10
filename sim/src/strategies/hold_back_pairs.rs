@@ -58,13 +58,12 @@ impl Strategy for HoldBackPairs {
             .min_by(|a, b| a.compare(b, duplicate_rule));
 
         match safe_top_card {
-            Some(card) => legal_moves
+            Some(card) => *legal_moves
                 .iter()
                 .find(
                     |mv| matches!(mv, Move::Play(combo) if combo.top_card(duplicate_rule) == card),
                 )
-                .expect("safe_top_card was derived from a Play move in legal_moves")
-                .clone(),
+                .expect("safe_top_card was derived from a Play move in legal_moves"),
             None => Move::Pass,
         }
     }

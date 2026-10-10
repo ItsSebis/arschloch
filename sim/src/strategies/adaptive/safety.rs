@@ -57,7 +57,7 @@ pub(super) fn cheapest_universally_safe_play(
             a.0.cmp(&b.0)
                 .then_with(|| a.1.compare(&b.1, duplicate_rule))
         })
-        .map(|(_, _, mv)| mv.clone())
+        .map(|(_, _, mv)| *mv)
 }
 
 #[cfg(test)]

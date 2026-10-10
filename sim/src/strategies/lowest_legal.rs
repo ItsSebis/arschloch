@@ -30,7 +30,7 @@ impl Strategy for LowestLegal {
                 a.0.cmp(&b.0)
                     .then_with(|| a.1.compare(&b.1, duplicate_rule))
             })
-            .map_or(Move::Pass, |(_, _, mv)| mv.clone())
+            .map_or(Move::Pass, |(_, _, mv)| *mv)
     }
 
     fn choose_exchange_cards(

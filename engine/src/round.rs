@@ -7,7 +7,7 @@ use crate::trick::{PassRule, Trick};
 use crate::SeatId;
 
 /// A move a seat can submit on its turn.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Move {
     Play(Combo),
     Pass,
@@ -207,6 +207,22 @@ impl Round {
         )
     }
 
+    /// Like [`Round::legal_moves`], but clears `out` and fills it, so a
+    /// caller that enumerates moves every turn can reuse one buffer and
+    /// allocate nothing.
+    pub fn legal_moves_into(&self, out: &mut Vec<Move>) {
+        let Some(seat) = self.seat_to_move() else {
+            out.clear();
+            return;
+        };
+        crate::legal_moves::legal_moves_into(
+            &self.hands[usize::from(seat)],
+            self.current_combo.as_ref(),
+            self.duplicate_rule,
+            out,
+        );
+    }
+
     /// Submits `seat`'s move. On success, the round's state has already
     /// advanced (hand updated, trick/finishing-order progressed as
     /// needed). On failure, the round's state is unchanged.
@@ -250,13 +266,14 @@ impl Round {
     }
 
     fn validate_play(&self, seat: SeatId, combo: &Combo) -> Result<(), MoveError> {
-        let mut remaining_hand = self.hands[usize::from(seat)].clone();
-        for card in combo.cards() {
-            match remaining_hand.iter().position(|c| c == card) {
-                Some(index) => {
-                    remaining_hand.remove(index);
-                }
-                None => return Err(MoveError::CardNotInHand(*card)),
+        // Each card of the combo needs its own copy in hand: the i-th
+        // occurrence of a card in the combo needs at least i copies held.
+        let hand = &self.hands[usize::from(seat)];
+        let cards = combo.cards();
+        for (i, card) in cards.iter().enumerate() {
+            let wanted = cards[..=i].iter().filter(|c| *c == card).count();
+            if hand.iter().filter(|c| *c == card).count() < wanted {
+                return Err(MoveError::CardNotInHand(*card));
             }
         }
         if let Some(current) = &self.current_combo {
@@ -277,7 +294,7 @@ impl Round {
             hand.remove(position);
         }
         let just_emptied = hand.is_empty();
-        self.play_history.push((seat, combo.clone()));
+        self.play_history.push((seat, combo));
         self.current_combo = Some(combo);
 
         if just_emptied {
@@ -287,8 +304,8 @@ impl Round {
             }
         }
 
-        let active = self.active_mask();
-        if let Some(new_leader) = self.trick.record_play(seat, &active) {
+        let (active, count) = self.active_mask();
+        if let Some(new_leader) = self.trick.record_play(seat, &active[..count]) {
             self.current_combo = None;
             self.trick = Trick::new(new_leader, self.pass_rule);
         }
@@ -297,10 +314,10 @@ impl Round {
     fn apply_pass(&mut self, seat: SeatId) {
         if let Some(combo) = &self.current_combo {
             self.pass_history
-                .push((seat, combo.clone(), self.play_history.len()));
+                .push((seat, *combo, self.play_history.len()));
         }
-        let active = self.active_mask();
-        if let Some(new_leader) = self.trick.record_pass(seat, &active) {
+        let (active, count) = self.active_mask();
+        if let Some(new_leader) = self.trick.record_pass(seat, &active[..count]) {
             self.current_combo = None;
             self.trick = Trick::new(new_leader, self.pass_rule);
         }
@@ -326,8 +343,14 @@ impl Round {
         }
     }
 
-    fn active_mask(&self) -> Vec<bool> {
-        self.hands.iter().map(|h| !h.is_empty()).collect()
+    /// Which seats still hold cards, in a fixed array (a table has at most
+    /// 6 seats) with the number of seats in use.
+    fn active_mask(&self) -> ([bool; 6], usize) {
+        let mut mask = [false; 6];
+        for (slot, hand) in mask.iter_mut().zip(&self.hands) {
+            *slot = !hand.is_empty();
+        }
+        (mask, self.hands.len())
     }
 }
 
@@ -566,22 +589,18 @@ mod tests {
         assert_eq!(round.play_history(), &[]);
 
         let first_play = combo(vec![card(Rank::Eight, Suit::Clubs)]);
-        round
-            .submit_move(0, Move::Play(first_play.clone()))
-            .unwrap();
-        assert_eq!(round.play_history(), &[(0, first_play.clone())]);
+        round.submit_move(0, Move::Play(first_play)).unwrap();
+        assert_eq!(round.play_history(), &[(0, first_play)]);
 
         round.submit_move(1, Move::Pass).unwrap();
         assert_eq!(
             round.play_history(),
-            &[(0, first_play.clone())],
+            &[(0, first_play)],
             "a pass must not appear in play_history"
         );
 
         let second_play = combo(vec![card(Rank::Nine, Suit::Clubs)]);
-        round
-            .submit_move(2, Move::Play(second_play.clone()))
-            .unwrap();
+        round.submit_move(2, Move::Play(second_play)).unwrap();
         assert_eq!(round.play_history(), &[(0, first_play), (2, second_play)]);
     }
 
@@ -614,18 +633,16 @@ mod tests {
         assert_eq!(round.pass_history(), &[]);
 
         let lead = combo(vec![card(Rank::Eight, Suit::Clubs)]);
-        round.submit_move(0, Move::Play(lead.clone())).unwrap(); // play_history now len 1
+        round.submit_move(0, Move::Play(lead)).unwrap(); // play_history now len 1
         round.submit_move(1, Move::Pass).unwrap();
-        assert_eq!(round.pass_history(), &[(1, lead.clone(), 1)]);
+        assert_eq!(round.pass_history(), &[(1, lead, 1)]);
 
         let beat = combo(vec![card(Rank::Nine, Suit::Clubs)]);
         round.submit_move(2, Move::Play(beat)).unwrap(); // play_history now len 2
                                                          // Trick resolves (both non-leaders acted); seat 0 leads again with
                                                          // its remaining card.
         let second_lead = combo(vec![card(Rank::Ten, Suit::Clubs)]);
-        round
-            .submit_move(0, Move::Play(second_lead.clone()))
-            .unwrap(); // len 3
+        round.submit_move(0, Move::Play(second_lead)).unwrap(); // len 3
         round.submit_move(1, Move::Pass).unwrap();
         assert_eq!(
             round.pass_history(),
@@ -810,7 +827,7 @@ mod tests {
                             let mv = if pass {
                                 Move::Pass
                             } else {
-                                moves[rng.random_range(0..moves.len())].clone()
+                                moves[rng.random_range(0..moves.len())]
                             };
                             if mv == Move::Pass {
                                 passed_in_trick.push(seat);
@@ -842,7 +859,7 @@ mod tests {
             for _ in 0..6 {
                 let seat = original.seat_to_move().unwrap();
                 let moves = original.legal_moves();
-                let mv = moves[rng.random_range(0..moves.len())].clone();
+                let mv = moves[rng.random_range(0..moves.len())];
                 original.submit_move(seat, mv).unwrap();
             }
             let mut copy = original.clone();
@@ -850,8 +867,8 @@ mod tests {
                 assert_eq!(copy.seat_to_move(), Some(seat));
                 let moves = original.legal_moves();
                 assert_eq!(moves, copy.legal_moves());
-                let mv = moves[rng.random_range(0..moves.len())].clone();
-                original.submit_move(seat, mv.clone()).unwrap();
+                let mv = moves[rng.random_range(0..moves.len())];
+                original.submit_move(seat, mv).unwrap();
                 copy.submit_move(seat, mv).unwrap();
             }
             assert!(copy.is_complete());

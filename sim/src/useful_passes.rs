@@ -166,10 +166,7 @@ fn extreme_plays(legal_moves: &[Move], rule: DuplicateRule) -> Option<(Move, Mov
         .collect();
     let weakest = plays.iter().min_by(|a, b| top_order(a, b, rule))?;
     let strongest = plays.iter().max_by(|a, b| top_order(a, b, rule))?;
-    Some((
-        Move::Play((*weakest).clone()),
-        Move::Play((*strongest).clone()),
-    ))
+    Some((Move::Play(*(*weakest)), Move::Play(*(*strongest))))
 }
 
 /// What a rollout needs besides the round: strategies, config, deck.
@@ -194,7 +191,7 @@ fn mean_place_after(
     for k in 0..rollouts {
         let mut rollout = round.clone();
         rollout
-            .submit_move(seat, mv.clone())
+            .submit_move(seat, *mv)
             .expect("the move comes from the engine's legal moves");
         let mut rng = rand::rngs::StdRng::seed_from_u64(mix(mix(base_seed) ^ k as u64));
         let mut scratch = PlayCounters::new(env.config.player_count);
@@ -350,12 +347,13 @@ pub fn replay_match(
         // `play_out`'s loop, plus the analysis hook on voluntary passes.
         let mut tracker = PassTracker::new(usize::from(config.player_count), config.duplicate_rule);
         let mut decision = 0usize;
+        let mut legal_moves = Vec::new();
         while !round.is_complete() {
             let seat = round.seat_to_move().expect("round is not complete");
             if round.current_combo().is_none() {
                 counters.trick_count += 1;
             }
-            let legal_moves = round.legal_moves();
+            round.legal_moves_into(&mut legal_moves);
             let context =
                 turn_context_for(&round, seat, config.player_count, &round_deck, &mut tracker);
             let chosen = strategies[usize::from(seat)].choose_play(

@@ -923,9 +923,20 @@ fn generation_events_carry_stage_timings_and_old_events_still_load() {
         ];
         assert!(stages.iter().all(|s| s.is_finite() && *s >= 0.0), "{t:?}");
         assert!(t.training_evaluation > 0.0);
+        // The mixed, per-opponent and hall-of-fame re-evaluations run concurrently, so only the
+        // longest of them adds to the generation's wall time.
+        let sequential = t.training_evaluation
+            + t.champion_selection
+            + t.speciation_and_reproduction
+            + t.confirmation
+            + t.decision_sample
+            + t.checkpoint_and_files
+            + t.reevaluation_mixed
+                .max(t.reevaluation_per_opponent)
+                .max(t.hall_of_fame);
         assert!(
-            stages.iter().sum::<f64>() <= event.generation_secs + 1e-6,
-            "the stages run one after the other: {t:?} vs {}",
+            sequential <= event.generation_secs + 1e-3,
+            "sequential stages plus the longest concurrent one fit in the generation: {t:?} vs {}",
             event.generation_secs
         );
     }

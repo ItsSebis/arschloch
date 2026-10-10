@@ -3,36 +3,87 @@
 //! phase (see docs/RULES.md, "Deferred / Out-of-scope Rules").
 
 use std::cmp::Ordering;
+use std::fmt;
 
-use crate::card::{Card, DuplicateRule};
+use crate::card::{Card, DuplicateRule, Rank, Suit};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// The most cards one combo can hold: the double deck has eight cards of
+/// each rank (two decks x four suits), the most any supported table has.
+pub const MAX_COMBO_SIZE: usize = 8;
+
+/// Unused slots of the inline array hold this card, so a `Combo` is always
+/// the same bytes for the same cards.
+const FILLER: Card = Card {
+    rank: Rank::Two,
+    suit: Suit::Diamonds,
+    deal_index: 0,
+};
+
+/// Stored inline (no heap allocation) and therefore `Copy`.
+#[derive(Clone, Copy)]
 pub struct Combo {
-    cards: Vec<Card>,
+    cards: [Card; MAX_COMBO_SIZE],
+    len: u8,
+}
+
+impl PartialEq for Combo {
+    fn eq(&self, other: &Self) -> bool {
+        self.cards() == other.cards()
+    }
+}
+
+impl Eq for Combo {}
+
+impl fmt::Debug for Combo {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Combo")
+            .field("cards", &self.cards())
+            .finish()
+    }
 }
 
 impl Combo {
     /// Builds a combo from cards that must all share the same rank and
-    /// must be non-empty. Returns `None` otherwise.
+    /// must be non-empty. Returns `None` otherwise, and also for more than
+    /// [`MAX_COMBO_SIZE`] cards (more cards of one rank than any supported
+    /// deck holds, so never a legal play).
     #[must_use]
+    #[allow(clippy::needless_pass_by_value)] // public signature kept; see `from_slice`
     pub fn new(cards: Vec<Card>) -> Option<Self> {
+        Self::from_slice(&cards)
+    }
+
+    /// Like [`Combo::new`], from a slice.
+    #[must_use]
+    pub fn from_slice(cards: &[Card]) -> Option<Self> {
         let first = cards.first()?;
-        if cards.iter().all(|c| c.rank == first.rank) {
-            Some(Self { cards })
-        } else {
-            None
+        if cards.len() > MAX_COMBO_SIZE || !cards.iter().all(|c| c.rank == first.rank) {
+            return None;
+        }
+        Some(Self::from_same_rank(cards))
+    }
+
+    /// `cards` must be non-empty, of one rank, and at most `MAX_COMBO_SIZE`.
+    pub(crate) fn from_same_rank(cards: &[Card]) -> Self {
+        debug_assert!(!cards.is_empty() && cards.len() <= MAX_COMBO_SIZE);
+        let mut array = [FILLER; MAX_COMBO_SIZE];
+        array[..cards.len()].copy_from_slice(cards);
+        Self {
+            cards: array,
+            #[allow(clippy::cast_possible_truncation)] // at most 8
+            len: cards.len() as u8,
         }
     }
 
     #[must_use]
     pub fn size(&self) -> usize {
-        self.cards.len()
+        usize::from(self.len)
     }
 
     /// The cards making up this combo, in the order given to `Combo::new`.
     #[must_use]
     pub fn cards(&self) -> &[Card] {
-        &self.cards
+        &self.cards[..self.size()]
     }
 
     /// The representative card used for comparison: since every card in
@@ -42,12 +93,12 @@ impl Combo {
     /// # Panics
     ///
     /// Never in practice: `Combo::new` only ever constructs a `Combo`
-    /// from a non-empty `Vec<Card>`, so there's always at least one card
+    /// from a non-empty card list, so there's always at least one card
     /// to compare.
     #[must_use]
     pub fn top_card(&self, duplicate_rule: DuplicateRule) -> Card {
         *self
-            .cards
+            .cards()
             .iter()
             .max_by(|a, b| a.compare(b, duplicate_rule))
             .expect("Combo is always constructed with at least one card")

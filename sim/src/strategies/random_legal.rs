@@ -24,7 +24,7 @@ impl Strategy for RandomLegal {
     ) -> Move {
         legal_moves
             .choose(rng)
-            .cloned()
+            .copied()
             .expect("legal_moves is never empty when a seat is actually to move")
     }
 

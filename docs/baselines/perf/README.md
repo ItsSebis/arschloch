@@ -77,6 +77,46 @@ rounds in 4.63s (1.7k rounds/s, two neat seats), 4x card-counter 24,000
 rounds in 3.25s (7.4k rounds/s), 4x lowest-legal 24,000 rounds in 2.79s
 (8.6k rounds/s).
 
+### After step 4 (engine hot path)
+
+Measured in one session (before and after built and run back to back, same
+laptop, same `powersave` governor caveat: compare only within this table).
+Checksums are identical on every row and `check12.sh` prints REFERENCE
+IDENTICAL. What changed: `Combo` is an inline `[Card; 8]` plus a length
+(`Copy`, no heap), `Round::active_mask` and `validate_play` no longer
+allocate or clone the hand, and `legal_moves` is one pass over a stack copy of
+the hand sorted by `Card::compare` (rank groups are contiguous slices, the
+lowest and highest subsets are windows, the lowest beating subset is an index
+search), written into a reusable buffer (`Round::legal_moves_into`, used by
+`play_out` and the `useful_passes` loop). The old implementation is kept as
+the test-only oracle `legal_moves_reference`, compared with the new one on
+more than 20,000 random hands and tables, order included.
+
+| workload (1 thread) | before | after | checksum (both) |
+|---------------------|-------:|------:|-----------------|
+| 4x lowest-legal | 2.86 s | 1.13 s | `e686c2a079c1b476` |
+| 4x neat | 6.26 s | 3.83 s | `f25c9146e47d417f` |
+| mixed (1 neat + 3 classic) | 3.97 s | 1.97 s | `ce79c92cd31c0ecc` |
+| 5p double deck, 2 neat + adaptive + 2 lowest-legal, 1000 matches | 4.62 s | 2.57 s | `9fe3bd9172cca244` |
+| 4x card-counter | 3.22 s | 1.40 s | `1ded4d66fcea8ac8` |
+| 4x endgame-denial | 2.94 s | 1.16 s | `11aab2a4d00bfd38` |
+| 4x adaptive:reading,tempo,bully | 2.67 s | 1.16 s | `2c54b4c39e8d7a04` |
+| all threads: lowest-legal / neat / mixed | 0.68 / 1.35 / 0.87 s | 0.27 / 0.87 / 0.46 s | same |
+| train, pop 60 x 4 gen | 12.16 s | 5.68 s | `85d7c401da1bb195` |
+
+`Round::legal_moves` in the micro-benchmark (ns per call, the wrapper that
+still allocates its one result `Vec`):
+
+| setup | before | after |
+|-------|-------:|------:|
+| single deck, 4 players, leading | 1499 | 265 |
+| single deck, 4 players, following | 968 | 215 |
+| double deck, 5 players, leading | 2762 | 539 |
+| double deck, 5 players, following | 1380 | 407 |
+
+`TurnSummary::new` is unchanged work (1.1-1.7 us), now the largest single
+item of a turn for the classic strategies.
+
 ### Training thread scaling (`docs/baselines/perf/scaling.sh`)
 
 `THREADS_LIST="1 2 4 8" docs/baselines/perf/scaling.sh`: population 150, 100

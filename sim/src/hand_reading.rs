@@ -262,7 +262,7 @@ mod tests {
                         let chosen = if pass {
                             Move::Pass
                         } else {
-                            moves[rng.random_range(0..moves.len())].clone()
+                            moves[rng.random_range(0..moves.len())]
                         };
                         round.submit_move(seat, chosen).unwrap();
                     }
@@ -325,7 +325,7 @@ mod tests {
         let nine = combo(vec![card(Rank::Nine, Suit::Diamonds)]);
         let king = combo(vec![card(Rank::King, Suit::Clubs)]);
         let pass_history = vec![(0u8, nine, 0)]; // plays_before: 0
-        let play_history_refuting = vec![(0u8, king.clone())]; // this play is index 0, so plays_before(0) <= 0 means it happened AFTER
+        let play_history_refuting = vec![(0u8, king)]; // this play is index 0, so plays_before(0) <= 0 means it happened AFTER
         let ceilings = read_pass_ceilings(
             2,
             &play_history_refuting,
@@ -344,7 +344,7 @@ mod tests {
         let king = combo(vec![card(Rank::King, Suit::Clubs)]);
         let nine = combo(vec![card(Rank::Nine, Suit::Diamonds)]);
         let play_history = vec![(0u8, king)]; // index 0, happened before
-        let pass_history = vec![(0u8, nine.clone(), 1)]; // plays_before: 1 (i.e. after that one play)
+        let pass_history = vec![(0u8, nine, 1)]; // plays_before: 1 (i.e. after that one play)
         let ceilings = read_pass_ceilings(
             2,
             &play_history,
@@ -365,7 +365,7 @@ mod tests {
             card(Rank::Seven, Suit::Diamonds),
         ]);
         let king_single = combo(vec![card(Rank::King, Suit::Clubs)]);
-        let pass_history = vec![(0u8, pair.clone(), 0)]; // pass at size 2, plays_before: 0
+        let pass_history = vec![(0u8, pair, 0)]; // pass at size 2, plays_before: 0
         let play_history = vec![(0u8, king_single)]; // size-1 play, index 0, happened after
         let ceilings = read_pass_ceilings(
             2,
