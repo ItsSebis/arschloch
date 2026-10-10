@@ -1,11 +1,10 @@
 //! Uniformly samples among every legal move, including `Pass` — this is
-//! the strategy that produces the "voluntary pass" signal (see
-//! docs/ROADMAP.md, Phase 4).
+//! the strategy that produces the "voluntary pass" signal.
 
 use engine::{Card, DuplicateRule, Move};
 use rand::seq::{IndexedRandom, SliceRandom};
 
-use crate::strategy::{Strategy, TurnContext};
+use crate::strategy::{ContextNeeds, Strategy, TurnContext};
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct RandomLegal;
@@ -24,8 +23,12 @@ impl Strategy for RandomLegal {
     ) -> Move {
         legal_moves
             .choose(rng)
-            .cloned()
+            .copied()
             .expect("legal_moves is never empty when a seat is actually to move")
+    }
+
+    fn needs(&self) -> ContextNeeds {
+        ContextNeeds::NONE
     }
 
     fn choose_exchange_cards(

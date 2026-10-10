@@ -1,6 +1,5 @@
 //! A pure endgame-denial strategy: every decision is driven by
-//! opponents' hand sizes, never by card counting (docs/ROADMAP.md,
-//! Phase 6).
+//! opponents' hand sizes, never by card counting.
 //!
 //! `CLOSE_TO_FINISHING` (2 cards) is the "about to finish" threshold —
 //! see docs/RULES.md's per-player-count deal sizes (as low as ~8-9
@@ -26,7 +25,7 @@
 use engine::{Card, DuplicateRule, Move};
 
 use crate::strategies::{GreedyHighest, LowestLegal};
-use crate::strategy::{Strategy, TurnContext};
+use crate::strategy::{ContextNeeds, Strategy, TurnContext};
 
 /// A still-active opponent at or below this many cards is "close to
 /// finishing" — see the module doc comment for the threshold
@@ -59,6 +58,10 @@ impl Strategy for EndgameDenial {
         }
     }
 
+    fn needs(&self) -> ContextNeeds {
+        ContextNeeds::OPPONENTS
+    }
+
     fn choose_exchange_cards(
         &self,
         hand: &[Card],
@@ -66,7 +69,7 @@ impl Strategy for EndgameDenial {
         duplicate_rule: DuplicateRule,
         _rng: &mut dyn rand::Rng,
     ) -> Vec<Card> {
-        crate::strategies::take_highest_naive(hand, count, duplicate_rule)
+        engine::take_highest(hand, count, duplicate_rule)
     }
 }
 

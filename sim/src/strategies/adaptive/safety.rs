@@ -1,6 +1,6 @@
 //! The shared proof both `denial` and `tempo` build on: which legal
 //! play, if any, is provably unbeatable by every still-active opponent
-//! right now (docs/ROADMAP.md, Phase 7 and Phase 8).
+//! right now.
 //!
 //! The two modifiers ask this for different reasons — `denial` to deny
 //! an opponent close to finishing, `tempo` to seize the next trick's
@@ -21,6 +21,7 @@ use std::cmp::Ordering;
 
 use engine::{Card, DuplicateRule, Move};
 
+use crate::strategies::{highest_unseen, lowest_play};
 use crate::strategy::TurnContext;
 
 /// The cheapest legal play that's provably unbeatable by every
@@ -33,31 +34,19 @@ pub(super) fn cheapest_universally_safe_play(
     duplicate_rule: DuplicateRule,
     context: &TurnContext<'_>,
 ) -> Option<Move> {
-    let active_opponents: Vec<_> = context.opponents.iter().filter(|o| o.active).collect();
-    let highest_unseen = context
-        .unseen_cards
-        .iter()
-        .copied()
-        .max_by(|a, b| a.compare(b, duplicate_rule));
+    let highest_unseen = highest_unseen(&context.unseen_cards, duplicate_rule);
     let locks_out_every_opponent = |size: usize, top: Card| {
         highest_unseen.is_none_or(|h| top.compare(&h, duplicate_rule) != Ordering::Less)
-            || active_opponents.iter().all(|o| {
+            || context.opponents.iter().filter(|o| o.active).all(|o| {
                 size > o.hand_size || o.pass_ceilings.cannot_beat(size, top, duplicate_rule)
             })
     };
 
-    legal_moves
-        .iter()
-        .filter_map(|mv| match mv {
-            Move::Play(combo) => Some((combo.size(), combo.top_card(duplicate_rule), mv)),
-            Move::Pass => None,
-        })
-        .filter(|&(size, top, _)| locks_out_every_opponent(size, top))
-        .min_by(|a, b| {
-            a.0.cmp(&b.0)
-                .then_with(|| a.1.compare(&b.1, duplicate_rule))
-        })
-        .map(|(_, _, mv)| mv.clone())
+    let locking = legal_moves.iter().filter(|mv| match mv {
+        Move::Play(combo) => locks_out_every_opponent(combo.size(), combo.top_card(duplicate_rule)),
+        Move::Pass => false,
+    });
+    lowest_play(locking, duplicate_rule).copied()
 }
 
 #[cfg(test)]

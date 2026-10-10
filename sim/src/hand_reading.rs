@@ -1,4 +1,4 @@
-//! Pass-based hand reading (docs/ROADMAP.md, Phase 7).
+//! Pass-based hand reading.
 //!
 //! A seat that passed against a size-`s` combo topped by `c` held no
 //! size-`s` combo topped above `c` at that moment; hands only shrink
@@ -31,24 +31,47 @@ pub const MAX_COMBO_SIZE: usize = 8;
 
 /// Per-size "can't beat" facts about one seat, derived from its
 /// unrefuted passes. `by_size[s - 1]` is the lowest top card passed
-/// against at exactly size `s`.
+/// against at exactly size `s`; `closed[s - 1]` is the lowest of
+/// `by_size[..s]` (upward closure), computed once when the ceilings are
+/// built so `ceiling` is a lookup.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct PassCeilings {
     by_size: [Option<Card>; MAX_COMBO_SIZE],
+    closed: [Option<Card>; MAX_COMBO_SIZE],
 }
 
 impl PassCeilings {
+    /// Ceilings from per-size values, with the running minimum under
+    /// `duplicate_rule` filled in.
+    fn from_by_size(
+        by_size: [Option<Card>; MAX_COMBO_SIZE],
+        duplicate_rule: DuplicateRule,
+    ) -> Self {
+        let mut closed = by_size;
+        for size in 1..MAX_COMBO_SIZE {
+            closed[size] = match (closed[size - 1], closed[size]) {
+                (Some(lower), Some(this)) => {
+                    Some(if this.compare(&lower, duplicate_rule) == Ordering::Less {
+                        this
+                    } else {
+                        lower
+                    })
+                }
+                (lower, this) => lower.or(this),
+            };
+        }
+        Self { by_size, closed }
+    }
+
     /// The lowest top card this seat is known unable to beat at
     /// `size`, applying upward closure. `None`: nothing is known at
     /// this size.
     #[must_use]
-    pub fn ceiling(&self, size: usize, duplicate_rule: DuplicateRule) -> Option<Card> {
-        self.by_size
-            .iter()
-            .take(size)
-            .flatten()
-            .copied()
-            .min_by(|a, b| a.compare(b, duplicate_rule))
+    pub fn ceiling(&self, size: usize, _duplicate_rule: DuplicateRule) -> Option<Card> {
+        match size {
+            0 => None,
+            _ => self.closed[size.min(MAX_COMBO_SIZE) - 1],
+        }
     }
 
     /// Whether this seat is known unable to beat a size-`size` combo
@@ -92,7 +115,7 @@ pub fn read_pass_ceilings(
     pass_history: &[(SeatId, Combo, usize)],
     duplicate_rule: DuplicateRule,
 ) -> Vec<PassCeilings> {
-    let mut ceilings = vec![PassCeilings::default(); player_count];
+    let mut by_size = vec![[None::<Card>; MAX_COMBO_SIZE]; player_count];
     let mut highest_later = vec![[None::<Card>; MAX_COMBO_SIZE]; player_count];
     let mut play_index = play_history.len();
 
@@ -114,13 +137,16 @@ pub fn read_pass_ceilings(
         let refuted = highest_later[seat_idx][size - 1]
             .is_some_and(|h| h.compare(&passed_top, duplicate_rule) == Ordering::Greater);
         if !refuted {
-            let slot = &mut ceilings[seat_idx].by_size[size - 1];
+            let slot = &mut by_size[seat_idx][size - 1];
             if slot.is_none_or(|c| passed_top.compare(&c, duplicate_rule) == Ordering::Less) {
                 *slot = Some(passed_top);
             }
         }
     }
-    ceilings
+    by_size
+        .into_iter()
+        .map(|per_size| PassCeilings::from_by_size(per_size, duplicate_rule))
+        .collect()
 }
 
 /// `read_pass_ceilings`, computed incrementally: the match loop reads
@@ -191,14 +217,14 @@ impl PassTracker {
 
     fn refresh(&mut self, seat: usize) {
         let rule = self.duplicate_rule;
-        let mut ceilings = PassCeilings::default();
+        let mut by_size = [None::<Card>; MAX_COMBO_SIZE];
         for &(size, top) in &self.open[seat] {
-            let slot = &mut ceilings.by_size[size - 1];
+            let slot = &mut by_size[size - 1];
             if slot.is_none_or(|c| top.compare(&c, rule) == Ordering::Less) {
                 *slot = Some(top);
             }
         }
-        self.ceilings[seat] = ceilings;
+        self.ceilings[seat] = PassCeilings::from_by_size(by_size, rule);
     }
 
     /// One `PassCeilings` per seat, as of the histories last `update`d.
@@ -262,13 +288,61 @@ mod tests {
                         let chosen = if pass {
                             Move::Pass
                         } else {
-                            moves[rng.random_range(0..moves.len())].clone()
+                            moves[rng.random_range(0..moves.len())]
                         };
                         round.submit_move(seat, chosen).unwrap();
                     }
                 }
             }
         }
+    }
+
+    /// The match loops only advance the tracker on turns whose strategy
+    /// reads pass ceilings (`ContextNeeds`): updating at random, sparse
+    /// moments (catching up on everything skipped) must give exactly the
+    /// reverse sweep's ceilings each time.
+    #[test]
+    fn a_tracker_that_skips_turns_and_catches_up_equals_the_reverse_sweep() {
+        use rand::RngExt;
+
+        use crate::test_support::for_each_state;
+
+        let mut tracker: Option<PassTracker> = None;
+        let mut checks = 0usize;
+        for_each_state(12, 8, |state, rng| {
+            let round = state.round;
+            if round.play_history().is_empty() && round.pass_history().is_empty() {
+                tracker = Some(PassTracker::new(usize::from(state.players), state.rule));
+            }
+            // Mostly skip; sometimes update after a long gap.
+            if rng.random_bool(0.1) {
+                let tracker = tracker.as_mut().unwrap();
+                tracker.update(round.play_history(), round.pass_history());
+                let expected = read_pass_ceilings(
+                    usize::from(state.players),
+                    round.play_history(),
+                    round.pass_history(),
+                    state.rule,
+                );
+                assert_eq!(tracker.ceilings(), &expected[..]);
+                // The precomputed upward closure equals the lowest of the
+                // per-size ceilings up to `size`.
+                for ceilings in &expected {
+                    for size in 0..=MAX_COMBO_SIZE + 1 {
+                        let lowest = ceilings
+                            .by_size
+                            .iter()
+                            .take(size)
+                            .flatten()
+                            .copied()
+                            .min_by(|a, b| a.compare(b, state.rule));
+                        assert_eq!(ceilings.ceiling(size, state.rule), lowest);
+                    }
+                }
+                checks += 1;
+            }
+        });
+        assert!(checks > 1000, "only {checks} checks");
     }
 
     #[test]
@@ -325,7 +399,7 @@ mod tests {
         let nine = combo(vec![card(Rank::Nine, Suit::Diamonds)]);
         let king = combo(vec![card(Rank::King, Suit::Clubs)]);
         let pass_history = vec![(0u8, nine, 0)]; // plays_before: 0
-        let play_history_refuting = vec![(0u8, king.clone())]; // this play is index 0, so plays_before(0) <= 0 means it happened AFTER
+        let play_history_refuting = vec![(0u8, king)]; // this play is index 0, so plays_before(0) <= 0 means it happened AFTER
         let ceilings = read_pass_ceilings(
             2,
             &play_history_refuting,
@@ -344,7 +418,7 @@ mod tests {
         let king = combo(vec![card(Rank::King, Suit::Clubs)]);
         let nine = combo(vec![card(Rank::Nine, Suit::Diamonds)]);
         let play_history = vec![(0u8, king)]; // index 0, happened before
-        let pass_history = vec![(0u8, nine.clone(), 1)]; // plays_before: 1 (i.e. after that one play)
+        let pass_history = vec![(0u8, nine, 1)]; // plays_before: 1 (i.e. after that one play)
         let ceilings = read_pass_ceilings(
             2,
             &play_history,
@@ -365,7 +439,7 @@ mod tests {
             card(Rank::Seven, Suit::Diamonds),
         ]);
         let king_single = combo(vec![card(Rank::King, Suit::Clubs)]);
-        let pass_history = vec![(0u8, pair.clone(), 0)]; // pass at size 2, plays_before: 0
+        let pass_history = vec![(0u8, pair, 0)]; // pass at size 2, plays_before: 0
         let play_history = vec![(0u8, king_single)]; // size-1 play, index 0, happened after
         let ceilings = read_pass_ceilings(
             2,

@@ -16,6 +16,8 @@ pub mod statistics;
 pub mod stats_catalog;
 pub mod strategies;
 pub mod strategy;
+#[cfg(test)]
+mod test_support;
 pub mod training;
 pub mod useful_passes;
 
@@ -36,4 +38,4 @@ pub use strategies::{
     GreedyHighest, HoldBackPairs, LowestLegal, NeatStrategy, RandomLegal, ScoredCandidate,
     TurnSummary, FEATURE_COUNT, FEATURE_NAMES, FEATURE_SET_VERSION,
 };
-pub use strategy::{OpponentHand, Strategy, TurnContext};
+pub use strategy::{ContextNeeds, OpponentHand, Strategy, TurnContext};

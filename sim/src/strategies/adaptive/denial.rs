@@ -11,7 +11,7 @@
 //! legal play cheaply, provably safe against the whole active field
 //! (see `safety::cheapest_universally_safe_play` for the proof)? Taking
 //! the *lowest* such play still denies the threat while spending
-//! less — the working theory (docs/ROADMAP.md, Phase 7) is that
+//! less — the working theory is that
 //! `EndgameDenial` loses to `LowestLegal` precisely because it spends
 //! high cards it doesn't need to. When following and the table combo
 //! is already provably safe against every active opponent, every legal

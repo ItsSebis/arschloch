@@ -86,7 +86,7 @@ fn main() -> anyhow::Result<()> {
         useful.as_ref(),
     )?;
 
-    // The original summary comes first and is unchanged; the Phase 12
+    // The original summary comes first and is unchanged; the extended
     // sections are appended after it.
     println!("{}", summary::render_summary(&args, &statistics));
     print!(

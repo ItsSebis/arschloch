@@ -5,7 +5,7 @@
 
 use engine::{Card, DuplicateRule, Move};
 
-use crate::strategy::{Strategy, TurnContext};
+use crate::strategy::{ContextNeeds, Strategy, TurnContext};
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct GreedyHighest;
@@ -32,7 +32,11 @@ impl Strategy for GreedyHighest {
                 a.0.cmp(&b.0)
                     .then_with(|| a.1.compare(&b.1, duplicate_rule))
             })
-            .map_or(Move::Pass, |(_, _, mv)| mv.clone())
+            .map_or(Move::Pass, |(_, _, mv)| *mv)
+    }
+
+    fn needs(&self) -> ContextNeeds {
+        ContextNeeds::NONE
     }
 
     fn choose_exchange_cards(
@@ -42,7 +46,7 @@ impl Strategy for GreedyHighest {
         duplicate_rule: DuplicateRule,
         _rng: &mut dyn rand::Rng,
     ) -> Vec<Card> {
-        crate::strategies::take_highest_naive(hand, count, duplicate_rule)
+        engine::take_highest(hand, count, duplicate_rule)
     }
 }
 
@@ -80,7 +84,7 @@ mod tests {
             ])
             .unwrap(),
         );
-        let legal = vec![pair.clone(), single(Rank::Ace, Suit::Clubs)];
+        let legal = vec![pair, single(Rank::Ace, Suit::Clubs)];
         let strategy = GreedyHighest;
         let chosen = strategy.choose_play(
             &legal,
