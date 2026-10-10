@@ -45,7 +45,7 @@ pub struct Opponent {
 
 /// Receives progress while a run executes. All methods default to doing
 /// nothing; implementors only override what they show. Called on the
-/// thread that called `Trainer::run`, between evaluation steps.
+/// thread that called `Trainer::run`, while the evaluation runs.
 pub trait TrainObserver {
     fn on_start(&mut self, _start: &RunStart) {}
     /// `done` of `total` genomes of the current generation evaluated.

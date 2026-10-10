@@ -128,8 +128,9 @@ pub struct Complexity {
 
 /// Wall-clock seconds spent in each stage of one generation (measured with
 /// `std::time::Instant`, so they differ from run to run and are not part
-/// of any determinism comparison, like `elapsed_secs`). The stages run one
-/// after the other and add up to almost all of `generation_secs`.
+/// of any determinism comparison, like `elapsed_secs`). The mixed,
+/// per-opponent and hall-of-fame re-evaluations run at the same time, so
+/// their times overlap; the other stages run one after the other.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
 pub struct StageTimings {
     /// Every genome played its training matches.

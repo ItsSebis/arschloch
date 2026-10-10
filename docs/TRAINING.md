@@ -93,8 +93,8 @@ independent of `--threads`.
 
 Each generation line in `events.jsonl` also has an optional `timings` object:
 the wall-clock seconds of every stage, to see where a slow run spends its
-time (it differs from run to run, like `elapsed_secs`, and is the only part of
-the event that is not reproducible). The stages are:
+time (it differs from run to run, like the other wall-clock fields
+`elapsed_secs`, `generation_secs` and `rounds_per_sec`). The stages are:
 `training_evaluation` (all genomes play their matches), `champion_selection`,
 `speciation_and_reproduction`, `reevaluation_mixed`,
 `reevaluation_per_opponent`, `hall_of_fame` (the champion against the hall,
