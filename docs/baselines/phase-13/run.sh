@@ -71,19 +71,18 @@ eval_arm() { # arm
   local arm=$1 files=() seed counts=4 deck=single
   for seed in $SEEDS; do files+=(--genome "$OUT/$arm/seed$seed/best.json"); done
   case $arm in S3) counts=3 ;; S5D) counts=5; deck=double ;; esac
-  local json=$OUT/$arm/eval.json
-  if [ -f "$json" ]; then echo "skip eval $arm (done)"; return; fi
+  if [ -f "$OUT/$arm/eval.json" ] && [ -f "$OUT/$arm/h2h.json" ]; then echo "skip eval $arm (done)"; return; fi
   echo "eval $arm"
-  if [ "$arm" = M1 ]; then
-    # one model, every setting
-    "$CLI" evaluate "${files[@]}" --opponent "neat:$CHAMPION" --player-counts 3,4,5,6 --decks single,double \
-      --matches "$EVAL_MATCHES" --rounds "$EVAL_ROUNDS" --seed "$EVAL_SEED" "${RULES[@]}" \
-      --threads "$THREADS" --json "$json" > "$OUT/$arm/eval.txt"
-  else
-    "$CLI" evaluate "${files[@]}" --opponent "neat:$CHAMPION" --player-count "$counts" --deck-variant "$deck" \
-      --matches "$EVAL_MATCHES" --rounds "$EVAL_ROUNDS" --seed "$EVAL_SEED" "${RULES[@]}" \
-      --threads "$THREADS" --json "$json" > "$OUT/$arm/eval.txt"
-  fi
+  local table=(--player-count "$counts" --deck-variant "$deck")
+  if [ "$arm" = M1 ]; then table=(--player-counts 3,4,5,6 --decks single,double); fi
+  # (1) the frozen default battery (hand-written strategies incl. ones training never saw) and its mixed row
+  "$CLI" evaluate "${files[@]}" "${table[@]}" \
+    --matches "$EVAL_MATCHES" --rounds "$EVAL_ROUNDS" --seed "$EVAL_SEED" "${RULES[@]}" \
+    --threads "$THREADS" --json "$OUT/$arm/eval.json" > "$OUT/$arm/eval.txt"
+  # (2) head-to-head against the committed neat-v2 champion (the strongest known opponent)
+  "$CLI" evaluate "${files[@]}" "${table[@]}" --opponent "neat:$CHAMPION" \
+    --matches "$EVAL_MATCHES" --rounds "$EVAL_ROUNDS" --seed "$EVAL_SEED" "${RULES[@]}" \
+    --threads "$THREADS" --json "$OUT/$arm/h2h.json" > "$OUT/$arm/h2h.txt"
 }
 
 mode=${1:?usage: run.sh train|eval|all ARM...}

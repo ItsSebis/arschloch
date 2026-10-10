@@ -94,6 +94,8 @@ def main():
         per_seed_mixed, per_seed_h2h, stalls, gaps, hidden = [], [], [], [], []
         ev = None
         evp = os.path.join(out, arm, "eval.json")
+        h2hp = os.path.join(out, arm, "h2h.json")
+        h2h_ev = eval_cells(h2hp) if os.path.exists(h2hp) else None
         if os.path.exists(evp):
             ev = eval_cells(evp)
         for s in seeds:
@@ -115,7 +117,11 @@ def main():
                 if key:
                     cells = ev[key]
                     mixed = next((c for n, c in cells.items() if n.startswith("mixed")), None)
-                    h2h = next((c for n, c in cells.items() if "champion" in n.lower() or "neat" in n.lower()), None)
+                    h2h = None
+                    if h2h_ev:
+                        hk = list(h2h_ev.keys())[idx] if idx < len(h2h_ev) else None
+                        if hk:
+                            h2h = next((c for n, c in h2h_ev[hk].items() if not n.startswith("mixed")), None)
                     if mixed:
                         per_seed_mixed.append(mixed["mean"])
                     if h2h:
