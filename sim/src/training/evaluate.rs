@@ -12,6 +12,7 @@ use std::sync::Arc;
 use engine::{roles_for_player_count, DeckVariant, DuplicateRule, ExchangeRule, PassRule, Role};
 use rand::rngs::Xoshiro256PlusPlus;
 use rand::{RngExt, SeedableRng};
+use rayon::prelude::*;
 
 use crate::hand_features::HandFeatures;
 use crate::{run_match_with, MatchConfig, RunOptions, Strategy};
@@ -93,6 +94,10 @@ pub struct Round1Obs {
 
 /// Mean role score of `candidate` over one match per seed in `seeds`.
 ///
+/// The matches run in parallel on the current rayon pool (so it nests
+/// inside a parallel loop over candidates: rayon work-steals, no pool is
+/// created); the result is independent of the thread count.
+///
 /// # Panics
 ///
 /// Panics if `seeds` is empty, the pool is empty, or the table size is
@@ -121,6 +126,15 @@ pub fn evaluate_with_round1(
     evaluate_inner(candidate, table, opponents, seeds, true)
 }
 
+/// What one match says about the candidate, before the cross-match sums.
+struct MatchOutcome {
+    /// Mean role score over the match's rounds.
+    mean: f64,
+    /// The candidate's place (index into the table's roles) in each round.
+    places: Vec<usize>,
+    round1: Option<Round1Obs>,
+}
+
 fn evaluate_inner(
     candidate: &Arc<dyn Strategy>,
     table: &TableSpec,
@@ -131,57 +145,79 @@ fn evaluate_inner(
     assert!(!seeds.is_empty(), "evaluation needs at least one match");
     let players = usize::from(table.player_count);
     let roles = roles_for_player_count(table.player_count).expect("supported table size");
-    let mut placements = vec![0u64; players];
-    let mut per_match = Vec::with_capacity(seeds.len());
-    let mut round1 = Vec::new();
     let options = RunOptions {
         record_deal_features: record_round1,
         ..RunOptions::default()
     };
-    for (index, &seed) in seeds.iter().enumerate() {
-        let seat = index % players;
-        let mut pick = Xoshiro256PlusPlus::seed_from_u64(mix(seed ^ 0x5EA7));
-        let strategies: Vec<Arc<dyn Strategy>> = (0..players)
-            .map(|s| {
-                if s == seat {
-                    return candidate.clone();
-                }
-                match opponents {
-                    Opponents::Only(only) => only.clone(),
-                    Opponents::Mixed(pool) => pool[pick.random_range(0..pool.len())].clone(),
-                }
-            })
-            .collect();
-        let result = run_match_with(
-            &MatchConfig {
-                player_count: table.player_count,
-                deck_variant: table.deck_variant,
-                duplicate_rule: table.duplicate_rule,
-                rounds: table.rounds,
-                seed,
-                pass_rule: table.pass_rule,
-                exchange_rule: table.exchange_rule,
-            },
-            &strategies,
-            &options,
-        );
-        if let Some(features) = &result.first_hand_features {
-            round1.push(Round1Obs {
-                score: role_score(result.role_history[0][seat], table.player_count),
-                features: HandFeatures::as_vector(&features[seat]),
-            });
-        }
-        let mut total = 0.0;
-        for round in &result.role_history {
-            total += role_score(round[seat], table.player_count);
-            let place = roles
-                .iter()
-                .position(|&r| r == round[seat])
-                .expect("role belongs to this table");
+    // Matches are independent (everything about one is a function of its
+    // seed), so they run in parallel; the order-preserving collect and the
+    // sequential sums below keep the result bit-identical to a serial loop.
+    let outcomes: Vec<MatchOutcome> = seeds
+        .par_iter()
+        .enumerate()
+        .map(|(index, &seed)| {
+            let seat = index % players;
+            let mut pick = Xoshiro256PlusPlus::seed_from_u64(mix(seed ^ 0x5EA7));
+            let strategies: Vec<Arc<dyn Strategy>> = (0..players)
+                .map(|s| {
+                    if s == seat {
+                        return candidate.clone();
+                    }
+                    match opponents {
+                        Opponents::Only(only) => only.clone(),
+                        Opponents::Mixed(pool) => pool[pick.random_range(0..pool.len())].clone(),
+                    }
+                })
+                .collect();
+            let result = run_match_with(
+                &MatchConfig {
+                    player_count: table.player_count,
+                    deck_variant: table.deck_variant,
+                    duplicate_rule: table.duplicate_rule,
+                    rounds: table.rounds,
+                    seed,
+                    pass_rule: table.pass_rule,
+                    exchange_rule: table.exchange_rule,
+                },
+                &strategies,
+                &options,
+            );
+            let round1 = result
+                .first_hand_features
+                .as_ref()
+                .map(|features| Round1Obs {
+                    score: role_score(result.role_history[0][seat], table.player_count),
+                    features: HandFeatures::as_vector(&features[seat]),
+                });
+            let mut total = 0.0;
+            let mut places = Vec::with_capacity(result.role_history.len());
+            for round in &result.role_history {
+                total += role_score(round[seat], table.player_count);
+                places.push(
+                    roles
+                        .iter()
+                        .position(|&r| r == round[seat])
+                        .expect("role belongs to this table"),
+                );
+            }
+            #[allow(clippy::cast_precision_loss)]
+            let mean = total / result.role_history.len() as f64;
+            MatchOutcome {
+                mean,
+                places,
+                round1,
+            }
+        })
+        .collect();
+    let mut placements = vec![0u64; players];
+    let mut per_match = Vec::with_capacity(outcomes.len());
+    let mut round1 = Vec::new();
+    for outcome in outcomes {
+        for place in outcome.places {
             placements[place] += 1;
         }
-        #[allow(clippy::cast_precision_loss)]
-        per_match.push(total / result.role_history.len() as f64);
+        per_match.push(outcome.mean);
+        round1.extend(outcome.round1);
     }
     #[allow(clippy::cast_precision_loss)]
     let count = per_match.len() as f64;
@@ -329,6 +365,97 @@ mod tests {
         let candidate: Arc<dyn Strategy> = Arc::new(LowestLegal);
         let score = evaluate(&candidate, &TABLE, Opponents::Only(&candidate), &seeds(1));
         assert!(score.std_error.abs() < f64::EPSILON);
+    }
+
+    /// The original serial implementation, kept as the oracle for the
+    /// parallel one.
+    #[allow(clippy::cast_precision_loss)]
+    fn evaluate_serially(
+        candidate: &Arc<dyn Strategy>,
+        table: &TableSpec,
+        opponents: Opponents<'_>,
+        seeds: &[u64],
+    ) -> Score {
+        let players = usize::from(table.player_count);
+        let roles = roles_for_player_count(table.player_count).unwrap();
+        let mut placements = vec![0u64; players];
+        let mut per_match = Vec::new();
+        for (index, &seed) in seeds.iter().enumerate() {
+            let seat = index % players;
+            let mut pick = Xoshiro256PlusPlus::seed_from_u64(mix(seed ^ 0x5EA7));
+            let strategies: Vec<Arc<dyn Strategy>> = (0..players)
+                .map(|s| {
+                    if s == seat {
+                        return candidate.clone();
+                    }
+                    match opponents {
+                        Opponents::Only(only) => only.clone(),
+                        Opponents::Mixed(pool) => pool[pick.random_range(0..pool.len())].clone(),
+                    }
+                })
+                .collect();
+            let result = run_match_with(
+                &MatchConfig {
+                    player_count: table.player_count,
+                    deck_variant: table.deck_variant,
+                    duplicate_rule: table.duplicate_rule,
+                    rounds: table.rounds,
+                    seed,
+                    pass_rule: table.pass_rule,
+                    exchange_rule: table.exchange_rule,
+                },
+                &strategies,
+                &RunOptions::default(),
+            );
+            let mut total = 0.0;
+            for round in &result.role_history {
+                total += role_score(round[seat], table.player_count);
+                placements[roles.iter().position(|&r| r == round[seat]).unwrap()] += 1;
+            }
+            per_match.push(total / result.role_history.len() as f64);
+        }
+        let count = per_match.len() as f64;
+        let mean = per_match.iter().sum::<f64>() / count;
+        let std_error = if per_match.len() < 2 {
+            0.0
+        } else {
+            let variance =
+                per_match.iter().map(|m| (m - mean).powi(2)).sum::<f64>() / (count - 1.0);
+            (variance / count).sqrt()
+        };
+        Score {
+            mean,
+            std_error,
+            matches: per_match.len(),
+            placements,
+        }
+    }
+
+    #[test]
+    fn parallel_evaluation_equals_the_serial_oracle_on_any_thread_count() {
+        let candidate: Arc<dyn Strategy> = Arc::new(RandomLegal);
+        let pool: Vec<Arc<dyn Strategy>> = vec![Arc::new(LowestLegal), Arc::new(RandomLegal)];
+        let many = seeds(37);
+        let expected_mixed = evaluate_serially(&candidate, &TABLE, Opponents::Mixed(&pool), &many);
+        let expected_only = evaluate_serially(&candidate, &TABLE, Opponents::Only(&pool[0]), &many);
+        for threads in [1, 3, 8] {
+            let rayon_pool = rayon::ThreadPoolBuilder::new()
+                .num_threads(threads)
+                .build()
+                .unwrap();
+            rayon_pool.install(|| {
+                let mixed = evaluate(&candidate, &TABLE, Opponents::Mixed(&pool), &many);
+                let only = evaluate(&candidate, &TABLE, Opponents::Only(&pool[0]), &many);
+                // Full structs, f64 fields bit for bit (`Score: PartialEq`).
+                assert_eq!(mixed, expected_mixed, "{threads} threads");
+                assert_eq!(only, expected_only, "{threads} threads");
+                assert_eq!(mixed.mean.to_bits(), expected_mixed.mean.to_bits());
+                assert_eq!(
+                    mixed.std_error.to_bits(),
+                    expected_mixed.std_error.to_bits()
+                );
+            });
+        }
     }
 
     #[test]

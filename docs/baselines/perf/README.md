@@ -102,6 +102,38 @@ selection: 5 tasks) cost about 1.3 s of the 5.3 s generation at 8 threads
 would be about 40% of the generation. See the Phase 19 notes in
 `docs/ROADMAP.md`.
 
+### After step 2 (training-loop parallelism)
+
+Same script and settings, same laptop, measured in a session that ran about
+6% slower single-threaded (1 thread: 20.5 s against 19.3 s above), so the
+speed-up column is against this table's own 1-thread row. `best.json` is
+identical for every thread count and equal to the baseline's checksum run
+(`bench.sh` training row `85d7c401da1bb195`, all other rows unchanged).
+
+| threads | s / generation | rounds/s | speed-up | training_evaluation | champion_selection | reevaluation_mixed | reevaluation_per_opponent | confirmation | rest |
+|--------:|---------------:|---------:|---------:|--------------------:|-------------------:|-------------------:|--------------------------:|-------------:|-----:|
+| 1 | 20.50 |  6,681 | 1.00x | 17.97 | 1.21 | 0.24 | 0.72 | 0.48 | < 0.01 |
+| 2 | 10.43 | 13,087 | 1.96x |  9.17 | 0.61 | 0.24 | 0.49 | 0.24 | < 0.01 |
+| 4 |  5.27 | 25,648 | 3.89x |  4.67 | 0.31 | 0.25 | 0.25 | 0.12 | < 0.01 |
+| 8 |  4.46 | 30,690 | 4.60x |  3.92 | 0.25 | 0.20 | 0.20 | 0.10 | < 0.01 |
+
+Compared with the baseline at 8 threads: 5.33 s -> 4.46 s per generation
+(-16%, 25.8k -> 30.7k rounds/s; 4 -> 8 threads now gains 18% instead of 13%).
+The stage times of the three re-evaluations (mixed, per-opponent, hall) are
+each stage's own wall time while the stages run concurrently, so they overlap
+and their sum is larger than their share of the generation. Where the time
+is now: the training evaluation is 88% of a generation at 8 threads and
+scales like the hardware (4 cores, SMT: about 4.5x); champion selection
+(5 candidates, matches in parallel) and the re-evaluations (about 0.2 s,
+run concurrently) plus the confirmation (0.1 s, only on a new best, still
+after the mixed re-evaluation) remain as the tail that does not shrink with
+more threads: 0.55 s of 4.46 s at 8 threads (12%). Each is a short
+fork-join with a straggler (the slowest match) at its end; the confirmation
+could be started speculatively next to the re-evaluations but would then be
+wasted on every generation without a new best. Further serial work:
+`TurnSummary`/move generation per match (step 4/5) is per-thread, so it
+helps all thread counts.
+
 ### Micro-benchmarks
 
 `cargo test --release -p sim --test micro_bench -- --ignored --nocapture

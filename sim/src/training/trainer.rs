@@ -9,8 +9,9 @@
 //! identical to one that never stopped.
 
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use neat::{Genome, Population};
 use rayon::prelude::*;
@@ -57,9 +58,84 @@ pub struct Trainer {
     warm_started_from: Option<String>,
 }
 
-/// Genomes are evaluated in this many parallel batches, with a progress
-/// callback between batches.
+/// `f()` and the wall seconds it took.
+fn timed<R>(f: impl FnOnce() -> R) -> (R, f64) {
+    let stage = Instant::now();
+    let value = f();
+    (value, stage.elapsed().as_secs_f64())
+}
+
+/// The training evaluation reports progress in this many steps (the
+/// observer sees `done` at multiples of `ceil(total / PROGRESS_STEPS)`,
+/// then `total`).
 const PROGRESS_STEPS: usize = 10;
+
+/// Maps `work` over `items` as one parallel pass (rayon tasks, results
+/// in item order) while the calling thread, which is the only one that may
+/// touch the observer, calls `report(done)` at the progress steps: the
+/// multiples of `ceil(len / PROGRESS_STEPS)` and finally `len`, each once,
+/// in order, as soon as that many items are finished.
+///
+/// The pass is spawned into an `in_place_scope`, so the caller keeps its
+/// own thread; if the caller is itself a worker of the pool (for example
+/// inside `ThreadPool::install`) it lends that thread to the pool between
+/// polls via `yield_now`, so a one-thread pool still makes progress (its
+/// progress then arrives in fewer, later steps). A caller outside the pool
+/// sleeps briefly between polls.
+fn run_with_progress<T, R>(
+    items: &[T],
+    work: impl Fn(&T) -> R + Sync,
+    mut report: impl FnMut(usize),
+) -> Vec<R>
+where
+    T: Sync,
+    R: Send,
+{
+    let total = items.len();
+    let batch = total.div_ceil(PROGRESS_STEPS).max(1);
+    let done = AtomicUsize::new(0);
+    let ended = AtomicBool::new(false);
+    let mut results = Vec::new();
+    rayon::in_place_scope(|scope| {
+        scope.spawn(|_| {
+            // Also set when `work` panics, so the polling loop cannot spin
+            // forever (the scope then re-raises the panic).
+            struct Ended<'a>(&'a AtomicBool);
+            impl Drop for Ended<'_> {
+                fn drop(&mut self) {
+                    self.0.store(true, Ordering::Release);
+                }
+            }
+            let _ended = Ended(&ended);
+            results = items
+                .par_iter()
+                .map(|item| {
+                    let value = work(item);
+                    done.fetch_add(1, Ordering::Release);
+                    value
+                })
+                .collect();
+        });
+        let mut reported = 0;
+        while reported < total {
+            let over = ended.load(Ordering::Acquire);
+            let finished = done.load(Ordering::Acquire);
+            if over && finished < total {
+                break;
+            }
+            let mut progressed = false;
+            while reported < total && finished >= (reported + batch).min(total) {
+                reported = (reported + batch).min(total);
+                report(reported);
+                progressed = true;
+            }
+            if !progressed && !matches!(rayon::yield_now(), Some(rayon::Yield::Executed)) {
+                std::thread::sleep(Duration::from_millis(2));
+            }
+        }
+    });
+    results
+}
 
 /// Decisions recorded for each new best champion.
 const DECISIONS_PER_BEST: usize = 12;
@@ -434,44 +510,32 @@ impl Trainer {
         let pool = self.training_pool();
         let seeds = training_seeds(&self.config, generation);
         let genomes = self.population.genomes();
-        let batch = genomes.len().div_ceil(PROGRESS_STEPS);
         let with_skill = self.config.skill_weight > 0.0;
+        // One parallel pass over all genomes (a rayon task per genome,
+        // collected in genome order); the calling thread meanwhile reports
+        // progress.
+        let per_genome: Vec<(f64, Vec<Round1Obs>)> = run_with_progress(
+            genomes,
+            |genome| {
+                let candidate = strategy_for(genome);
+                if with_skill {
+                    let (score, obs) =
+                        evaluate_with_round1(&candidate, &table, Opponents::Mixed(&pool), &seeds);
+                    (score.mean, obs)
+                } else {
+                    let score = evaluate(&candidate, &table, Opponents::Mixed(&pool), &seeds);
+                    (score.mean, Vec::new())
+                }
+            },
+            |done| observer.on_eval_progress(generation, done, genomes.len()),
+        );
         let mut fitness = Vec::with_capacity(genomes.len());
         let mut round1: Vec<Vec<Round1Obs>> = Vec::new();
-        for chunk in genomes.chunks(batch) {
+        for (mean, obs) in per_genome {
+            fitness.push(mean);
             if with_skill {
-                let scores: Vec<(f64, Vec<Round1Obs>)> = chunk
-                    .par_iter()
-                    .map(|genome| {
-                        let (score, obs) = evaluate_with_round1(
-                            &strategy_for(genome),
-                            &table,
-                            Opponents::Mixed(&pool),
-                            &seeds,
-                        );
-                        (score.mean, obs)
-                    })
-                    .collect();
-                for (mean, obs) in scores {
-                    fitness.push(mean);
-                    round1.push(obs);
-                }
-            } else {
-                let scores: Vec<f64> = chunk
-                    .par_iter()
-                    .map(|genome| {
-                        evaluate(
-                            &strategy_for(genome),
-                            &table,
-                            Opponents::Mixed(&pool),
-                            &seeds,
-                        )
-                        .mean
-                    })
-                    .collect();
-                fitness.extend(scores);
+                round1.push(obs);
             }
-            observer.on_eval_progress(generation, fitness.len(), genomes.len());
         }
         if with_skill {
             let (total, skill) = combine(self.config.skill_weight, &fitness, &round1);
@@ -526,36 +590,45 @@ impl Trainer {
         let table = self.config.table();
         let seeds = reeval_seeds(&self.config);
         let candidate = strategy_for(champion);
-        let stage = Instant::now();
-        let mixed = evaluate(
-            &candidate,
-            &table,
-            Opponents::Mixed(&self.fixed_pool()),
-            &seeds,
+        // The three evaluations only share their inputs, so they run
+        // concurrently (each is itself parallel over matches); the timings
+        // are each stage's own wall time and therefore overlap.
+        let mixed_stage = || {
+            evaluate(
+                &candidate,
+                &table,
+                Opponents::Mixed(&self.fixed_pool()),
+                &seeds,
+            )
+        };
+        let per_opponent_stage = || -> Vec<OpponentStat> {
+            self.opponents
+                .par_iter()
+                .map(|opponent| OpponentStat {
+                    name: opponent.name.clone(),
+                    score: evaluate(
+                        &candidate,
+                        &table,
+                        Opponents::Only(&opponent.strategy),
+                        &seeds,
+                    )
+                    .into(),
+                })
+                .collect()
+        };
+        let hall_stage = || {
+            let hall = self.hall_pool();
+            (!hall.is_empty())
+                .then(|| evaluate(&candidate, &table, Opponents::Mixed(&hall), &seeds))
+        };
+        let (mixed, (per_opponent, hall_score)) = rayon::join(
+            || timed(mixed_stage),
+            || rayon::join(|| timed(per_opponent_stage), || timed(hall_stage)),
         );
-        timings.reevaluation_mixed = stage.elapsed().as_secs_f64();
-        let stage = Instant::now();
-        let per_opponent = self
-            .opponents
-            .par_iter()
-            .map(|opponent| OpponentStat {
-                name: opponent.name.clone(),
-                score: evaluate(
-                    &candidate,
-                    &table,
-                    Opponents::Only(&opponent.strategy),
-                    &seeds,
-                )
-                .into(),
-            })
-            .collect();
-        timings.reevaluation_per_opponent = stage.elapsed().as_secs_f64();
-        let stage = Instant::now();
-        let hall = self.hall_pool();
-        let hall_score = (!hall.is_empty())
-            .then(|| evaluate(&candidate, &table, Opponents::Mixed(&hall), &seeds));
-        timings.hall_of_fame = stage.elapsed().as_secs_f64();
-        (mixed, per_opponent, hall_score)
+        timings.reevaluation_mixed = mixed.1;
+        timings.reevaluation_per_opponent = per_opponent.1;
+        timings.hall_of_fame = hall_score.1;
+        (mixed.0, per_opponent.0, hall_score.0)
     }
 
     /// A few real decisions of the champion (for the dashboard's decision

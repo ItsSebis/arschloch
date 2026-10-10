@@ -940,3 +940,110 @@ fn generation_events_carry_stage_timings_and_old_events_still_load() {
     }
     fs::remove_dir_all(&run).unwrap();
 }
+
+/// Everything a generation event says except the wall-clock fields.
+fn timeless_events(dir: &Path) -> Vec<serde_json::Value> {
+    generation_events(dir)
+        .iter()
+        .map(|e| {
+            let mut value = serde_json::to_value(e).unwrap();
+            let object = value.as_object_mut().unwrap();
+            for key in [
+                "elapsed_secs",
+                "generation_secs",
+                "rounds_per_sec",
+                "timings",
+            ] {
+                object.remove(key);
+            }
+            value
+        })
+        .collect()
+}
+
+#[test]
+fn the_whole_training_loop_is_identical_on_1_4_and_8_threads() {
+    // Champion candidates, hall of fame (interval 1) and the skill term
+    // exercise every parallel stage of a generation.
+    let full = || TrainConfig {
+        champion_candidates: 3,
+        hall_of_fame_size: 2,
+        hall_of_fame_interval: 1,
+        skill_weight: 0.5,
+        ..config(4)
+    };
+    let run_with = |threads: usize| {
+        let run = dir(&format!("full-threads{threads}"));
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(threads)
+            .build()
+            .unwrap();
+        pool.install(|| {
+            Trainer::new(full(), opponents(), &run)
+                .unwrap()
+                .run(&mut Recorder::default())
+                .unwrap();
+        });
+        let result = (
+            checkpoint_population(&run),
+            fs::read_to_string(run.join("best.json")).unwrap(),
+            timeless_events(&run),
+        );
+        fs::remove_dir_all(&run).unwrap();
+        result
+    };
+    let one = run_with(1);
+    assert!(one.2.iter().any(|e| !e["hall_score"].is_null()));
+    assert_eq!(one, run_with(4));
+    assert_eq!(one, run_with(8));
+}
+
+#[derive(Default)]
+struct ProgressLog(Vec<(u32, usize, usize)>);
+
+impl TrainObserver for ProgressLog {
+    fn on_eval_progress(&mut self, generation: u32, done: usize, total: usize) {
+        self.0.push((generation, done, total));
+    }
+}
+
+#[test]
+fn progress_is_monotone_and_ends_at_the_whole_population_on_any_pool() {
+    let check = |threads: Option<usize>| {
+        let run = dir(&format!("progress-{threads:?}"));
+        let mut log = ProgressLog::default();
+        let mut trainer = Trainer::new(config(3), opponents(), &run).unwrap();
+        match threads {
+            // The global pool: the calling thread is not a pool worker.
+            None => {
+                trainer.run(&mut log).unwrap();
+            }
+            // Inside a pool: the caller is a worker (a one-thread pool must
+            // not deadlock while the caller waits for its own tasks).
+            Some(n) => rayon::ThreadPoolBuilder::new()
+                .num_threads(n)
+                .build()
+                .unwrap()
+                .install(|| {
+                    trainer.run(&mut log).unwrap();
+                }),
+        }
+        for generation in 0..3 {
+            let steps: Vec<usize> = log
+                .0
+                .iter()
+                .filter(|p| p.0 == generation)
+                .map(|p| {
+                    assert_eq!(p.2, 16);
+                    p.1
+                })
+                .collect();
+            assert!(steps.windows(2).all(|w| w[0] < w[1]), "{steps:?}");
+            assert_eq!(steps.last(), Some(&16), "{threads:?}: {steps:?}");
+        }
+        fs::remove_dir_all(&run).unwrap();
+    };
+    check(None);
+    check(Some(1));
+    check(Some(4));
+}
