@@ -95,6 +95,10 @@ pub struct EvaluateArgs {
     /// Also write the results as JSON.
     #[arg(long, value_name = "PATH")]
     pub json: Option<PathBuf>,
+
+    /// Print a one-line explanation of each statistic in the tables.
+    #[arg(long)]
+    pub explain: bool,
 }
 
 /// One cell of the result table.
@@ -105,15 +109,24 @@ pub struct Cell {
     pub std_error: f64,
     pub matches: usize,
     pub placements: Vec<u64>,
+    /// Average finishing place, 1 = best. The role score is linear in the
+    /// place, so this is exactly the mean score restated.
+    pub avg_rank: f64,
+    /// Standard error of `avg_rank` across matches.
+    pub avg_rank_std_error: f64,
 }
 
 impl Cell {
     fn new(opponent: &str, score: Score) -> Self {
+        #[allow(clippy::cast_precision_loss)] // table sizes are 3-6
+        let half_span = (score.placements.len().saturating_sub(1)) as f64 / 2.0;
         Self {
             opponent: opponent.to_owned(),
             mean: score.mean,
             std_error: score.std_error,
             matches: score.matches,
+            avg_rank: 1.0 + (1.0 - score.mean) * half_span,
+            avg_rank_std_error: score.std_error * half_span,
             placements: score.placements,
         }
     }
@@ -155,6 +168,24 @@ fn column_labels(paths: &[PathBuf]) -> Vec<String> {
 /// one column per genome. Pure, so it is directly testable.
 #[must_use]
 pub fn render_table(labels: &[String], results: &[GenomeResult]) -> String {
+    render_cells(labels, results, |cell| {
+        format!("{:+.3} ±{:.3}", cell.mean, cell.std_error)
+    })
+}
+
+/// The same table with the average place (1 = best) in each cell.
+#[must_use]
+pub fn render_rank_table(labels: &[String], results: &[GenomeResult]) -> String {
+    render_cells(labels, results, |cell| {
+        format!("{:.2} ±{:.2}", cell.avg_rank, cell.avg_rank_std_error)
+    })
+}
+
+fn render_cells(
+    labels: &[String],
+    results: &[GenomeResult],
+    format_cell: impl Fn(&Cell) -> String,
+) -> String {
     let rows: Vec<&str> = results[0]
         .cells
         .iter()
@@ -176,11 +207,7 @@ pub fn render_table(labels: &[String], results: &[GenomeResult]) -> String {
         let _ = write!(text, "{name:<row_width$}");
         for result in results {
             let cell = &result.cells[row];
-            let _ = write!(
-                text,
-                "  {:>column_width$}",
-                format!("{:+.3} ±{:.3}", cell.mean, cell.std_error)
-            );
+            let _ = write!(text, "  {:>column_width$}", format_cell(cell));
         }
         text.push('\n');
     }
@@ -282,7 +309,19 @@ pub fn run(raw_args: impl Iterator<Item = String>) -> anyhow::Result<()> {
         args.seed
     );
     println!("score: +1 always President .. -1 always last; 0 is even\n");
-    print!("{}", render_table(&column_labels(&args.genome), &results));
+    let labels = column_labels(&args.genome);
+    print!("{}", render_table(&labels, &results));
+    println!(
+        "\naverage place: 1 = best .. {} = last, ± standard error\n",
+        args.player_count
+    );
+    print!("{}", render_rank_table(&labels, &results));
+    if args.explain {
+        println!(
+            "\n{}",
+            sim::stats_catalog::render_explain(&["mean_role_score", "avg_rank"]).trim_end()
+        );
+    }
     if let Some(path) = &args.json {
         let text = serde_json::to_string_pretty(&serde_json::json!({
             "player_count": args.player_count,
@@ -294,6 +333,7 @@ pub fn run(raw_args: impl Iterator<Item = String>) -> anyhow::Result<()> {
             "matches": args.matches,
             "seed": args.seed,
             "results": results,
+            "statistics_catalog": sim::stats_catalog::catalog(),
         }))?;
         std::fs::write(path, text).with_context(|| format!("cannot write {}", path.display()))?;
     }
@@ -311,6 +351,8 @@ mod tests {
             std_error: 0.021,
             matches: 100,
             placements: vec![1, 2, 3, 4],
+            avg_rank: 2.5,
+            avg_rank_std_error: 0.03,
         }
     }
 
@@ -339,6 +381,27 @@ mod tests {
                 && lines[1].contains("-0.250 ±0.021")
         );
         assert!(lines[2].starts_with("mixed (all opponents)") && lines[2].contains("+0.400"));
+    }
+
+    #[test]
+    fn the_rank_table_shows_average_places_and_cells_restate_the_score() {
+        let labels = vec!["a".to_owned()];
+        let text = render_rank_table(&labels, &[result("a.json", [0.5, 0.4])]);
+        assert!(text.contains("2.50 ±0.03"), "{text}");
+        // four places: score +1 is place 1, -1 is place 4, 0 is 2.5.
+        let score = |mean: f64| Score {
+            mean,
+            std_error: 0.1,
+            matches: 10,
+            placements: vec![1, 1, 1, 1],
+        };
+        let best = Cell::new("x", score(1.0));
+        let even = Cell::new("x", score(0.0));
+        let worst = Cell::new("x", score(-1.0));
+        assert!((best.avg_rank - 1.0).abs() < 1e-12);
+        assert!((even.avg_rank - 2.5).abs() < 1e-12);
+        assert!((worst.avg_rank - 4.0).abs() < 1e-12);
+        assert!((even.avg_rank_std_error - 0.15).abs() < 1e-12);
     }
 
     #[test]

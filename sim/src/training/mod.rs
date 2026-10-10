@@ -8,6 +8,7 @@ pub mod evaluate;
 pub mod events;
 pub mod run_dir;
 pub mod set;
+pub mod skill_term;
 pub mod trainer;
 
 pub use config::{DeckChoice, DuplicateChoice, TrainConfig};

@@ -728,3 +728,57 @@ fn generations_on_a_set_resume_apply_to_every_run_still_to_go() {
     }
     let _ = std::fs::remove_dir_all(&out);
 }
+
+#[test]
+fn a_skill_weighted_run_writes_the_weight_and_the_additive_fields_and_resumes_with_it() {
+    let out = run_dir("skill-weight");
+    let result = train(
+        &out,
+        &[
+            "--generations",
+            "2",
+            "--fitness-skill-weight",
+            "0.5",
+            "--quiet",
+        ],
+    );
+    assert!(result.status.success(), "stderr: {}", text(&result.stderr));
+    let config: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(out.join("config.json")).unwrap()).unwrap();
+    assert!((config["skill_weight"].as_f64().unwrap() - 0.5).abs() < 1e-12);
+    let events = std::fs::read_to_string(out.join("events.jsonl")).unwrap();
+    assert!(events.contains(r#""skill_term""#), "{events}");
+    let resumed = cli(&[
+        "train",
+        "--out",
+        out.to_str().unwrap(),
+        "--resume",
+        "--generations",
+        "3",
+        "--quiet",
+    ]);
+    assert!(
+        resumed.status.success(),
+        "stderr: {}",
+        text(&resumed.stderr)
+    );
+    let config: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(out.join("config.json")).unwrap()).unwrap();
+    assert!((config["skill_weight"].as_f64().unwrap() - 0.5).abs() < 1e-12);
+    std::fs::remove_dir_all(&out).unwrap();
+
+    // The default writes neither the weight nor any skill field.
+    let plain = run_dir("skill-weight-off");
+    let result = train(&plain, &["--generations", "2", "--quiet"]);
+    assert!(result.status.success(), "stderr: {}", text(&result.stderr));
+    for file in ["config.json", "events.jsonl", "checkpoint.json"] {
+        let content = std::fs::read_to_string(plain.join(file)).unwrap();
+        assert!(!content.contains("skill"), "{file}");
+    }
+    std::fs::remove_dir_all(&plain).unwrap();
+
+    let bad = run_dir("skill-weight-bad");
+    let result = train(&bad, &["--fitness-skill-weight", "2"]);
+    assert!(!result.status.success());
+    assert!(!bad.exists());
+}

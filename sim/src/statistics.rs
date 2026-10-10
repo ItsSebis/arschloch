@@ -215,6 +215,7 @@ mod tests {
             trick_count: 0,
             pass_counts,
             voluntary_pass_counts,
+            first_hand_features: None,
         }
     }
 

@@ -64,6 +64,17 @@ pub struct TrainConfig {
     /// generations (the oldest member leaves when it is full).
     #[serde(default = "five")]
     pub hall_of_fame_interval: u32,
+    /// Weight `w` of the luck-adjusted term in the training fitness:
+    /// `(1 - w) * mean_role_score + w * luck_adjusted_score` (see
+    /// `skill_term`). 0 (the default) is the plain mean role score and
+    /// leaves a run bit-for-bit as it was before the option existed.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub skill_weight: f64,
+}
+
+#[allow(clippy::trivially_copy_pass_by_ref)] // serde's signature
+fn is_zero(value: &f64) -> bool {
+    value.to_bits() == 0.0f64.to_bits()
 }
 
 /// The rule every run before the pass rule was introduced was played under.
@@ -136,6 +147,12 @@ impl TrainConfig {
         if self.hall_of_fame_interval == 0 {
             return Err("hall_of_fame_interval must be at least 1".into());
         }
+        if !(0.0..=1.0).contains(&self.skill_weight) {
+            return Err(format!(
+                "skill_weight {} is not between 0 and 1",
+                self.skill_weight
+            ));
+        }
         self.neat.validate().map_err(|e| e.to_string())
     }
 }
@@ -164,6 +181,7 @@ pub(crate) mod test_support {
             champion_candidates: 1,
             hall_of_fame_size: 0,
             hall_of_fame_interval: 5,
+            skill_weight: 0.0,
         }
     }
 }
@@ -293,6 +311,43 @@ mod tests {
             ),
             (1, 0, 5)
         );
+    }
+
+    #[test]
+    fn skill_weight_defaults_to_zero_validates_and_old_configs_load() {
+        assert!(sample().skill_weight.abs() < f64::EPSILON);
+        for ok in [0.0, 0.5, 1.0] {
+            assert_eq!(
+                TrainConfig {
+                    skill_weight: ok,
+                    ..sample()
+                }
+                .validate(),
+                Ok(())
+            );
+        }
+        for bad in [-0.1, 1.01, f64::NAN, f64::INFINITY] {
+            let error = TrainConfig {
+                skill_weight: bad,
+                ..sample()
+            }
+            .validate()
+            .unwrap_err();
+            assert!(error.contains("skill_weight"), "{bad}: {error}");
+        }
+        // Zero is not written, so a default run's files are unchanged.
+        let text = serde_json::to_string(&sample()).unwrap();
+        assert!(!text.contains("skill_weight"), "{text}");
+        let old: TrainConfig = serde_json::from_str(&text).unwrap();
+        assert!(old.skill_weight.abs() < f64::EPSILON);
+        // A non-zero weight round-trips.
+        let config = TrainConfig {
+            skill_weight: 0.5,
+            ..sample()
+        };
+        let again: TrainConfig =
+            serde_json::from_str(&serde_json::to_string(&config).unwrap()).unwrap();
+        assert!((again.skill_weight - 0.5).abs() < f64::EPSILON);
     }
 
     #[test]

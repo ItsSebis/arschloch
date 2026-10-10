@@ -13,7 +13,8 @@ use engine::{roles_for_player_count, DeckVariant, DuplicateRule, ExchangeRule, P
 use rand::rngs::Xoshiro256PlusPlus;
 use rand::{RngExt, SeedableRng};
 
-use crate::{run_match, MatchConfig, Strategy};
+use crate::hand_features::HandFeatures;
+use crate::{run_match_with, MatchConfig, RunOptions, Strategy};
 
 /// What a candidate plays: the table and the length of each match.
 #[derive(Debug, Clone, Copy)]
@@ -47,7 +48,8 @@ pub struct Score {
 }
 
 /// The `SplitMix64` finalizer: a cheap, well-mixed 64-bit hash.
-fn mix(mut x: u64) -> u64 {
+#[must_use]
+pub fn mix(mut x: u64) -> u64 {
     x = x.wrapping_add(0x9E37_79B9_7F4A_7C15);
     x = (x ^ (x >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
     x = (x ^ (x >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
@@ -79,6 +81,16 @@ pub fn role_score(role: Role, player_count: u8) -> f64 {
     1.0 - 2.0 * rank / last
 }
 
+/// What one match says about the candidate's first round: the role
+/// score it finished with and the features of the hand it was dealt
+/// (before the exchange). Used by the optional luck-adjusted fitness
+/// term (`super::skill_term`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Round1Obs {
+    pub score: f64,
+    pub features: [f64; 6],
+}
+
 /// Mean role score of `candidate` over one match per seed in `seeds`.
 ///
 /// # Panics
@@ -91,11 +103,41 @@ pub fn evaluate(
     opponents: Opponents<'_>,
     seeds: &[u64],
 ) -> Score {
+    evaluate_inner(candidate, table, opponents, seeds, false).0
+}
+
+/// `evaluate`, also returning one `Round1Obs` per match. The matches
+/// played, and so the `Score`, are exactly those of `evaluate`.
+///
+/// # Panics
+///
+/// As `evaluate`.
+pub fn evaluate_with_round1(
+    candidate: &Arc<dyn Strategy>,
+    table: &TableSpec,
+    opponents: Opponents<'_>,
+    seeds: &[u64],
+) -> (Score, Vec<Round1Obs>) {
+    evaluate_inner(candidate, table, opponents, seeds, true)
+}
+
+fn evaluate_inner(
+    candidate: &Arc<dyn Strategy>,
+    table: &TableSpec,
+    opponents: Opponents<'_>,
+    seeds: &[u64],
+    record_round1: bool,
+) -> (Score, Vec<Round1Obs>) {
     assert!(!seeds.is_empty(), "evaluation needs at least one match");
     let players = usize::from(table.player_count);
     let roles = roles_for_player_count(table.player_count).expect("supported table size");
     let mut placements = vec![0u64; players];
     let mut per_match = Vec::with_capacity(seeds.len());
+    let mut round1 = Vec::new();
+    let options = RunOptions {
+        record_deal_features: record_round1,
+        ..RunOptions::default()
+    };
     for (index, &seed) in seeds.iter().enumerate() {
         let seat = index % players;
         let mut pick = Xoshiro256PlusPlus::seed_from_u64(mix(seed ^ 0x5EA7));
@@ -110,7 +152,7 @@ pub fn evaluate(
                 }
             })
             .collect();
-        let result = run_match(
+        let result = run_match_with(
             &MatchConfig {
                 player_count: table.player_count,
                 deck_variant: table.deck_variant,
@@ -121,7 +163,14 @@ pub fn evaluate(
                 exchange_rule: table.exchange_rule,
             },
             &strategies,
+            &options,
         );
+        if let Some(features) = &result.first_hand_features {
+            round1.push(Round1Obs {
+                score: role_score(result.role_history[0][seat], table.player_count),
+                features: HandFeatures::as_vector(&features[seat]),
+            });
+        }
         let mut total = 0.0;
         for round in &result.role_history {
             total += role_score(round[seat], table.player_count);
@@ -143,12 +192,13 @@ pub fn evaluate(
         let variance = per_match.iter().map(|m| (m - mean).powi(2)).sum::<f64>() / (count - 1.0);
         (variance / count).sqrt()
     };
-    Score {
+    let score = Score {
         mean,
         std_error,
         matches: per_match.len(),
         placements,
-    }
+    };
+    (score, round1)
 }
 
 #[cfg(test)]
@@ -250,6 +300,28 @@ mod tests {
         );
         let reverse = evaluate(&random, &TABLE, Opponents::Only(&lowest), &many);
         assert!(reverse.mean < -0.4, "{reverse:?}");
+    }
+
+    #[test]
+    #[allow(clippy::float_cmp)] // the same deals give bit-identical features
+    fn recording_round_one_changes_neither_the_matches_nor_the_score() {
+        let candidate: Arc<dyn Strategy> = Arc::new(RandomLegal);
+        let pool: Vec<Arc<dyn Strategy>> = vec![Arc::new(LowestLegal), Arc::new(RandomLegal)];
+        let many = seeds(25);
+        let plain = evaluate(&candidate, &TABLE, Opponents::Mixed(&pool), &many);
+        let (score, round1) =
+            evaluate_with_round1(&candidate, &TABLE, Opponents::Mixed(&pool), &many);
+        assert_eq!(plain, score);
+        assert_eq!(round1.len(), 25);
+        assert!(round1.iter().all(|o| o.score.abs() <= 1.0));
+        // The deal does not depend on who plays: another candidate sees the
+        // same round-1 features in every match.
+        let other: Arc<dyn Strategy> = Arc::new(LowestLegal);
+        let (_, again) = evaluate_with_round1(&other, &TABLE, Opponents::Mixed(&pool), &many);
+        assert!(round1
+            .iter()
+            .zip(&again)
+            .all(|(a, b)| a.features == b.features));
     }
 
     #[test]

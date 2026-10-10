@@ -3,9 +3,12 @@
 //! docs/ARCHITECTURE.md, "cli".
 
 mod args;
+mod batch;
 mod evaluate;
+mod extended_summary;
 mod output;
 mod play;
+mod stats_doc;
 mod summary;
 mod train;
 mod train_args;
@@ -25,6 +28,7 @@ fn main() -> anyhow::Result<()> {
         Some("train") => return train::run(std::env::args().skip(2)),
         Some("watch") => return watch::run(std::env::args().skip(2)),
         Some("evaluate") => return evaluate::run(std::env::args().skip(2)),
+        Some("stats-doc") => return stats_doc::run(std::env::args().skip(2)),
         Some("play") => return play::run(std::env::args().skip(2)),
         _ => {}
     }
@@ -61,11 +65,39 @@ fn main() -> anyhow::Result<()> {
         })
         .collect();
 
-    let results = sim::run_batch(&configs, &strategies);
+    let batch::BatchRun { results, skill } = batch::run(args.skill_score, &configs, &strategies)?;
     let statistics = sim::aggregate(&results);
+    let extended = sim::extended_stats::aggregate_extended_with(
+        &results,
+        &sim::extended_stats::ExtendedOptions {
+            bootstrap_resamples: args.bootstrap_resamples,
+            ..sim::extended_stats::ExtendedOptions::default()
+        },
+    );
 
-    output::write_json_output(output_file, &results, &statistics)?;
+    let useful = batch::useful_passes(&args, &configs, &strategies);
 
+    output::write_json_output(
+        output_file,
+        &results,
+        &statistics,
+        &extended,
+        skill.as_ref(),
+        useful.as_ref(),
+    )?;
+
+    // The original summary comes first and is unchanged; the Phase 12
+    // sections are appended after it.
     println!("{}", summary::render_summary(&args, &statistics));
+    print!(
+        "{}",
+        extended_summary::render_extended_summary(
+            &args,
+            &statistics,
+            &extended,
+            skill.as_ref(),
+            useful.as_ref()
+        )
+    );
     Ok(())
 }
