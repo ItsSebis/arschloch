@@ -11,7 +11,7 @@ use rayon::prelude::*;
 use super::super::decisions::{record_decisions, DecisionFile};
 use super::super::evaluate::{evaluate_with, evaluate_with_round1, Opponents, Round1Obs, Score};
 use super::super::events::{OpponentStat, RacingStats, StageTimings};
-use super::super::fitness::Moments;
+use super::super::fitness::{FitnessKind, Moments};
 use super::super::run_dir::{BestRecord, HallMember, TrainError};
 use super::super::skill_term::combine;
 use super::progress::{run_with_progress, timed};
@@ -138,11 +138,13 @@ impl Trainer {
     /// `(m * old + k * extra) / (m + k)`; for `risk` and `tanh` the moments
     /// are pooled, not the two scalars, because a standard deviation of the
     /// pooled rounds is not the average of two standard deviations.
-    /// Genomes that were not raced keep their fitness. Returns `None` with
-    /// racing off.
+    ///
+    /// The race expands (see `expanding_race`) so that no un-raced genome
+    /// outranks a raced one on its single noisy estimate. Returns `None`
+    /// with racing off.
     pub(super) fn race(&self, generation: u32, eval: &mut PopulationEval) -> Option<RacingStats> {
-        let raced = self.config.raced_count();
-        if raced == 0 {
+        let initial = self.config.raced_count();
+        if initial == 0 {
             return None;
         }
         let tables = self.config.tables();
@@ -150,40 +152,32 @@ impl Trainer {
         let pool = self.training_pool();
         let seeds = racing_seeds(&self.config, generation);
         let genomes = self.population.genomes();
-        let top = top_indices(&eval.fitness, raced);
         // The extra matches continue the setting and seat cycle after the
         // training matches, so a few extra matches still visit every setting.
         let first_index = self.config.matches_per_genome;
-        let extra: Vec<Moments> = top
-            .par_iter()
-            .map(|&index| {
-                evaluate_with(
-                    &strategy_for(&genomes[index]),
-                    &tables,
-                    Opponents::Mixed(&pool),
-                    &seeds,
-                    kind,
-                    first_index,
-                )
-                .moments
-            })
-            .collect();
-        let before: f64 = top.iter().map(|&i| eval.fitness[i]).sum();
-        for (&index, extra) in top.iter().zip(&extra) {
-            let pooled = eval.moments[index].pooled(extra);
-            eval.moments[index] = pooled;
-            eval.fitness[index] = pooled.fitness(&kind);
-        }
-        let after: f64 = top.iter().map(|&i| eval.fitness[i]).sum();
-        #[allow(clippy::cast_precision_loss)]
-        let count = top.len() as f64;
-        Some(RacingStats {
-            raced: top.len(),
-            extra_matches: self.config.racing_matches,
-            mean_before: before / count,
-            mean_after: after / count,
-            mean_shift: (after - before) / count,
-        })
+        Some(expanding_race(
+            eval,
+            initial,
+            self.config.racing_cap(),
+            self.config.racing_matches,
+            &kind,
+            |indices| {
+                indices
+                    .par_iter()
+                    .map(|&index| {
+                        evaluate_with(
+                            &strategy_for(&genomes[index]),
+                            &tables,
+                            Opponents::Mixed(&pool),
+                            &seeds,
+                            kind,
+                            first_index,
+                        )
+                        .moments
+                    })
+                    .collect()
+            },
+        ))
     }
 
     /// Picks the generation's champion: the best of the `k` genomes with
@@ -360,5 +354,87 @@ impl Trainer {
                 self.hall.remove(0);
             }
         }
+    }
+}
+
+/// The expanding race on a population's fitness values. `extra(indices)`
+/// returns the moments of the extra matches of those genomes (in the order
+/// given; it is called with ascending genome indices, a genome is raced at
+/// most once, and what it returns must not depend on which other genomes
+/// are raced with it).
+///
+/// Round 0 races the top `initial` genomes. A genome that was not raced
+/// keeps one noisy estimate, and the lucky ones are exactly those that sit
+/// just below the cutoff: left alone, they could outrank raced genomes whose
+/// fitness has been pulled back. So while some un-raced genome has a fitness
+/// above the lowest pooled fitness of the raced set, the qualifying genomes
+/// are raced too (one batch per round), until the cap on the raced set
+/// (`cap`) is reached. Afterwards either every un-raced fitness is at most
+/// every raced pooled fitness, or `cap_hit` says the cap stopped the
+/// expansion. When more genomes qualify than the cap has room for, the
+/// highest-fitness qualifiers are raced first.
+pub(super) fn expanding_race(
+    eval: &mut PopulationEval,
+    initial: usize,
+    cap: usize,
+    extra_matches: usize,
+    kind: &FitnessKind,
+    mut extra: impl FnMut(&[usize]) -> Vec<Moments>,
+) -> RacingStats {
+    let n = eval.fitness.len();
+    let cap = cap.clamp(initial.min(n), n);
+    let mut raced_flag = vec![false; n];
+    let mut raced = 0usize;
+    let mut first_set = top_indices(&eval.fitness, initial);
+    first_set.sort_unstable();
+    let before: f64 = first_set.iter().map(|&i| eval.fitness[i]).sum();
+    let mut pending = first_set.clone();
+    let mut rounds = 0u32;
+    let mut cap_hit = false;
+    loop {
+        let moments = extra(&pending);
+        assert_eq!(moments.len(), pending.len());
+        for (&index, extra) in pending.iter().zip(&moments) {
+            let pooled = eval.moments[index].pooled(extra);
+            eval.moments[index] = pooled;
+            eval.fitness[index] = pooled.fitness(kind);
+            raced_flag[index] = true;
+        }
+        raced += pending.len();
+        let lowest = (0..n)
+            .filter(|&i| raced_flag[i])
+            .map(|i| eval.fitness[i])
+            .fold(f64::INFINITY, f64::min);
+        let qualifying: Vec<usize> = (0..n)
+            .filter(|&i| !raced_flag[i] && eval.fitness[i] > lowest)
+            .collect();
+        if qualifying.is_empty() {
+            break;
+        }
+        let room = cap - raced;
+        if room == 0 {
+            cap_hit = true;
+            break;
+        }
+        let values: Vec<f64> = qualifying.iter().map(|&i| eval.fitness[i]).collect();
+        pending = top_indices(&values, room)
+            .into_iter()
+            .map(|k| qualifying[k])
+            .collect();
+        pending.sort_unstable();
+        rounds += 1;
+    }
+    let after: f64 = first_set.iter().map(|&i| eval.fitness[i]).sum();
+    #[allow(clippy::cast_precision_loss)]
+    let count = first_set.len() as f64;
+    RacingStats {
+        raced: first_set.len(),
+        extra_matches,
+        mean_before: before / count,
+        mean_after: after / count,
+        mean_shift: (after - before) / count,
+        expansion_rounds: rounds,
+        raced_final: raced,
+        cap_hit,
     }
 }

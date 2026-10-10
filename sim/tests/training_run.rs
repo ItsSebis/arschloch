@@ -1209,6 +1209,9 @@ fn a_raced_run_reports_the_shift_costs_its_matches_resumes_and_is_thread_indepen
     for event in &raced_events {
         let racing = event.racing.as_ref().expect("racing is reported");
         assert_eq!((racing.raced, racing.extra_matches), (5, 6));
+        // The race may expand past the top five, at most to twice that.
+        assert!((5..=10).contains(&racing.raced_final));
+        assert!(racing.expansion_rounds > 0 || racing.raced_final == 5);
         assert!((racing.mean_after - racing.mean_before - racing.mean_shift).abs() < 1e-12);
         // Mean fitness: the stats carry no spread (events keep their old shape).
         assert!(event.champion.reeval.spread.is_none());
@@ -1216,10 +1219,11 @@ fn a_raced_run_reports_the_shift_costs_its_matches_resumes_and_is_thread_indepen
     assert!(plain_events.iter().all(|e| e.racing.is_none()));
     // Generation 0 starts from the same population and its champion is a new
     // best either way, so the cost difference is exactly the extra rounds
-    // (rounds per match 4, 5 raced genomes, 6 extra matches).
+    // (rounds per match 4, every raced genome, 6 extra matches).
+    let first_racing = raced_events[0].racing.as_ref().unwrap();
     assert_eq!(
         raced_events[0].rounds_evaluated,
-        plain_events[0].rounds_evaluated + 4 * 5 * 6
+        plain_events[0].rounds_evaluated + 4 * first_racing.raced_final as u64 * 6
     );
     // The raced genomes' fitness was pulled together with new information, so
     // the generation's fitness statistics differ from the unraced run's.

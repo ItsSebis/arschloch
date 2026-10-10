@@ -202,7 +202,7 @@ treat the option as a way to run it, not as a recommended setting.
 ## Feature sets (`--features`)
 
 A network's inputs are the features of one candidate move. The full list
-(`FEATURE_NAMES_V2` in `sim/src/strategies/neat_player/features.rs`) is the 20
+(`FEATURE_NAMES_V2` in `sim/src/strategies/neat_player/feature_set.rs`; `FEATURE_SET_VERSION` stays 1 and a genome file's recorded feature names, which must be a prefix of that list, tell the sets apart) is the 20
 features of set v1 (`base`, unchanged: same names, order and formulas) followed
 by three groups; `--features` picks a nested prefix, so each choice is a clean
 ablation with an honest genome size:
@@ -301,7 +301,23 @@ stream (new every generation, and the same deals, seats, tables and opponents fo
 every raced genome, so they are still common random numbers), and each raced
 genome's fitness becomes the fitness of all its `m + K` matches together
 (`m` = `--matches-per-genome`) before speciation, selection and the champion choice.
-Genomes that were not raced keep their fitness.
+
+*The boundary problem and the expanding race.* Racing only the top `ceil(F x N)`
+leaves a bias at the cutoff: genomes just below it keep a single noisy estimate,
+and the ones that were lucky enough to sit there can outrank raced genomes whose
+fitness has just been pulled back. The ranking near the cutoff would be
+incoherent (and the lucky ones are exactly those that get selected). So the race
+expands: after pooling, while some un-raced genome has a fitness above the
+lowest pooled fitness of the raced set, those genomes are raced too (all that
+qualify in one batch per round; the extra matches are the same seeds, seats and
+opponents as for the first batch), and the check is repeated. The raced set is
+capped at 2 x `ceil(F x N)` genomes (at most `N`) so the cost stays bounded; when
+more genomes qualify than the cap has room for, the highest-fitness ones are
+raced first. The final state is that every un-raced genome's fitness is at most
+every raced genome's pooled fitness, unless the cap was hit. Genomes that were
+never raced keep their fitness. Everything is deterministic and independent of
+the thread count (batches are in genome-index order and a genome's extra
+evaluation does not depend on the others).
 
 Pooling is done on the moments, not on the scalars: an evaluation keeps `n`, the
 sum of `s`, the sum of `s^2` and the sum of `g(s)`; the two evaluations' sums are
@@ -310,10 +326,12 @@ exactly the match-weighted mean `(m x old + K x extra) / (m + K)`; for `tanh` th
 same weighted mean of the two `tanh` fitnesses; for `risk` it is *not* the
 weighted mean of the two risk values (the standard deviation of the pooled rounds
 is not the average of two standard deviations), which is why the sums are kept.
-Each generation's event has a `racing` object: `raced`, `extra_matches`,
-`mean_before`, `mean_after` and `mean_shift` of the raced genomes' fitness, so the
-correction is visible (a negative shift means the leaders were lucky). Cost: `raced
-x K` extra matches per generation, counted in `rounds_evaluated`. Racing cannot be
+Each generation's event has a `racing` object: `raced` (the initial top set),
+`extra_matches`, `mean_before`, `mean_after` and `mean_shift` of the initial set's
+fitness (the first round, unchanged), so the correction is visible (a negative
+shift means the leaders were lucky), plus `expansion_rounds`, `raced_final` (all
+genomes raced) and `cap_hit`. Cost: `raced_final x K` extra matches per
+generation, between `1x` and `2x` the initial set, counted in `rounds_evaluated`. Racing cannot be
 combined with `--fitness-skill-weight`.
 
 ### One model for several tables (`--player-counts`, `--decks`)
@@ -322,7 +340,9 @@ combined with `--fitness-skill-weight`.
 train one model on every combination of the lists, table size first: with
 `3,5` and `single,double` the settings are `3p-single, 3p-double, 5p-single,
 5p-double`. Match `i` of an evaluation is played at setting `i mod (number of
-settings)`, in seat `i mod (players of that table)`, the same for every genome, so
+settings)`, in seat `(i div settings) mod (players of that table)` (the setting
+cycles fastest, so every setting rotates through all of its own seats; with one
+setting this is `i mod players`), the same for every genome, so
 common random numbers hold. The same cycle is used by the re-evaluations (mixed,
 per opponent, hall of fame), the candidate selection and the held-out
 confirmation, each with its own seeds. The fitness is the configured scalar

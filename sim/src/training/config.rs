@@ -200,6 +200,16 @@ impl TrainConfig {
         count.clamp(1, self.neat.population_size)
     }
 
+    /// The expanding race may race this many times the initial set.
+    pub const RACING_CAP_FACTOR: usize = 2;
+
+    /// The most genomes a generation's expanding race may race: twice the
+    /// initial set, at most the population (0 when racing is off).
+    #[must_use]
+    pub fn racing_cap(&self) -> usize {
+        (self.raced_count() * Self::RACING_CAP_FACTOR).min(self.neat.population_size)
+    }
+
     /// # Errors
     ///
     /// Returns a message naming the first invalid setting.

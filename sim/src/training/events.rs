@@ -125,6 +125,18 @@ pub struct RacingStats {
     pub mean_after: f64,
     /// `mean_after - mean_before`.
     pub mean_shift: f64,
+    /// Rounds of expansion after the first race of the top `raced` genomes
+    /// (0 = no un-raced genome outranked a raced one). Absent in events
+    /// written before the race expanded.
+    #[serde(default)]
+    pub expansion_rounds: u32,
+    /// How many genomes were raced in the end (`raced` plus the expansion).
+    #[serde(default)]
+    pub raced_final: usize,
+    /// Whether the cap on the raced set stopped the expansion while an
+    /// un-raced genome still outranked a raced one.
+    #[serde(default)]
+    pub cap_hit: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

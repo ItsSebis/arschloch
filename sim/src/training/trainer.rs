@@ -403,7 +403,7 @@ impl Trainer {
             // Racing's extra matches.
             + racing
                 .as_ref()
-                .map_or(0, |r| rounds_per_match * (r.raced * r.extra_matches) as u64);
+                .map_or(0, |r| rounds_per_match * (r.raced_final * r.extra_matches) as u64);
         self.total_rounds += rounds_evaluated;
         // Neither `generation_secs` nor the timings include writing the
         // event line and the checkpoint (they come after the event is built).

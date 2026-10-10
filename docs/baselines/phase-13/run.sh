@@ -17,13 +17,16 @@
 #   B1  racing on $BEST            extra matches for the top genomes (noise-aware selection)
 #   B2  risk:0.5 on $BEST          fitness = mean - 0.5 x spread (stable rank)
 #   B3  tanh:4 on $BEST            concave fitness (Vize almost as good as President)
+#   C2  $BEST, 100 matches/genome  matched-budget control for B1 (B1 costs ~25% more evaluation
+#                                  per generation than A0/A2: compare B1 against C2, and also A2)
 #   M1  all features, sizes 3-6, both decks (one model for every table)
 #   S3, S5D  specialist controls for M1 (3 players single deck, 5 players double deck, base features)
 # BEST is the feature set of the better of A0/A2 (default hidden); set BEST=base to stack on A0.
 #
 # Environment: CLI, OUT (default runs/phase13), SEEDS (default "1 2 3"), THREADS (0 = all),
 # GENS/POP/MATCHES/ROUNDS/REEVAL (default: the neat-v2 recipe), EVAL_MATCHES (default 2000),
-# EVAL_ROUNDS (default 10), EVAL_SEED (default 99).
+# EVAL_ROUNDS (default 10), EVAL_SEED (default 99). ARM_MATCHES[arm] overrides --matches-per-genome
+# for one arm (default $MATCHES; C2 uses 100).
 set -euo pipefail
 CLI=${CLI:-target/release/cli}
 OUT=${OUT:-runs/phase13}
@@ -48,9 +51,15 @@ declare -A ARM_ARGS=(
   [B1]="--features $BEST --racing-top 0.2 --racing-matches 100"
   [B2]="--features $BEST --fitness risk:0.5"
   [B3]="--features $BEST --fitness tanh:4"
+  [C2]="--features $BEST"
   [M1]="--features all --player-counts 3,4,5,6 --decks single,double"
   [S3]="--features base --player-count 3"
   [S5D]="--features base --player-count 5 --deck-variant double"
+)
+
+# Per-arm matches per genome (default $MATCHES). C2 matches B1's evaluation budget.
+declare -A ARM_MATCHES=(
+  [C2]=100
 )
 
 train_arm() { # arm seed
@@ -62,7 +71,7 @@ train_arm() { # arm seed
   echo "train $arm seed $seed: ${ARM_ARGS[$arm]}"
   # shellcheck disable=SC2086
   "$CLI" train --out "$dir" --seed "$seed" --population "$POP" --generations "$GENS" \
-    --matches-per-genome "$MATCHES" --reeval-matches "$REEVAL" --rounds "$ROUNDS" \
+    --matches-per-genome "${ARM_MATCHES[$arm]:-$MATCHES}" --reeval-matches "$REEVAL" --rounds "$ROUNDS" \
     --champion-candidates 5 --weight-power 0.2 "${RULES[@]}" --threads "$THREADS" --quiet \
     ${ARM_ARGS[$arm]}
 }

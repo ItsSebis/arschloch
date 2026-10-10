@@ -163,7 +163,9 @@ pub fn evaluate(
 
 /// `evaluate` over several settings and with a fitness variant. Match `i`
 /// of `seeds` is played at `tables[(first_index + i) % tables.len()]`, in
-/// seat `(first_index + i) % players` of that table, so every candidate
+/// seat `((first_index + i) / tables.len()) % players` of that table (each
+/// setting rotates through its own seats; with one table this is
+/// `(first_index + i) % players`), so every candidate
 /// evaluated on the same seeds meets the same table, seat and opponents
 /// (common random numbers). `first_index` lets a second batch of matches
 /// continue the cycle of the first. With one table, `FitnessKind::Mean` and
@@ -288,7 +290,9 @@ fn evaluate_inner(
                 opponents,
                 kind,
                 &options,
-                index,
+                // The setting cycles fastest, so the seat rotates once per
+                // pass over the settings: every setting visits all its seats.
+                index / tables.len(),
                 seed,
             );
             outcome.setting = setting;
@@ -298,20 +302,20 @@ fn evaluate_inner(
     summarise(outcomes, tables, kind)
 }
 
-/// Plays match number `index` of the cycle (at `table`, in seat `index mod
-/// players`) with `seed`.
+/// Plays a match at `table` with the candidate in seat `rotation mod
+/// players` and the deals of `seed`.
 fn play_match(
     candidate: &Arc<dyn Strategy>,
     table: &TableSpec,
     opponents: Opponents<'_>,
     kind: FitnessKind,
     options: &RunOptions,
-    index: usize,
+    rotation: usize,
     seed: u64,
 ) -> MatchOutcome {
     let players = usize::from(table.player_count);
     let roles = roles_for_player_count(table.player_count).expect("supported table size");
-    let seat = index % players;
+    let seat = rotation % players;
     let mut pick = Xoshiro256PlusPlus::seed_from_u64(mix(seed ^ 0x5EA7));
     let strategies: Vec<Arc<dyn Strategy>> = (0..players)
         .map(|s| {
@@ -899,6 +903,34 @@ mod tests {
             one,
             evaluate(&a, &tables[0], Opponents::Mixed(&pool), &many)
         );
+    }
+
+    #[test]
+    fn every_setting_rotates_through_all_its_seats() {
+        // With L settings the candidate's seat is (index / L) % players, so a
+        // setting's own matches (every L-th) take seats 0, 1, 2, ... in turn;
+        // by_setting[j] is therefore exactly the evaluation of that table
+        // alone on every L-th seed with the plain rotation.
+        let tables = mixed_tables();
+        let candidate: Arc<dyn Strategy> = Arc::new(RandomLegal);
+        let pool: Vec<Arc<dyn Strategy>> = vec![Arc::new(LowestLegal), Arc::new(RandomLegal)];
+        let many = seeds(36);
+        let multi = evaluate_with(
+            &candidate,
+            &tables,
+            Opponents::Mixed(&pool),
+            &many,
+            FitnessKind::Mean,
+            0,
+        );
+        for (j, table) in tables.iter().enumerate() {
+            let own: Vec<u64> = many.iter().copied().skip(j).step_by(tables.len()).collect();
+            let alone = evaluate(&candidate, table, Opponents::Mixed(&pool), &own);
+            let column = &multi.by_setting[j];
+            assert_eq!(column.matches, own.len());
+            assert_eq!(column.placements, alone.placements, "{}", column.label);
+            assert!((column.mean - alone.mean).abs() < 1e-12);
+        }
     }
 
     #[test]
