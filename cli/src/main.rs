@@ -6,6 +6,7 @@ mod args;
 mod evaluate;
 mod output;
 mod play;
+mod stats_doc;
 mod summary;
 mod train;
 mod train_args;
@@ -25,6 +26,7 @@ fn main() -> anyhow::Result<()> {
         Some("train") => return train::run(std::env::args().skip(2)),
         Some("watch") => return watch::run(std::env::args().skip(2)),
         Some("evaluate") => return evaluate::run(std::env::args().skip(2)),
+        Some("stats-doc") => return stats_doc::run(std::env::args().skip(2)),
         Some("play") => return play::run(std::env::args().skip(2)),
         _ => {}
     }

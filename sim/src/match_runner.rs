@@ -14,10 +14,12 @@ use rand::seq::SliceRandom;
 use rand::SeedableRng;
 use rayon::prelude::*;
 
+use crate::hand_features::HandFeatures;
 use crate::hand_reading::PassTracker;
 use crate::match_config::MatchConfig;
 use crate::match_result::MatchResult;
 use crate::strategy::{OpponentHand, Strategy, TurnContext};
+use crate::training::evaluate::mix;
 
 /// Builds the `TurnContext` for `seat`'s upcoming `choose_play` call:
 /// every other seat's current hand size/activity/pass ceilings, the
@@ -74,8 +76,124 @@ pub(crate) fn turn_context_for<'a>(
     }
 }
 
+/// Optional behaviour of `run_match_with`. The default reproduces
+/// `run_match` exactly.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct RunOptions {
+    /// When set, round `r`'s deck is shuffled from its own generator
+    /// seeded by `deal_round_seed(deal_seed, r)` instead of the shared
+    /// play stream, so two matches with the same `deal_seed` deal the
+    /// same decks whatever randomness their strategies consume.
+    pub deal_seed: Option<u64>,
+    /// Record each seat's round-1 hand features (after the deal, before
+    /// any exchange) in `MatchResult::first_hand_features`.
+    pub record_deal_features: bool,
+}
+
+/// The seed of round `round_index`'s shuffle under `deal_seed`.
+#[must_use]
+pub fn deal_round_seed(deal_seed: u64, round_index: usize) -> u64 {
+    mix(mix(deal_seed) ^ round_index as u64)
+}
+
+/// Move-shape counters `play_out` adds to; a rollout passes a scratch
+/// value it throws away.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PlayCounters {
+    /// Tricks led.
+    pub trick_count: u32,
+    /// Passes submitted, per seat.
+    pub pass_counts: Vec<u32>,
+    /// Passes submitted while a play was also legal, per seat.
+    pub voluntary_pass_counts: Vec<u32>,
+}
+
+impl PlayCounters {
+    #[must_use]
+    pub fn new(player_count: u8) -> Self {
+        Self {
+            trick_count: 0,
+            pass_counts: vec![0; usize::from(player_count)],
+            voluntary_pass_counts: vec![0; usize::from(player_count)],
+        }
+    }
+}
+
+/// Plays `round` to completion from its current state: each seat to move
+/// asks its strategy (drawing randomness from `rng`) and the move is
+/// submitted. `round_deck` is every card dealt this round (see
+/// `turn_context_for`); `counters` accumulates tricks and passes. The
+/// pass tracker restarts from the round's history, so it works for a
+/// round cloned mid-way. Resulting placings are in
+/// `round.finishing_order()`.
+///
+/// # Panics
+///
+/// Panics if `strategies` or `counters` do not match
+/// `config.player_count` seats, or a strategy returns an illegal move.
+pub fn play_out(
+    round: &mut Round,
+    strategies: &[Arc<dyn Strategy>],
+    config: &MatchConfig,
+    round_deck: &[Card],
+    rng: &mut dyn rand::Rng,
+    counters: &mut PlayCounters,
+) {
+    let mut tracker = PassTracker::new(usize::from(config.player_count), config.duplicate_rule);
+    while !round.is_complete() {
+        let seat = round.seat_to_move().expect("round is not complete");
+        if round.current_combo().is_none() {
+            counters.trick_count += 1;
+        }
+        let legal_moves = round.legal_moves();
+
+        let context = turn_context_for(round, seat, config.player_count, round_deck, &mut tracker);
+
+        let chosen = strategies[usize::from(seat)].choose_play(
+            &legal_moves,
+            config.duplicate_rule,
+            &context,
+            rng,
+        );
+
+        if chosen == Move::Pass {
+            counters.pass_counts[usize::from(seat)] += 1;
+            if legal_moves.iter().any(|mv| matches!(mv, Move::Play(_))) {
+                counters.voluntary_pass_counts[usize::from(seat)] += 1;
+            }
+        }
+        round
+            .submit_move(seat, chosen)
+            .expect("strategies only choose from the moves engine just reported as legal");
+    }
+}
+
+/// Round `round_index`'s numbered, shuffled deck: from the play stream
+/// `rng`, or from the round's own generator when `options.deal_seed` is set.
+fn shuffled_deck(
+    config: &MatchConfig,
+    options: &RunOptions,
+    round_index: usize,
+    rng: &mut rand::rngs::StdRng,
+) -> Vec<Card> {
+    let mut deck = standard_deck(config.deck_variant);
+    match options.deal_seed {
+        Some(deal_seed) => {
+            let mut deal_rng =
+                rand::rngs::StdRng::seed_from_u64(deal_round_seed(deal_seed, round_index));
+            deck.shuffle(&mut deal_rng);
+        }
+        None => deck.shuffle(rng),
+    }
+    for (index, card) in deck.iter_mut().enumerate() {
+        card.deal_index = u8::try_from(index).expect("deck sizes (52/104) fit in u8");
+    }
+    deck
+}
+
 /// Simulates one full match (`config.rounds` rounds, role carry-over
-/// between them) using `strategies` (one per seat).
+/// between them) using `strategies` (one per seat). Same as
+/// `run_match_with` with default options.
 ///
 /// # Panics
 ///
@@ -87,6 +205,21 @@ pub(crate) fn turn_context_for<'a>(
 /// boundary with proper `Result`-based validation arrives in Phase 3).
 #[must_use]
 pub fn run_match(config: &MatchConfig, strategies: &[Arc<dyn Strategy>]) -> MatchResult {
+    run_match_with(config, strategies, &RunOptions::default())
+}
+
+/// `run_match` with `RunOptions` (fixed deal seed, deal-feature
+/// recording).
+///
+/// # Panics
+///
+/// As `run_match`.
+#[must_use]
+pub fn run_match_with(
+    config: &MatchConfig,
+    strategies: &[Arc<dyn Strategy>],
+    options: &RunOptions,
+) -> MatchResult {
     assert_eq!(
         strategies.len(),
         usize::from(config.player_count),
@@ -98,18 +231,16 @@ pub fn run_match(config: &MatchConfig, strategies: &[Arc<dyn Strategy>]) -> Matc
     let mut previous_roles: Option<Vec<engine::Role>> = None;
     let mut previous_arschloch: Option<SeatId> = None;
     let mut role_history = Vec::with_capacity(config.rounds);
-    let mut trick_count = 0u32;
-    let mut pass_counts = vec![0u32; usize::from(config.player_count)];
-    let mut voluntary_pass_counts = vec![0u32; usize::from(config.player_count)];
+    let mut counters = PlayCounters::new(config.player_count);
+    let mut first_hand_features = None;
 
-    for _ in 0..config.rounds {
-        let mut deck = standard_deck(config.deck_variant);
-        deck.shuffle(&mut rng);
-        for (index, card) in deck.iter_mut().enumerate() {
-            card.deal_index = u8::try_from(index).expect("deck sizes (52/104) fit in u8");
-        }
+    for round_index in 0..config.rounds {
+        let deck = shuffled_deck(config, options, round_index, &mut rng);
         let mut hands = deal(deck, config.player_count)
             .expect("standard_deck always yields enough cards for a supported player count");
+        if round_index == 0 && options.record_deal_features {
+            first_hand_features = Some(hands.iter().map(|h| HandFeatures::from_hand(h)).collect());
+        }
 
         let leader = match (&previous_roles, previous_arschloch) {
             (Some(roles), Some(arschloch)) => {
@@ -138,34 +269,14 @@ pub fn run_match(config: &MatchConfig, strategies: &[Arc<dyn Strategy>]) -> Matc
             Round::with_pass_rule(hands, config.duplicate_rule, config.pass_rule, leader)
                 .expect("player_count/leader are always valid for a supported table size");
 
-        let mut tracker = PassTracker::new(usize::from(config.player_count), config.duplicate_rule);
-        while !round.is_complete() {
-            let seat = round.seat_to_move().expect("round is not complete");
-            if round.current_combo().is_none() {
-                trick_count += 1;
-            }
-            let legal_moves = round.legal_moves();
-
-            let context =
-                turn_context_for(&round, seat, config.player_count, &round_deck, &mut tracker);
-
-            let chosen = strategies[usize::from(seat)].choose_play(
-                &legal_moves,
-                config.duplicate_rule,
-                &context,
-                &mut rng,
-            );
-
-            if chosen == Move::Pass {
-                pass_counts[usize::from(seat)] += 1;
-                if legal_moves.iter().any(|mv| matches!(mv, Move::Play(_))) {
-                    voluntary_pass_counts[usize::from(seat)] += 1;
-                }
-            }
-            round
-                .submit_move(seat, chosen)
-                .expect("strategies only choose from the moves engine just reported as legal");
-        }
+        play_out(
+            &mut round,
+            strategies,
+            config,
+            &round_deck,
+            &mut rng,
+            &mut counters,
+        );
 
         let finishing_order = round.finishing_order().to_vec();
         let roles = assign_roles(&finishing_order, config.player_count)
@@ -179,9 +290,10 @@ pub fn run_match(config: &MatchConfig, strategies: &[Arc<dyn Strategy>]) -> Matc
         player_count: config.player_count,
         strategy_names: strategies.iter().map(|s| s.name().to_string()).collect(),
         role_history,
-        trick_count,
-        pass_counts,
-        voluntary_pass_counts,
+        trick_count: counters.trick_count,
+        pass_counts: counters.pass_counts,
+        voluntary_pass_counts: counters.voluntary_pass_counts,
+        first_hand_features,
     }
 }
 
@@ -227,6 +339,84 @@ mod tests {
             Arc::new(crate::strategies::LowestLegal),
             Arc::new(crate::strategies::LowestLegal),
         ]
+    }
+
+    #[test]
+    fn deal_seed_fixes_every_rounds_deck_regardless_of_play_stream() {
+        let config = MatchConfig {
+            player_count: 4,
+            deck_variant: DeckVariant::Single,
+            duplicate_rule: DuplicateRule::FirstDealtWins,
+            rounds: 3,
+            seed: 1,
+            pass_rule: engine::PassRule::default(),
+            exchange_rule: engine::ExchangeRule::default(),
+        };
+        let fixed = RunOptions {
+            deal_seed: Some(77),
+            record_deal_features: false,
+        };
+        let other = RunOptions {
+            deal_seed: Some(78),
+            record_deal_features: false,
+        };
+        let key = |deck: &[Card]| -> Vec<(u8, u8, u8)> {
+            deck.iter()
+                .map(|c| (c.rank as u8, c.suit as u8, c.deal_index))
+                .collect()
+        };
+        for round in 0..3 {
+            // Play streams with different positions and seeds, as differently
+            // consuming strategies would leave them.
+            let mut a = rand::rngs::StdRng::seed_from_u64(1);
+            let mut b = rand::rngs::StdRng::seed_from_u64(2);
+            let _: u64 = rand::RngExt::random(&mut b);
+            assert_eq!(
+                key(&shuffled_deck(&config, &fixed, round, &mut a)),
+                key(&shuffled_deck(&config, &fixed, round, &mut b))
+            );
+            assert_ne!(
+                key(&shuffled_deck(&config, &fixed, round, &mut a)),
+                key(&shuffled_deck(&config, &other, round, &mut a))
+            );
+        }
+        let mut rng = rand::rngs::StdRng::seed_from_u64(1);
+        assert_ne!(
+            key(&shuffled_deck(&config, &fixed, 0, &mut rng)),
+            key(&shuffled_deck(&config, &fixed, 1, &mut rng))
+        );
+    }
+
+    #[test]
+    fn default_options_equal_run_match_and_deal_seed_changes_the_deal() {
+        let config = MatchConfig {
+            player_count: 4,
+            deck_variant: DeckVariant::Single,
+            duplicate_rule: DuplicateRule::FirstDealtWins,
+            rounds: 3,
+            seed: 5,
+            pass_rule: engine::PassRule::default(),
+            exchange_rule: engine::ExchangeRule::default(),
+        };
+        let strategies = four_lowest_legal();
+        let plain = run_match(&config, &strategies);
+        let with = run_match_with(&config, &strategies, &RunOptions::default());
+        assert_eq!(plain.role_history, with.role_history);
+        assert!(with.first_hand_features.is_none());
+        let features = |deal_seed| {
+            run_match_with(
+                &config,
+                &strategies,
+                &RunOptions {
+                    deal_seed: Some(deal_seed),
+                    record_deal_features: true,
+                },
+            )
+            .first_hand_features
+            .unwrap()
+        };
+        assert_eq!(features(1), features(1));
+        assert_ne!(features(1), features(2));
     }
 
     #[test]

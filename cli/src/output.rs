@@ -75,6 +75,7 @@ mod tests {
             trick_count: 3,
             pass_counts: vec![1, 0, 0],
             voluntary_pass_counts: vec![0, 0, 0],
+            first_hand_features: None,
         }
     }
 

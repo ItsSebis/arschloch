@@ -18,4 +18,8 @@ pub struct MatchResult {
     /// (a `Move::Play` was also legal — see docs/ROADMAP.md, Phase 4,
     /// "Strategy diversification").
     pub voluntary_pass_counts: Vec<u32>,
+    /// Round-1 hand features per seat, after the deal and before the
+    /// exchange; only present when `RunOptions::record_deal_features` was set.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub first_hand_features: Option<Vec<crate::hand_features::HandFeatures>>,
 }

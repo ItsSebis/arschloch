@@ -88,6 +88,11 @@ impl App {
 
     /// Handles one request. `target` is the request target as sent
     /// (path plus optional query).
+    ///
+    /// # Panics
+    ///
+    /// Only if serialising the built-in statistics catalogue fails, which cannot happen
+    /// for its plain-data types.
     #[must_use]
     pub fn handle(&self, method: &str, target: &str) -> Response {
         if method != "GET" {
@@ -113,6 +118,10 @@ impl App {
             ),
             "/api/state" => self.state(),
             "/api/events" => self.events(query),
+            "/api/statistics-catalog" => Response::json(
+                200,
+                &serde_json::to_value(sim::stats_catalog::catalog()).expect("catalogue serialises"),
+            ),
             _ => {
                 if let Some(rest) = path.strip_prefix("/api/genome/") {
                     return self.genome(rest);
@@ -355,6 +364,23 @@ mod tests {
         ] {
             assert_eq!(app.handle("GET", path).status, 404, "{path}");
         }
+    }
+
+    #[test]
+    fn the_statistics_catalogue_is_served_as_json() {
+        let response = app().handle("GET", "/api/statistics-catalog");
+        assert_eq!(response.status, 200);
+        assert!(response.content_type.starts_with("application/json"));
+        let body = json_of(&response);
+        let ids: Vec<&str> = body
+            .as_array()
+            .expect("an array")
+            .iter()
+            .map(|e| e["id"].as_str().expect("an id"))
+            .collect();
+        assert!(ids.contains(&"avg_rank") && ids.contains(&"role_retention_by_strategy"));
+        assert_eq!(body[0]["scope"], "per_strategy");
+        assert_eq!(app().handle("POST", "/api/statistics-catalog").status, 405);
     }
 
     #[test]
