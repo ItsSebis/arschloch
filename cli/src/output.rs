@@ -281,9 +281,12 @@ mod tests {
         let statistics = sim::aggregate(&run.results);
         let extended = sim::extended_stats::aggregate_extended(&run.results);
 
+        // Two tests call this in one process: the file name must be unique per call.
+        static CALLS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
         let path = std::env::temp_dir().join(format!(
-            "arschloch-catalog-paths-{}.json",
-            std::process::id()
+            "arschloch-catalog-paths-{}-{}.json",
+            std::process::id(),
+            CALLS.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
         ));
         let file = create_output_file(&path).unwrap();
         write_json_output(
