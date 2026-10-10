@@ -16,14 +16,7 @@ pub use compare::{compare, ComparisonReport, StrategyComparison};
 pub use duplicate_report::{skill_report, SkillReport, StrategySkill};
 pub use estimator::{estimator_report, EstimatorReport, EstimatorStrategy};
 
-/// A mean with its standard error and the number of independent units
-/// (groups or matches) behind it.
-#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize)]
-pub struct Estimate {
-    pub value: f64,
-    pub std_error: f64,
-    pub n: usize,
-}
+pub use crate::extended_stats::Estimate;
 
 #[allow(clippy::cast_precision_loss)] // sample counts are far below 2^52
 fn count(xs: &[f64]) -> f64 {

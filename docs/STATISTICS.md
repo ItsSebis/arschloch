@@ -10,8 +10,6 @@ How to read these statistics. Every number comes from simulated play, so it is a
 
 - [Voluntary pass rate](#voluntary_pass_rate) (`voluntary_pass_rate`)
 - [Matches played](#matches_played) (`matches_played`)
-- [Luck share](#luck_share) (`luck_share`)
-- [Variance reduction](#variance_reduction) (`variance_reduction`)
 - [Estimator agreement](#estimator_agreement) (`estimator_agreement`)
 
 **Per strategy**
@@ -29,6 +27,8 @@ How to read these statistics. Every number comes from simulated play, so it is a
 - [Useful pass gain](#useful_pass_gain) (`useful_pass_gain`)
 - [Skill score (duplicate deals)](#skill_score_duplicate) (`skill_score_duplicate`)
 - [Skill score (cheap estimate)](#skill_score_estimate) (`skill_score_estimate`)
+- [Luck share](#luck_share) (`luck_share`)
+- [Variance reduction](#variance_reduction) (`variance_reduction`)
 
 ## Role counts
 
@@ -126,7 +126,7 @@ How to read these statistics. Every number comes from simulated play, so it is a
 
 **Caveats.** Averages per match, because the rounds of one match are not independent (roles carry over). Places are not equally spaced in value; mean_role_score weights them linearly.
 
-**JSON path.** `extended.by_strategy.<name>.avg_rank (+ std_error), extended.by_seat.<n>.avg_rank`
+**JSON path.** `extended.by_strategy.<strategy>.avg_rank.{value,std_error}; extended.by_seat.[].avg_rank.{value,std_error}`
 
 ## Rank distribution
 
@@ -140,7 +140,7 @@ How to read these statistics. Every number comes from simulated play, so it is a
 
 **Caveats.** A distribution over many places needs many rounds to be smooth; small batches look jagged. No error bars.
 
-**JSON path.** `extended.by_strategy.<name>.rank_distribution`
+**JSON path.** `extended.by_strategy.<strategy>.rank_distribution`
 
 ## Mean role score
 
@@ -154,7 +154,7 @@ How to read these statistics. Every number comes from simulated play, so it is a
 
 **Caveats.** Treats the gap between places as equal, which is a modelling choice. Depends on who the opponents are; use strength_rating to adjust for that.
 
-**JSON path.** `extended.by_strategy.<name>.mean_role_score (+ std_error), extended.by_seat.<n>.mean_role_score`
+**JSON path.** `extended.by_strategy.<strategy>.mean_role_score.{value,std_error}; extended.by_seat.[].mean_role_score.{value,std_error}`
 
 ## Strength rating
 
@@ -168,7 +168,7 @@ How to read these statistics. Every number comes from simulated play, so it is a
 
 **Caveats.** Only meaningful relative to this field: adding a weak opponent changes the others' numbers. A strategy that beat everyone in every game has an unbounded rating, so very large values show up as clipped. The bootstrap standard error is an estimate and needs many matches.
 
-**JSON path.** `extended.by_strategy.<name>.strength_rating (+ std_error)`
+**JSON path.** `extended.by_strategy.<strategy>.strength_rating.{value,std_error}`
 
 ## Wilson confidence interval
 
@@ -182,7 +182,7 @@ How to read these statistics. Every number comes from simulated play, so it is a
 
 **Caveats.** Assumes independent trials; consecutive rounds of one match are correlated, so the true uncertainty is somewhat larger than shown. Unlike the plain normal interval it stays inside 0..1 even for rare events.
 
-**JSON path.** `extended.*.<name>.<rate>_interval ([low, high])`
+**JSON path.** `extended.role_retention_intervals.<strategy>.<role>.{low,high}; extended.voluntary_pass_rate_intervals.<strategy>.{low,high}`
 
 ## Useful pass share
 
@@ -224,7 +224,7 @@ How to read these statistics. Every number comes from simulated play, so it is a
 
 **Caveats.** Only round 1 is perfectly luck-free. Later rounds are luck-reduced, not luck-free, because the carried-over roles and exchanged cards depend partly on skill in earlier rounds and the rounds diverge between seatings. Needs a number of matches that is a multiple of the number of strategies. The deal comes from a separate random stream, so results differ from ordinary runs with the same seed.
 
-**JSON path.** `extended.skill.duplicate.<name>.{score,std_error}`
+**JSON path.** `extended.skill.duplicate.strategies.[].skill_score_duplicate.{value,std_error}`
 
 ## Skill score (cheap estimate)
 
@@ -234,15 +234,15 @@ How to read these statistics. Every number comes from simulated play, so it is a
 
 **Formula.** Least squares regression of the round-1 role score of every seat on hand features (cards of Queen or higher, pairs, triples, quads, lowest card strength, sum of strengths) plus a constant per strategy. Adjusted score = actual score minus beta times (features minus their mean); the estimate is the mean adjusted score per strategy with a standard error.
 
-**Reading it.** Read like skill_score_duplicate: higher is better, 0 is average. It should land close to the duplicate result; estimator_agreement says how close. A big difference between the plain mean role score and this one means the strategy was helped or hurt by its hands.
+**Reading it.** Read like skill_score_duplicate: higher is better, 0 is average. It should land close to the duplicate result; estimator_agreement says how close. When both modes run, the estimate comes from a separate ordinary batch with different deals, so its standard error is honest and it differs from the duplicate value by noise. A big difference between the plain mean role score and this one means the strategy was helped or hurt by its hands.
 
 **Caveats.** It can only remove the luck its features capture: luck that comes from how hands combine during play stays in. Uses round 1 only. The regression is linear and may be biased if the true hand effect is not. Costs almost nothing extra and works on ordinary runs.
 
-**JSON path.** `extended.skill.estimate.<name>.{score,std_error}`
+**JSON path.** `extended.skill.estimate.strategies.[].skill_score_estimate.{value,std_error}`
 
 ## Luck share
 
-<a id="luck_share"></a>`luck_share` - whole run, unit: share, range: 0..1, since phase 12
+<a id="luck_share"></a>`luck_share` - per strategy, unit: share, range: 0..1, since phase 12
 
 **Meaning.** How much of the spread of single-game results is down to card luck rather than play: 0 means skill decides everything, 1 means pure luck.
 
@@ -250,23 +250,23 @@ How to read these statistics. Every number comes from simulated play, so it is a
 
 **Reading it.** A card game with a lot of luck shows a high value. If it is large, many games are needed to separate two strategies, and duplicate deals pay off. Values near 0 would mean the deal hardly matters.
 
-**Caveats.** A property of this field and rule set, not of one strategy. It rests on variance_reduction, which needs several duplicate groups to be stable. It counts only the luck that duplicate deals remove, so luck that arises during play (who happens to get which exchange cards in later rounds) is not included and the true luck share is somewhat higher.
+**Caveats.** Computed per strategy from the same deals, so the rows are similar; it describes this field and rule set rather than one strategy's quality. It rests on variance_reduction, which needs several duplicate groups to be stable. It counts only the luck that duplicate deals remove, so luck that arises during play (who happens to get which exchange cards in later rounds) is not included and the true luck share is somewhat higher.
 
-**JSON path.** `extended.skill.luck_share`
+**JSON path.** `extended.skill.duplicate.strategies.[].luck_share; extended.skill.estimate.strategies.[].luck_share`
 
 ## Variance reduction
 
-<a id="variance_reduction"></a>`variance_reduction` - whole run, unit: factor, range: 0..unbounded, since phase 12
+<a id="variance_reduction"></a>`variance_reduction` - per strategy, unit: factor, range: 0..unbounded, since phase 12
 
 **Meaning.** How many ordinary games one duplicate game is worth: a value of 5 means a duplicate group gives the accuracy of five times as many ordinary games.
 
-**Formula.** Var(single-match score) / (k * Var(group mean)), where the single-match score is a strategy's mean role score in one match, k is the number of matches per group (number of strategies) and the group mean is x(s,g) as in skill_score_duplicate, pooled over strategies.
+**Formula.** Var(single-match score) / (k * Var(group mean)), where the single-match score is a strategy's mean role score in one match, k is the number of matches per group (number of strategies) and the group mean is x(s,g) as in skill_score_duplicate. Computed for each strategy; the cheap estimator reports its own factor (the variance of the strategy's round-1 scores before and after the adjustment).
 
 **Reading it.** Larger is better for duplicate mode; 1 means no benefit. The cost is k times as many matches per group, so a value above 1 shows the format pays for itself, a value well above k is excellent.
 
 **Caveats.** Estimated from the same sample, so itself noisy with few groups. Values below 1 can occur by chance.
 
-**JSON path.** `extended.skill.variance_reduction`
+**JSON path.** `extended.skill.duplicate.strategies.[].variance_reduction; extended.skill.estimate.strategies.[].variance_reduction`
 
 ## Estimator agreement
 
@@ -274,10 +274,10 @@ How to read these statistics. Every number comes from simulated play, so it is a
 
 **Meaning.** How closely the cheap estimator follows the duplicate result. High agreement means the cheap estimator can replace the expensive duplicate mode.
 
-**Formula.** Spearman rank correlation of strategies ordered by skill_score_estimate and by skill_score_duplicate, together with the share of the duplicate variance reduction the estimator recovers; reported only when both modes ran.
+**Formula.** Kendall rank correlation (tau, rank_agreement) of the strategies ordered by skill_score_estimate and by round-1 skill_score_duplicate, together with the mean share of the duplicate round-1 luck share the estimator recovers (mean_variance_removed_ratio, estimator luck share divided by duplicate luck share); reported only when both modes ran.
 
 **Reading it.** Near 1 means the estimator gives the same ordering and removes a similar amount of luck, so duplicate deals can be skipped. Low values mean the estimator is not trustworthy for this game.
 
-**Caveats.** With few strategies the rank correlation has few possible values and is easy to get by chance (three strategies give only a handful of orderings). Only available in the mode that runs both.
+**Caveats.** With few strategies the rank correlation has few possible values and is easy to get by chance (three strategies give only a handful of orderings). Only available in the mode that runs both, which plays about twice the matches: the duplicate groups and a separate ordinary batch (different deals) for the estimator. The estimate and the duplicate value therefore differ by sampling noise; gaps within about two standard errors are expected, perfect agreement would be suspicious.
 
-**JSON path.** `extended.skill.estimator_agreement`
+**JSON path.** `extended.skill.comparison.{rank_agreement,mean_variance_removed_ratio}`

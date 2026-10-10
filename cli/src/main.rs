@@ -3,7 +3,9 @@
 //! docs/ARCHITECTURE.md, "cli".
 
 mod args;
+mod batch;
 mod evaluate;
+mod extended_summary;
 mod output;
 mod play;
 mod stats_doc;
@@ -63,11 +65,39 @@ fn main() -> anyhow::Result<()> {
         })
         .collect();
 
-    let results = sim::run_batch(&configs, &strategies);
+    let batch::BatchRun { results, skill } = batch::run(args.skill_score, &configs, &strategies)?;
     let statistics = sim::aggregate(&results);
+    let extended = sim::extended_stats::aggregate_extended_with(
+        &results,
+        &sim::extended_stats::ExtendedOptions {
+            bootstrap_resamples: args.bootstrap_resamples,
+            ..sim::extended_stats::ExtendedOptions::default()
+        },
+    );
 
-    output::write_json_output(output_file, &results, &statistics)?;
+    let useful = batch::useful_passes(&args, &configs, &strategies);
 
+    output::write_json_output(
+        output_file,
+        &results,
+        &statistics,
+        &extended,
+        skill.as_ref(),
+        useful.as_ref(),
+    )?;
+
+    // The original summary comes first and is unchanged; the Phase 12
+    // sections are appended after it.
     println!("{}", summary::render_summary(&args, &statistics));
+    print!(
+        "{}",
+        extended_summary::render_extended_summary(
+            &args,
+            &statistics,
+            &extended,
+            skill.as_ref(),
+            useful.as_ref()
+        )
+    );
     Ok(())
 }

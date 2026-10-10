@@ -44,7 +44,8 @@ impl Scope {
 /// Plain-data description of one statistic.
 #[derive(Debug, Clone, Copy, serde::Serialize)]
 pub struct StatInfo {
-    /// `snake_case`; equals the JSON field name where the value lives.
+    /// `snake_case`; the stable key of the statistic (it is not always
+    /// the name of the JSON field, see `json_path`).
     pub id: &'static str,
     pub name: &'static str,
     pub scope: Scope,
@@ -59,7 +60,11 @@ pub struct StatInfo {
     pub caveats: &'static str,
     /// Roadmap phase that introduced the statistic.
     pub since_phase: u32,
-    /// Where the value appears in results.json.
+    /// Where the value appears in results.json: one or more paths
+    /// separated by `"; "`. Segments are separated by `.`; `<name>` stands
+    /// for every key of a JSON object (strategy name, role), `[]` for every
+    /// element of an array and `{a,b}` for several fields at once. A test
+    /// in the `cli` crate resolves every path against a real run.
     pub json_path: &'static str,
 }
 
@@ -153,7 +158,7 @@ static CATALOG: &[StatInfo] = &[
         reading: "Lower is better. The average over a fair field is (players + 1) / 2, for example 2.5 at four players. A strategy more than about two standard errors away from that is credibly better or worse than average. Per seat values that differ from each other for equal strategies reveal a seating bias.",
         caveats: "Averages per match, because the rounds of one match are not independent (roles carry over). Places are not equally spaced in value; mean_role_score weights them linearly.",
         since_phase: 12,
-        json_path: "extended.by_strategy.<name>.avg_rank (+ std_error), extended.by_seat.<n>.avg_rank",
+        json_path: "extended.by_strategy.<strategy>.avg_rank.{value,std_error}; extended.by_seat.[].avg_rank.{value,std_error}",
     },
     StatInfo {
         id: "rank_distribution",
@@ -166,7 +171,7 @@ static CATALOG: &[StatInfo] = &[
         reading: "Shows the shape behind the average: two strategies with equal average place can differ in how often they win outright versus finish last. A fair field puts 100/players percent on each place.",
         caveats: "A distribution over many places needs many rounds to be smooth; small batches look jagged. No error bars.",
         since_phase: 12,
-        json_path: "extended.by_strategy.<name>.rank_distribution",
+        json_path: "extended.by_strategy.<strategy>.rank_distribution",
     },
     StatInfo {
         id: "mean_role_score",
@@ -179,7 +184,7 @@ static CATALOG: &[StatInfo] = &[
         reading: "Higher is better. A fair field averages exactly 0 (the scores of one table always sum to 0), so scores are relative to the opponents. Values near 0.1 are a small edge, above 0.3 is a clear one.",
         caveats: "Treats the gap between places as equal, which is a modelling choice. Depends on who the opponents are; use strength_rating to adjust for that.",
         since_phase: 12,
-        json_path: "extended.by_strategy.<name>.mean_role_score (+ std_error), extended.by_seat.<n>.mean_role_score",
+        json_path: "extended.by_strategy.<strategy>.mean_role_score.{value,std_error}; extended.by_seat.[].mean_role_score.{value,std_error}",
     },
     StatInfo {
         id: "strength_rating",
@@ -192,7 +197,7 @@ static CATALOG: &[StatInfo] = &[
         reading: "Higher is better; 0 is the field average, a difference of 100 points means the stronger strategy finishes above the weaker one in about 64 percent of their meetings. Compare ratings within one run only.",
         caveats: "Only meaningful relative to this field: adding a weak opponent changes the others' numbers. A strategy that beat everyone in every game has an unbounded rating, so very large values show up as clipped. The bootstrap standard error is an estimate and needs many matches.",
         since_phase: 12,
-        json_path: "extended.by_strategy.<name>.strength_rating (+ std_error)",
+        json_path: "extended.by_strategy.<strategy>.strength_rating.{value,std_error}",
     },
     StatInfo {
         id: "retention_interval",
@@ -205,7 +210,7 @@ static CATALOG: &[StatInfo] = &[
         reading: "Read it as the plausible range. If two intervals do not overlap, the rates probably differ. A wide interval means too few observations, run more matches.",
         caveats: "Assumes independent trials; consecutive rounds of one match are correlated, so the true uncertainty is somewhat larger than shown. Unlike the plain normal interval it stays inside 0..1 even for rare events.",
         since_phase: 12,
-        json_path: "extended.*.<name>.<rate>_interval ([low, high])",
+        json_path: "extended.role_retention_intervals.<strategy>.<role>.{low,high}; extended.voluntary_pass_rate_intervals.<strategy>.{low,high}",
     },
     StatInfo {
         id: "useful_pass_share",
@@ -244,7 +249,7 @@ static CATALOG: &[StatInfo] = &[
         reading: "Higher is better; 0 is the field average and a fair field sums to 0. The standard error is much smaller than for ordinary games of the same size, so smaller differences are detectable. This is the reference the cheap estimator is compared with.",
         caveats: "Only round 1 is perfectly luck-free. Later rounds are luck-reduced, not luck-free, because the carried-over roles and exchanged cards depend partly on skill in earlier rounds and the rounds diverge between seatings. Needs a number of matches that is a multiple of the number of strategies. The deal comes from a separate random stream, so results differ from ordinary runs with the same seed.",
         since_phase: 12,
-        json_path: "extended.skill.duplicate.<name>.{score,std_error}",
+        json_path: "extended.skill.duplicate.strategies.[].skill_score_duplicate.{value,std_error}",
     },
     StatInfo {
         id: "skill_score_estimate",
@@ -254,36 +259,36 @@ static CATALOG: &[StatInfo] = &[
         range: "-1..+1",
         meaning: "An inexpensive luck adjustment for ordinary runs: it predicts each seat's first-round result from the quality of the dealt hand and subtracts the part explained by luck.",
         formula: "Least squares regression of the round-1 role score of every seat on hand features (cards of Queen or higher, pairs, triples, quads, lowest card strength, sum of strengths) plus a constant per strategy. Adjusted score = actual score minus beta times (features minus their mean); the estimate is the mean adjusted score per strategy with a standard error.",
-        reading: "Read like skill_score_duplicate: higher is better, 0 is average. It should land close to the duplicate result; estimator_agreement says how close. A big difference between the plain mean role score and this one means the strategy was helped or hurt by its hands.",
+        reading: "Read like skill_score_duplicate: higher is better, 0 is average. It should land close to the duplicate result; estimator_agreement says how close. When both modes run, the estimate comes from a separate ordinary batch with different deals, so its standard error is honest and it differs from the duplicate value by noise. A big difference between the plain mean role score and this one means the strategy was helped or hurt by its hands.",
         caveats: "It can only remove the luck its features capture: luck that comes from how hands combine during play stays in. Uses round 1 only. The regression is linear and may be biased if the true hand effect is not. Costs almost nothing extra and works on ordinary runs.",
         since_phase: 12,
-        json_path: "extended.skill.estimate.<name>.{score,std_error}",
+        json_path: "extended.skill.estimate.strategies.[].skill_score_estimate.{value,std_error}",
     },
     StatInfo {
         id: "luck_share",
         name: "Luck share",
-        scope: Scope::Global,
+        scope: Scope::PerStrategy,
         unit: "share",
         range: "0..1",
         meaning: "How much of the spread of single-game results is down to card luck rather than play: 0 means skill decides everything, 1 means pure luck.",
         formula: "luck_share = 1 - 1 / variance_reduction, clamped to 0..1.",
         reading: "A card game with a lot of luck shows a high value. If it is large, many games are needed to separate two strategies, and duplicate deals pay off. Values near 0 would mean the deal hardly matters.",
-        caveats: "A property of this field and rule set, not of one strategy. It rests on variance_reduction, which needs several duplicate groups to be stable. It counts only the luck that duplicate deals remove, so luck that arises during play (who happens to get which exchange cards in later rounds) is not included and the true luck share is somewhat higher.",
+        caveats: "Computed per strategy from the same deals, so the rows are similar; it describes this field and rule set rather than one strategy's quality. It rests on variance_reduction, which needs several duplicate groups to be stable. It counts only the luck that duplicate deals remove, so luck that arises during play (who happens to get which exchange cards in later rounds) is not included and the true luck share is somewhat higher.",
         since_phase: 12,
-        json_path: "extended.skill.luck_share",
+        json_path: "extended.skill.duplicate.strategies.[].luck_share; extended.skill.estimate.strategies.[].luck_share",
     },
     StatInfo {
         id: "variance_reduction",
         name: "Variance reduction",
-        scope: Scope::Global,
+        scope: Scope::PerStrategy,
         unit: "factor",
         range: "0..unbounded",
         meaning: "How many ordinary games one duplicate game is worth: a value of 5 means a duplicate group gives the accuracy of five times as many ordinary games.",
-        formula: "Var(single-match score) / (k * Var(group mean)), where the single-match score is a strategy's mean role score in one match, k is the number of matches per group (number of strategies) and the group mean is x(s,g) as in skill_score_duplicate, pooled over strategies.",
+        formula: "Var(single-match score) / (k * Var(group mean)), where the single-match score is a strategy's mean role score in one match, k is the number of matches per group (number of strategies) and the group mean is x(s,g) as in skill_score_duplicate. Computed for each strategy; the cheap estimator reports its own factor (the variance of the strategy's round-1 scores before and after the adjustment).",
         reading: "Larger is better for duplicate mode; 1 means no benefit. The cost is k times as many matches per group, so a value above 1 shows the format pays for itself, a value well above k is excellent.",
         caveats: "Estimated from the same sample, so itself noisy with few groups. Values below 1 can occur by chance.",
         since_phase: 12,
-        json_path: "extended.skill.variance_reduction",
+        json_path: "extended.skill.duplicate.strategies.[].variance_reduction; extended.skill.estimate.strategies.[].variance_reduction",
     },
     StatInfo {
         id: "estimator_agreement",
@@ -292,11 +297,11 @@ static CATALOG: &[StatInfo] = &[
         unit: "correlation / share",
         range: "-1..+1",
         meaning: "How closely the cheap estimator follows the duplicate result. High agreement means the cheap estimator can replace the expensive duplicate mode.",
-        formula: "Spearman rank correlation of strategies ordered by skill_score_estimate and by skill_score_duplicate, together with the share of the duplicate variance reduction the estimator recovers; reported only when both modes ran.",
+        formula: "Kendall rank correlation (tau, rank_agreement) of the strategies ordered by skill_score_estimate and by round-1 skill_score_duplicate, together with the mean share of the duplicate round-1 luck share the estimator recovers (mean_variance_removed_ratio, estimator luck share divided by duplicate luck share); reported only when both modes ran.",
         reading: "Near 1 means the estimator gives the same ordering and removes a similar amount of luck, so duplicate deals can be skipped. Low values mean the estimator is not trustworthy for this game.",
-        caveats: "With few strategies the rank correlation has few possible values and is easy to get by chance (three strategies give only a handful of orderings). Only available in the mode that runs both.",
+        caveats: "With few strategies the rank correlation has few possible values and is easy to get by chance (three strategies give only a handful of orderings). Only available in the mode that runs both, which plays about twice the matches: the duplicate groups and a separate ordinary batch (different deals) for the estimator. The estimate and the duplicate value therefore differ by sampling noise; gaps within about two standard errors are expected, perfect agreement would be suspicious.",
         since_phase: 12,
-        json_path: "extended.skill.estimator_agreement",
+        json_path: "extended.skill.comparison.{rank_agreement,mean_variance_removed_ratio}",
     },
 ];
 

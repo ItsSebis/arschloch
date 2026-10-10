@@ -170,7 +170,7 @@ pub fn play_out(
 
 /// Round `round_index`'s numbered, shuffled deck: from the play stream
 /// `rng`, or from the round's own generator when `options.deal_seed` is set.
-fn shuffled_deck(
+pub(crate) fn shuffled_deck(
     config: &MatchConfig,
     options: &RunOptions,
     round_index: usize,
@@ -307,6 +307,17 @@ pub fn run_match_with(
 /// in the earliest seats — the bias cancels out across the batch instead.
 #[must_use]
 pub fn run_batch(configs: &[MatchConfig], strategies: &[Arc<dyn Strategy>]) -> Vec<MatchResult> {
+    run_batch_with(configs, strategies, &RunOptions::default())
+}
+
+/// `run_batch` with `RunOptions` applied to every match (same seat
+/// rotation). With the default options it is exactly `run_batch`.
+#[must_use]
+pub fn run_batch_with(
+    configs: &[MatchConfig],
+    strategies: &[Arc<dyn Strategy>],
+    options: &RunOptions,
+) -> Vec<MatchResult> {
     configs
         .par_iter()
         .enumerate()
@@ -319,7 +330,7 @@ pub fn run_batch(configs: &[MatchConfig], strategies: &[Arc<dyn Strategy>]) -> V
                 .take(strategies.len())
                 .cloned()
                 .collect();
-            run_match(config, &rotated)
+            run_match_with(config, &rotated, options)
         })
         .collect()
 }
@@ -626,6 +637,37 @@ mod tests {
         assert_eq!(names[1], ["RandomLegal", "GreedyHighest", "LowestLegal"]);
         assert_eq!(names[2], ["GreedyHighest", "LowestLegal", "RandomLegal"]);
         assert_eq!(names[3], names[0]);
+    }
+
+    #[test]
+    fn run_batch_with_defaults_is_run_batch_and_features_only_add_data() {
+        let strategies = four_lowest_legal();
+        let configs: Vec<MatchConfig> = (0..4)
+            .map(|seed| MatchConfig {
+                player_count: 4,
+                deck_variant: DeckVariant::Single,
+                duplicate_rule: DuplicateRule::FirstDealtWins,
+                rounds: 2,
+                seed,
+                pass_rule: engine::PassRule::default(),
+                exchange_rule: engine::ExchangeRule::default(),
+            })
+            .collect();
+        let plain = run_batch(&configs, &strategies);
+        let same = run_batch_with(&configs, &strategies, &RunOptions::default());
+        assert_eq!(format!("{plain:?}"), format!("{same:?}"));
+        let with = run_batch_with(
+            &configs,
+            &strategies,
+            &RunOptions {
+                deal_seed: None,
+                record_deal_features: true,
+            },
+        );
+        for (a, b) in plain.iter().zip(&with) {
+            assert_eq!(a.role_history, b.role_history);
+            assert!(a.first_hand_features.is_none() && b.first_hand_features.is_some());
+        }
     }
 
     /// Records whether any seat's `TurnContext.opponents` ever included

@@ -82,6 +82,86 @@ pub struct Args {
     /// Where to write the JSON results file.
     #[arg(long, default_value = "results.json")]
     pub output: PathBuf,
+
+    /// Separate skill from the luck of the deal. `estimate` adjusts an
+    /// ordinary run for the quality of the dealt round-1 hands (nearly
+    /// free); `duplicate` replays every deal with the strategies rotated
+    /// through all seats (exact, needs `--matches` to be a multiple of
+    /// `--player-count`, and those groups are the matches of the run);
+    /// `both` does both and compares them. `off` adds no work and no output.
+    #[arg(long, value_enum, default_value_t = SkillScoreArg::Off)]
+    pub skill_score: SkillScoreArg,
+
+    /// Print a one-line explanation of every statistic shown in the summary
+    /// (the full reference is docs/STATISTICS.md, `cli stats-doc`).
+    #[arg(long)]
+    pub explain: bool,
+
+    /// Bootstrap resamples for the standard error of the strength rating;
+    /// 0 skips the standard error.
+    #[arg(long, default_value_t = 200)]
+    pub bootstrap_resamples: usize,
+
+    /// Measure whether voluntary passes are useful: for a sample of them the
+    /// rest of the round is replayed K times after the pass and after the
+    /// weakest and strongest legal play. Off unless given; costs K x 3
+    /// rollouts per sampled pass. Replays the matches of the batch as
+    /// ordinary matches, with `--seed` as the analysis seed.
+    #[arg(
+        long,
+        value_name = "K",
+        value_parser = clap::builder::RangedI64ValueParser::<usize>::new().range(1..)
+    )]
+    pub useful_passes: Option<usize>,
+
+    /// Fraction of the voluntary passes analysed by `--useful-passes`, 0..=1.
+    #[arg(long, default_value_t = 0.05, value_parser = parse_fraction)]
+    pub useful_pass_sample: f64,
+
+    /// A pass counts as useful only if it beats the best alternative by more
+    /// than this many places.
+    #[arg(long, default_value_t = 0.0, value_parser = parse_margin)]
+    pub useful_pass_margin: f64,
+}
+
+fn parse_fraction(text: &str) -> Result<f64, String> {
+    let value: f64 = text
+        .parse()
+        .map_err(|_| format!("`{text}` is not a number"))?;
+    if (0.0..=1.0).contains(&value) {
+        Ok(value)
+    } else {
+        Err("must be between 0 and 1".to_owned())
+    }
+}
+
+fn parse_margin(text: &str) -> Result<f64, String> {
+    let value: f64 = text
+        .parse()
+        .map_err(|_| format!("`{text}` is not a number"))?;
+    if value.is_finite() && value >= 0.0 {
+        Ok(value)
+    } else {
+        Err("must be a finite number, 0 or more".to_owned())
+    }
+}
+
+/// Which luck/skill measurement a batch runs (`--skill-score`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SkillScoreArg {
+    Off,
+    Estimate,
+    Duplicate,
+    Both,
+}
+
+impl SkillScoreArg {
+    /// Whether the run plays duplicate groups.
+    #[must_use]
+    pub fn uses_duplicate(self) -> bool {
+        matches!(self, Self::Duplicate | Self::Both)
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
@@ -229,13 +309,29 @@ impl StrategyArg {
 /// # Errors
 ///
 /// Returns an error if `args.strategies.len()` doesn't equal
-/// `args.player_count` — exactly one strategy is required per seat.
+/// `args.player_count` — exactly one strategy is required per seat — or if
+/// a duplicate skill score is asked for and `args.matches` is not a
+/// multiple of `args.player_count`.
 pub fn validate(args: &Args) -> anyhow::Result<()> {
     anyhow::ensure!(
         args.strategies.len() == usize::from(args.player_count),
         "expected {} strategies (one per seat), got {}",
         args.player_count,
         args.strategies.len()
+    );
+    anyhow::ensure!(
+        !args.skill_score.uses_duplicate() || args.matches.is_multiple_of(args.strategies.len()),
+        "--skill-score {} plays groups of {} matches (one per rotation of the {} strategies), \
+         so --matches must be a multiple of --player-count ({}), got {}",
+        if args.skill_score == SkillScoreArg::Both {
+            "both"
+        } else {
+            "duplicate"
+        },
+        args.player_count,
+        args.player_count,
+        args.player_count,
+        args.matches
     );
     // Results are grouped by player name, so two *different* genome
     // files sharing a name (`runs/a/champion.json`, `runs/b/champion.json`)
@@ -276,12 +372,111 @@ mod tests {
             threads: 0,
             seed: 0,
             output: PathBuf::from("results.json"),
+            skill_score: SkillScoreArg::Off,
+            explain: false,
+            bootstrap_resamples: 200,
+            useful_passes: None,
+            useful_pass_sample: 0.05,
+            useful_pass_margin: 0.0,
         }
     }
 
     #[test]
     fn validate_accepts_matching_strategy_count() {
         assert!(validate(&args_with_strategies(4, 4)).is_ok());
+    }
+
+    #[test]
+    fn duplicate_modes_need_matches_in_whole_groups() {
+        let mut args = args_with_strategies(4, 4);
+        args.matches = 6;
+        args.skill_score = SkillScoreArg::Duplicate;
+        let error = validate(&args).unwrap_err().to_string();
+        assert!(error.contains("multiple of --player-count (4)"), "{error}");
+        args.skill_score = SkillScoreArg::Both;
+        assert!(validate(&args).is_err());
+        args.skill_score = SkillScoreArg::Estimate;
+        assert!(validate(&args).is_ok());
+        args.skill_score = SkillScoreArg::Duplicate;
+        args.matches = 8;
+        assert!(validate(&args).is_ok());
+    }
+
+    #[test]
+    fn skill_score_flags_parse_with_defaults() {
+        let args = Args::try_parse_from([
+            "cli",
+            "--player-count",
+            "3",
+            "--matches",
+            "3",
+            "--strategy",
+            "lowest-legal",
+            "--strategy",
+            "lowest-legal",
+            "--strategy",
+            "lowest-legal",
+        ])
+        .unwrap();
+        assert_eq!(args.skill_score, SkillScoreArg::Off);
+        assert!(!args.explain);
+        assert_eq!(args.bootstrap_resamples, 200);
+        let args = Args::try_parse_from([
+            "cli",
+            "--player-count",
+            "3",
+            "--matches",
+            "3",
+            "--strategy",
+            "lowest-legal",
+            "--strategy",
+            "lowest-legal",
+            "--strategy",
+            "lowest-legal",
+            "--skill-score",
+            "both",
+            "--explain",
+            "--bootstrap-resamples",
+            "0",
+        ])
+        .unwrap();
+        assert!(args.skill_score.uses_duplicate() && args.skill_score == SkillScoreArg::Both);
+        assert!(args.explain && args.bootstrap_resamples == 0);
+    }
+
+    #[test]
+    fn useful_pass_flags_default_off_and_are_range_checked() {
+        let base = [
+            "cli",
+            "--player-count",
+            "3",
+            "--matches",
+            "3",
+            "--strategy",
+            "lowest-legal",
+            "--strategy",
+            "lowest-legal",
+            "--strategy",
+            "lowest-legal",
+        ];
+        let args = Args::try_parse_from(base).unwrap();
+        assert_eq!(args.useful_passes, None);
+        assert!((args.useful_pass_sample - 0.05).abs() < 1e-12);
+        assert!(args.useful_pass_margin.abs() < 1e-12);
+        let with = |extra: &[&str]| Args::try_parse_from(base.iter().chain(extra));
+        let args = with(&[
+            "--useful-passes",
+            "8",
+            "--useful-pass-sample",
+            "1",
+            "--useful-pass-margin",
+            "0.1",
+        ])
+        .unwrap();
+        assert_eq!(args.useful_passes, Some(8));
+        assert!(with(&["--useful-passes", "0"]).is_err());
+        assert!(with(&["--useful-pass-sample", "1.5"]).is_err());
+        assert!(with(&["--useful-pass-margin", "-1"]).is_err());
     }
 
     #[test]

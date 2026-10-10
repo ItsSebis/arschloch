@@ -53,7 +53,7 @@ impl FromStr for PassRule {
 /// One trick's turn-taking state: who led it, whose turn it is now, who
 /// currently holds the winning play (if anyone has played yet), and how
 /// many consecutive passes are needed to resolve it.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct Trick {
     leader: SeatId,
     turn: SeatId,

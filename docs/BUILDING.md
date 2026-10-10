@@ -169,6 +169,125 @@ cargo run -p cli -- \
   reproduce results measured before Phase 14). The summary line and the
   `evaluate --json` output name the rule.
 
+### Luck, skill and the extra numbers (Phase 12)
+
+Every run now also prints, after the original summary, a table
+`Strategy | avg rank ±SE | mean score ±SE | strength rating ±SE | President %
+[95% Wilson]` and the average rank and mean score per seat (position bias).
+Place 1 is best; the mean score is +1 for the best role down to -1 for the
+last; the strength rating is a Bradley-Terry fit on "finished above"
+outcomes in Elo-like points with the field average at 0, so it measures
+strength against this field (beating strong opponents counts for more);
+`±` is a standard error over matches. `docs/STATISTICS.md` explains every
+number; `cli stats-doc` regenerates it.
+
+- `--explain` adds, after each new section, one line with the catalogue's
+  meaning of its numbers, and at the end the lines for the original
+  sections.
+- `--bootstrap-resamples N` (default 200) is the number of resamples behind
+  the rating's standard error; `0` skips it (the rating is then printed
+  without `±`).
+- `--skill-score off|estimate|duplicate|both` (default `off`: no extra
+  simulation, no extra table). It adds the table `Strategy | plain score
+  ±SE | skill (duplicate) ±SE | skill (estimate) ±SE | variance reduction M
+  | luck share`:
+  - `estimate`: ordinary matches that also record the round-1 hand
+    features; a regression removes the part of the first-round result that
+    the dealt hand explains. Nearly free, round 1 only.
+  - `duplicate`: groups of `--player-count` matches play identical deals
+    with the strategies rotated through every seat, so every strategy plays
+    every hand once. **`--matches` must be a multiple of `--player-count`**
+    (otherwise the run stops with an error naming the number). These groups
+    are the matches of the run, so all other numbers and the JSON `matches`
+    come from them; deals come from a separate random stream, so results
+    differ from an ordinary run with the same seed.
+  - `both`: the duplicate groups (they are the matches of the run and the
+    ground truth) **plus a second, independent ordinary batch** of the same
+    number of matches (seeds offset by a constant, so different deals) with
+    hand features, on which the estimator runs. The estimator is then judged
+    against the duplicate result: difference in standard errors per
+    strategy, rank agreement and the share of luck variance it removes. This
+    plays about twice the matches, so it takes about twice as long. The
+    estimator's standard errors are honest because its matches are
+    independent.
+
+  How to read it: *plain score* is the ordinary mean score. *Skill* is the
+  same strategy's score after removing the luck of the deal (same value
+  with a smaller `±` in a balanced batch, or shifted for the estimator).
+  *M* (variance reduction) says how many ordinary games one duplicate game
+  is worth; *luck share* = 1 - 1/M, the share of single-game variance the
+  deal accounts for. Duplicate deals cancel the luck of the deal exactly in
+  round 1; later rounds are luck-reduced, not luck-free, because roles and
+  exchanged cards carried over depend partly on earlier play. The duplicate
+  columns, M and luck share cover all rounds; the estimate covers round 1
+  only (an `estimate`-only run reports its plain score, M and luck share for
+  round 1 too).
+
+- `--useful-passes K` (off unless given, `K >= 1`) measures whether voluntary
+  passes (a pass although a play was legal) are useful. For a sample of them
+  the round is replayed `K` times from that exact state after the pass, after
+  the weakest legal play and after the strongest; a pass is useful if the
+  average finishing place after it is better than after the better of the two
+  plays (by more than `--useful-pass-margin`, default 0). `--useful-pass-sample F`
+  (0..=1, default 0.05) is the fraction of the voluntary passes analysed; the
+  cost is about `3 * K` partial rounds per sampled pass. The analysis is
+  deterministic for the same flags, uses `--seed`, and replays the batch's
+  matches as ordinary matches (in the duplicate modes it does not reuse their
+  deals, so its pass counts belong to an ordinary batch of the same
+  configs). It adds a summary table (`voluntary passes | sampled | useful
+  share [95% Wilson] | mean gain ±SE`; strategies that never pass on purpose
+  read "no voluntary passes") and, in `extended.by_strategy.<name>`, the keys
+  `voluntary_passes_total`, `sampled_voluntary_passes`, `useful_passes`,
+  `useful_pass_share` (`value`, `std_error`, `n`, `interval`) and
+  `useful_pass_gain` (`value`, `std_error`, `n`; null without samples), only
+  when the flag is given.
+
+New keys of `results.json` (additive; `matches` and `statistics` are
+unchanged, `matches[].first_hand_features` appears only with `estimate` or
+`both`):
+
+```json
+{
+  "matches": [ ... ],
+  "statistics": { ... },
+  "extended": {
+    "by_strategy": { "LowestLegal": {
+      "avg_rank": {"value": 2.86, "std_error": 0.02, "n": 2000},
+      "mean_role_score": {"value": -0.243, "std_error": 0.012, "n": 2000},
+      "rank_distribution": [14.2, 24.0, 30.1, 31.7],
+      "rounds": 12000,
+      "strength_rating": {"value": -73.0, "std_error": 3.0, "n": 2000} } },
+    "by_seat": [ {"avg_rank": {...}, "mean_role_score": {...}} ],
+    "role_retention_intervals": { "LowestLegal": { "President": {"low": 0.2, "high": 0.3} } },
+    "voluntary_pass_rate_intervals": { "LowestLegal": {"low": 0.1, "high": 0.2} },
+    "skill": {
+      "mode": "both",
+      "duplicate": { "group_count": 500, "k": 4, "rounds_per_match": 6,
+        "strategies": [ {"name": "LowestLegal",
+          "skill_score_duplicate": {"value": -0.243, "std_error": 0.008, "n": 500},
+          "variance_reduction": 2.03, "luck_share": 0.51, "...": "..."} ] },
+      "estimate": { "match_count": 2000, "feature_r2": 0.40,
+        "strategies": [ {"name": "LowestLegal",
+          "skill_score_estimate": {"value": -0.146, "std_error": 0.012, "n": 2000},
+          "...": "..."} ] },
+      "comparison": { "rank_agreement": 1.0, "verdict": "...", "...": "..." }
+    }
+  },
+  "statistics_catalog": [ {"id": "avg_rank", "name": "Average finishing place",
+    "scope": "per_strategy", "meaning": "...", "json_path": "...", "...": "..."} ]
+}
+```
+
+`extended.skill` and its `duplicate`, `estimate`, `comparison` parts exist
+only for the modes that compute them. Every catalogue entry's `json_path`
+says where its value lives (`docs/STATISTICS.md` lists them), and a test
+checks that against a real run.
+
+`cli evaluate` additionally prints the average place (with its standard
+error) per cell and, in its `--json`, adds `avg_rank` and
+`avg_rank_std_error` to each cell and the `statistics_catalog` key; it has
+`--explain` too. (The skill score is not offered there.)
+
 ## Cross-compiling a Windows executable (from Linux or macOS)
 
 This workspace has zero C dependencies — `rayon`, `rand`, and `serde` are

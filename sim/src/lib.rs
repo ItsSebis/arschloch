@@ -17,6 +17,7 @@ pub mod stats_catalog;
 pub mod strategies;
 pub mod strategy;
 pub mod training;
+pub mod useful_passes;
 
 pub use engine::{
     roles_for_player_count, DeckVariant, DuplicateRule, ExchangeRule, PassRule, Role,
@@ -26,7 +27,8 @@ pub use hand_reading::{read_pass_ceilings, PassCeilings};
 pub use match_config::MatchConfig;
 pub use match_result::MatchResult;
 pub use match_runner::{
-    deal_round_seed, play_out, run_batch, run_match, run_match_with, PlayCounters, RunOptions,
+    deal_round_seed, play_out, run_batch, run_batch_with, run_match, run_match_with, PlayCounters,
+    RunOptions,
 };
 pub use statistics::{aggregate, RoleRetention, Statistics};
 pub use strategies::{

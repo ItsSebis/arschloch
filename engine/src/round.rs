@@ -35,7 +35,7 @@ pub enum MoveError {
 /// A single round's trick-taking state, from a freshly dealt (and, if
 /// applicable, already-exchanged) set of hands through to every seat's
 /// finishing order.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Round {
     hands: Vec<Vec<Card>>,
     duplicate_rule: DuplicateRule,
@@ -824,6 +824,39 @@ mod tests {
                     }
                 }
             }
+        }
+    }
+    #[test]
+    fn a_cloned_round_continues_identically() {
+        use rand::{RngExt, SeedableRng};
+        for rule in [PassRule::default(), PassRule::Final] {
+            let mut rng = rand::rngs::StdRng::seed_from_u64(9);
+            let mut deck = crate::deck::standard_deck(crate::card::DeckVariant::Single);
+            for (index, c) in deck.iter_mut().enumerate() {
+                c.deal_index = u8::try_from(index).unwrap();
+            }
+            let hands = crate::deal::deal(deck, 4).unwrap();
+            let mut original =
+                Round::with_pass_rule(hands, DuplicateRule::FirstDealtWins, rule, 0).unwrap();
+            // Advance a few moves, then clone mid-round.
+            for _ in 0..6 {
+                let seat = original.seat_to_move().unwrap();
+                let moves = original.legal_moves();
+                let mv = moves[rng.random_range(0..moves.len())].clone();
+                original.submit_move(seat, mv).unwrap();
+            }
+            let mut copy = original.clone();
+            while let Some(seat) = original.seat_to_move() {
+                assert_eq!(copy.seat_to_move(), Some(seat));
+                let moves = original.legal_moves();
+                assert_eq!(moves, copy.legal_moves());
+                let mv = moves[rng.random_range(0..moves.len())].clone();
+                original.submit_move(seat, mv.clone()).unwrap();
+                copy.submit_move(seat, mv).unwrap();
+            }
+            assert!(copy.is_complete());
+            assert_eq!(original.finishing_order(), copy.finishing_order());
+            assert_eq!(original.play_history(), copy.play_history());
         }
     }
 }

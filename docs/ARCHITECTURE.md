@@ -166,6 +166,34 @@ legal, never which move to prefer.
   matches with an identical seating but a different shuffle (Phase 4,
   "luck-vs-skill signal"). Serialized with `serde`/`serde_json` so a
   later web phase can consume the same output format.
+- Phase 12 (statistics and luck/skill score) adds, each module one concept
+  and all purely additive (`MatchResult` and `Statistics` keep their shape,
+  except the optional `MatchResult::first_hand_features`, absent unless
+  asked for):
+  - `stats_catalog`: one `StatInfo` per statistic (name, unit, range,
+    meaning, formula, how to read it, caveats, JSON path). The single source
+    of truth for `docs/STATISTICS.md` (`cli stats-doc`; a test fails if the
+    file is stale), the CLI's `--explain` text and the `statistics_catalog`
+    key of results.json.
+  - `extended_stats`: `aggregate_extended` turns a batch into
+    `ExtendedStatistics`: average place and mean role score with standard
+    errors per strategy and per seat, the rank distribution, a
+    Bradley-Terry strength rating (MM fit on pairwise "finished above"
+    outcomes, bootstrap standard error) and Wilson intervals.
+  - `duplicate`: `try_run_duplicate_batch` plays groups of k matches
+    (k = number of strategies) that share one deal seed while the strategies
+    rotate through every seat. It uses `RunOptions::deal_seed` of
+    `run_match_with`, which shuffles each round's deck from its own stream
+    instead of the shared play stream; `run_match` and `run_batch` are the
+    defaults and stay byte for byte what they were (`run_batch_with` takes
+    options for the whole batch).
+  - `skill`: `skill_report` (exact, from duplicate groups: skill score,
+    variance reduction M, luck share), `estimator_report` (cheap, a
+    regression on round-1 hand features of an ordinary run) and `compare`
+    (agreement of the two).
+  - `hand_features` (what the estimator regresses on, recorded with
+    `RunOptions::record_deal_features`) and `linalg` (a small least-squares
+    solver, no dependencies).
 
 ### `cli`
 
@@ -176,6 +204,16 @@ seats, thread count, and a base seed each match's seed derives from) via
 JSON results file (every `MatchResult` plus the aggregated `Statistics`,
 `sim`'s existing types with no new schema) and a human-readable summary
 table to stdout.
+
+Phase 12 additions: `--skill-score off|estimate|duplicate|both` (module
+`batch` picks `run_batch`, `run_batch_with` or `try_run_duplicate_batch`;
+`off` adds no simulation), `--explain` and `--bootstrap-resamples`. The JSON
+gains the keys `extended` (with `skill` when asked for) and
+`statistics_catalog`; `output` writes them and a test resolves every
+catalogue `json_path` against a real run. `summary` still renders the
+original summary unchanged; `extended_summary` renders the sections
+appended after it. `cli evaluate` also reports the average place per cell
+and has `--explain`; `cli stats-doc` prints `docs/STATISTICS.md`.
 
 ### `neat` (Phase 10; core done in 10a)
 

@@ -147,6 +147,12 @@ mod tests {
             threads: 0,
             seed: 42,
             output: PathBuf::from("results.json"),
+            skill_score: crate::args::SkillScoreArg::Off,
+            explain: false,
+            bootstrap_resamples: 200,
+            useful_passes: None,
+            useful_pass_sample: 0.05,
+            useful_pass_margin: 0.0,
         }
     }
 

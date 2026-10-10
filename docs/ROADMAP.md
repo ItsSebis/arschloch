@@ -203,7 +203,8 @@ sitting; a phase that grows beyond that should be split.
 **Status:** the interactive part is built: `cli play` (Phase 11, "play against the
 models"; see `docs/PLAYING.md`) with a pure `sim::session` game session, a POST-capable
 local HTTP layer, model advice and personal records. Still open: the
-simulation-statistics overview views below.
+simulation-statistics overview views below, the run-analysis page (Phase 17)
+and the training-advisor form (Phase 18).
 
 - Extends the `web` crate that Phase 10d starts with the NEAT training
   dashboard (HTTP server, embedded single-page app, JSON API), rather
@@ -328,28 +329,243 @@ only sees what was taken and received); old runs, configs and records read as
 cards, so every other strategy plays identical games under both rules and the
 retrained champion is byte-identical (`docs/baselines/current-rules`).
 
-## Idea — GPU (CUDA / ROCm) training
+## Phase 16 — Self-play and co-evolutionary training (idea)
 
-Measured in Phase 12 (details in `docs/baselines/perf/README.md`): the
-network is not where training time goes. One move scored costs 46 ns on the
-committed champion; a game spends about 54% of its time building the
-strategy's view of the table and 30% enumerating legal moves (both before
-the Phase 12 speedup), and the network is about 2% of a training table
-and 6% even when all four seats are neat players. Offloading only the
-network to a GPU (CUDA, ROCm/HIP or a portable layer such as wgpu) can
-therefore save at most a few percent, and moving data to the GPU and back for
-a handful of 20-number vectors per decision would cost more than that.
+Raised while planning Phase 12; deliberately not built yet. Today genomes train
+against a fixed opponent pool, so the opposition never gets stronger than the
+pool. Idea: train populations against each other and a hall of fame of their
+own past champions, optionally mixed with fixed strategies.
 
-A real speedup means porting the simulation itself to the GPU: dealing, legal
-move generation, the round state machine, feature extraction and the network,
-with fixed-size card and hand representations, no allocation and one match per
-GPU thread. That is a separate large project; it also has to reproduce the CPU
-simulator exactly (a bit-for-bit comparison on thousands of seeds is the
-acceptance test), and it only pays off at populations and match counts far
-beyond what the CPU runs need (about 30k rounds/s on a laptop, more on a
-desktop). Go / no-go: start it only if training runs that matter take hours
-on the best CPU available, and after the cheaper CPU wins listed in the perf
-README are exhausted.
+- Relative fitness from the Phase 12 statistics: duplicate-deal skill scores
+  (so card luck does not swamp a zero-sum comparison) and the opponent-adjusted
+  strength rating (a result against a stronger field counts for more).
+- A fixed **anchor benchmark**: every N generations the current best is also
+  scored against frozen baselines (`docs/baselines/neat-v2` champion and the
+  hand-written strategies), so progress is absolute even though self-play
+  fitness is only relative.
+- Known risks to design for: cycling (A beats B beats C beats A) and forgetting
+  old tricks; the hall of fame and the anchors are the standard guard. The first
+  run is an experiment compared against `neat-v2`, not a new default.
+- Evidence so far (from the stagnation analysis of the long runs, see Phase 17):
+  the stall seen in the long runs looks noise- and information-limited rather
+  than opponent-limited, so this phase ranks below Phase 13's new inputs.
+
+## Phase 17 — Run analysis tool (CLI and web)
+
+Born from the first stagnation analysis of the long runs in `runs/PC` (done by
+hand with a throwaway script). Turn that into a tool so every run can answer
+"where did it stop improving, and why?" in one command.
+
+- **`cli analyse-run <events.jsonl | run dir> [more...]`**: accepts several
+  runs at once and labels them by file or directory name. Reports per run:
+  - the **stall generation** (smoothed champion re-evaluation within one
+    standard error of its peak) and the **trend** (slope per 100 generations
+    with a 95% interval, overall and for the last part of the run);
+  - the **noise level** (standard error of a single evaluation, standard
+    deviation of the generation-to-generation change of the champion's score);
+  - the **winner's-curse gap** (best generation's re-evaluation against its
+    held-out score, and training best against champion level), so a lucky "best
+    generation" is not mistaken for progress;
+  - **per-opponent trends** (flat everywhere = information/noise limited; flat
+    against some and rising against others = pool limited);
+  - **growth without gain** (hidden nodes and connections against score),
+    **population convergence** (share of genomes in the top fitness bin), species
+    counts and the compatibility threshold;
+  - a plain-language **verdict with suggestions** (more matches per genome or the
+    duplicate-deal fitness when noise dominates, new inputs when the model stalls
+    everywhere, harder opponents when only the pool is exhausted, stop early
+    when the slope is flat).
+  - `--json` output for other tools; the numbers are catalogued and explained
+    like the Phase 12 statistics (`docs/STATISTICS.md`).
+- **Web interface (the Phase 11 dashboard work):** the same analysis as a page
+  of the web interface: pick one or several run directories or imported
+  `events.jsonl` files, see the curves with the stall point, noise band,
+  winner's-curse markers and per-opponent lines, the verdict text, and compare
+  runs side by side. It reads the same JSON as the CLI; no new simulation.
+  Listed under Phase 11's still-open web items.
+
+## Phase 18 — Training advisor: pick the opponents and settings for you
+
+Choosing the opponent pool and settings by hand (population, matches per
+genome, rounds, hall of fame, target species, opponents) is trial and error;
+the long runs show it matters (see Phase 17). A simple option that picks them.
+
+- **`cli train --auto`** (and a `cli train-advisor` that only prints the
+  recommendation): from the table (player count, deck, rules), an optional
+  starting genome or model folder, and a time budget (`--time-budget 30m`),
+  run a short probe and choose:
+  - the **opponent pool**: score the candidates (hand-written strategies, models
+    found in a models directory, the hall of fame of earlier runs) against the
+    starting genome, drop opponents that are too weak to teach anything (the
+    candidate already wins almost every game) or too strong to give signal, and
+    pick a mix with usable headroom; report the per-opponent score and standard
+    error behind each choice;
+  - **matches per genome** from the measured per-match variance, so the standard
+    error of a fitness measurement is small enough to see the improvements the
+    run is expected to make (using the duplicate-deal skill score where it
+    reduces the noise, Phase 12);
+  - population size and generations that fit the time budget on this machine
+    (measured rounds per second), rounds per match, hall-of-fame size and
+    interval, species target and threshold defaults;
+  - presets on top: `quick` (a few minutes, a sanity run), `thorough` and
+    `overnight`.
+- It prints the chosen settings and the reason for each in plain language, writes
+  them to the run's config, and they can all be overridden by flags. During the
+  run the Phase 17 analysis can stop it early or recommend a change once the
+  slope is flat.
+- **Web interface:** a "New training" form with the recommended values filled in
+  and the reasons next to them, plus the live recommendation panel; extends the
+  Phase 11 dashboard.
+- Depends on Phase 12 (statistics, skill score), Phase 13 (inputs and fitness
+  variants to choose between) and Phase 17 (the analysis).
+
+## Phase 19 — CPU performance and simplification
+
+The cheaper road to faster training, done before any GPU work (Phase 20), and
+useful on its own. Reference points measured on the owner's Ryzen 7800X3D (8
+cores / 16 threads): the long runs in `runs/PC` reach about 39,000 rounds/s
+(4 players, single deck, hand-written opponents) and about 11,000 rounds/s
+(5 players, double deck, two neat and one adaptive opponent), barely above the
+i5-11300H laptop's 30,000 rounds/s, so either the heavier strategies cost a lot
+per round or the 16 threads do not scale. Finding out which is the first task.
+
+- **Measure first:** a per-generation timing breakdown in the training events
+  (training evaluation, champion candidates, re-evaluation, opponent scores,
+  speciation, checkpoint and file writes) and a thread-scaling check
+  (`--threads 1, 2, 4, 8, 16` on the same run); micro-benchmarks per strategy
+  (one `bench.sh` row each for card-counter, endgame-denial, adaptive with
+  reading, neat) next to the existing ones. Record in `docs/baselines/perf`.
+- **Cheap CPU wins from `docs/baselines/perf/README.md`, "What is left":**
+  `Round::legal_moves` allocations (a `Vec` per candidate combo and helper
+  vectors per rank group), `TurnSummary::new` building `Vec<Vec<Card>>` twice per
+  decision, `Round::submit_move` cloning the hand to validate. Reusable scratch
+  buffers and fixed-size, bitmask-based hands where the profile says so.
+- **Heavier strategies:** the per-turn cost of the adaptive modifiers (pass
+  reading, safety proofs), card counting and neat feature building, which the
+  profile will rank; the same data structures feed Phase 20.
+- **Training loop:** remove serial sections and contention found by the timing
+  breakdown (for example per-generation file writes, species distance
+  computation, opponent re-evaluation granularity).
+- **Simplification pass:** split files over the ~400-line guideline, remove or
+  isolate code that only exists to reproduce very old results where it is not
+  needed, merge duplicated logic across strategies, refresh outdated comments;
+  nothing is removed that a committed baseline still needs.
+- **Findings of the exploration (code reading, not yet measured):**
+  - **Why 16 threads do not scale:** `sim::training::evaluate` is serial per
+    candidate; rayon is used only across genomes, champion candidates and
+    opponents. Training runs its genomes in 10 chunks, each its own `par_iter`
+    with a barrier (15 tasks per chunk at population 150, 6 at population 60),
+    and the champion selection (5 tasks), the mixed re-evaluation (1 thread), the
+    per-opponent evaluation (3 threads), the hall of fame (1 thread), the
+    confirmation (1 thread, on a new best) and the decision sample (1 thread)
+    run with little or no parallelism. Roughly 12% of the rounds run on 1-5
+    threads, which can double the wall time. Fix, results identical: parallelise
+    `evaluate` over matches (order-preserving collect, sequential sum), run the
+    re-evaluation stages in one `rayon::scope`, replace the chunk barriers by an
+    atomic progress counter; also try mimalloc/jemalloc (no global allocator is
+    set; many small allocations on 16 threads).
+  - **Per-turn allocations (about 60-90 per turn, roughly 2 µs per turn):**
+    `legal_moves` (sorted hand copy, a `Vec` per rank group, size lists,
+    subset vectors, and `Combo` is a heap `Vec<Card>`); `turn_context_for`
+    builds opponents, a 256-byte seen array, the unseen list and updates the pass
+    tracker for every seat although four strategies never read the context and
+    `EndgameDenial` needs only hand sizes; `TurnSummary::new` builds
+    `Vec<Vec<Card>>` groups twice, and each candidate scans the whole hand and
+    unseen list (features 3, 17, 18); `Round::validate_play` clones the hand and
+    `active_mask` allocates per move. Fixes: inline `Combo` (`[Card; 8]` plus
+    length), `legal_moves_into` with a reused buffer and no Vecs, a
+    `Strategy::needs()` flag set for a lazy context (pure data, safe), per-rank
+    counts and `u128` masks for unseen cards, a prefix-min in the pass
+    tracker. All must keep the move order identical (Pass, ascending rank,
+    ascending size, lowest before highest), which neat's tie-breaks rely on.
+  - **Simplification:** `session.rs` (1035 production lines) duplicates the
+    deal/exchange/role loop of `run_match`; `trainer.rs` and `useful_passes.rs`
+    exceed the size guideline; duplicated helpers (`min_by` on (size, top card)
+    in four strategies, `highest_unseen` twice, `strength()` twice); about 37
+    "Phase N" mentions in `sim` and `engine` comments to move into docs; the
+    legacy `--pass-rule free` / `--exchange-rule free` paths (about 115 lines plus
+    flag plumbing in about 25 places and `Strategy::choose_exchange_cards` in 9
+    strategies) could move behind a `legacy-rules` feature, only if the old
+    baselines are still wanted.
+- **Order of work:** (1) per-stage timers in the generation events and a
+  thread-scaling run (`THREADS=1,4,8,16`); (2) `evaluate` over matches, the
+  re-evaluation scope, atomic progress; (3) a global allocator trial;
+  (4) stack-based `active_mask`, no-clone `validate_play`; (5) inline `Combo` and
+  allocation-free `legal_moves`; (6) `Strategy::needs()` and the lazy context;
+  (7) `TurnSummary` on counts and masks; (8) prefix-min and the duplicated
+  helpers; (9) file splits and legacy-rule isolation. New benchmarks first: a
+  5-player double-deck case with two neat players, adaptive and lowest-legal
+  (the 11k rounds/s setup, missing from `bench.sh`), a training thread-scaling
+  case at population 150, and micro-benchmarks of `legal_moves` and
+  `TurnSummary::new`.
+- **Acceptance:** every speed change must leave the `bench.sh` checksums and the
+  reference batch outputs byte-identical (the rule of `docs/baselines/perf`); the
+  phase ends with a before/after table and the new rounds/s numbers for the two
+  real training setups above.
+
+## Phase 20 — GPU simulation port (RTX 4070)
+
+Go/no-go, schedule and design for running the simulation on the GPU. Motivation
+(from the stagnation analysis, Phase 17): the long runs are noise-limited, and a
+10-30x faster simulator would allow many more matches per genome (standard error
+down 3-5x) and bigger populations in the same wall time. The measured facts in
+`docs/baselines/perf/README.md` still hold: the network is only a few percent of
+the time, so only a port of the **whole simulation** (dealing, exchange, legal
+moves, the round loop, strategy features, network evaluation) pays off, one
+match per GPU thread, and the CPU implementation stays the reference.
+
+**Target hardware and tooling.** NVIDIA RTX 4070 (5,888 CUDA cores, 12 GB).
+Recommended stack: a Rust host with CUDA C++ kernels loaded at run time through
+`cudarc` (NVRTC, no `nvcc` needed to build the default workspace), behind a cargo
+feature `gpu` and a `--backend cpu|gpu` flag (default `cpu`; automatic fall back
+when no device is found). A portable `wgpu`/WGSL version is the fallback if CUDA
+tooling proves too heavy; it lacks 64-bit integers, which the 52/104-card
+bitmasks would need emulating, and is expected to be 1.5-2x slower. Decided at
+the end of stage G0.
+
+**Exactness.** The roadmap's acceptance rule (bit-for-bit equal to the CPU
+simulator) needs the same random numbers on both sides. The CPU uses `StdRng`
+(ChaCha12), costly to port. Plan: add a counter-based generator (Philox4x32)
+as an extra `--rng philox` mode of the CPU simulator, implemented identically in
+Rust and CUDA; ordinary runs keep `StdRng` and all committed baselines stay
+reproducible, and GPU/CPU parity is then tested exactly in Philox mode.
+
+**Schedule.** Working days for one developer working focused with AI assistance;
+calendar time is longer when done in the evenings (multiply by about 2). Start
+after Phase 13 has fixed the feature set (a new feature set changes stage G3),
+but G0 can run earlier because it uses the current 20 features.
+
+| Stage | Content | Days | Gate |
+|---|---|---:|---|
+| G0 Spike | `lowest-legal` x4 plus one neat player, 4 players, single deck, no exchange: dealing, legal moves, trick loop, network, measured rounds/s on the 4070 against the CPU at 16 threads after Phase 19 | 2-3 | go if >= 8x; conditional at 4-8x (decide with the profile); stop below 4x. Also decides CUDA vs wgpu. |
+| G1 Foundations | host/device data layout (hands as bitmasks / per-card counts for the double deck), Philox mode on the CPU, buffer upload of genomes (flattened network), seed scheme equal to `match_seed` | 4-5 | Philox CPU mode reproducible and unit-tested |
+| G2 Round engine | deal, forced exchange, canonical legal-move generation, pass rule `final`, role assignment, all table sizes 3-6, both decks and duplicate rules | 6-8 | exact parity: identical finishing orders and role histories on >= 100k seeded matches with scripted strategies |
+| G3 Strategies | `lowest-legal`, `greedy-highest`, `random-legal`, `hold-back-pairs`, `card-counter`, `endgame-denial`, neat feature extraction (20 features, `PassTracker` equivalent) and network scoring | 6-8 | exact parity on decisions, reusing the CPU fixtures of `neat_equivalence`; checksum equality of batch outputs |
+| G4 Adaptive | `adaptive` modifiers (reading, tempo, bully, deception) used in the training pools | 5-7 | exact parity; optional: skipped if pools can avoid them (documented limitation) |
+| G5 Training backend | `cli train --backend gpu`: population fitness, champion candidates and re-evaluation on the GPU, generational loop (speciation, crossover, checkpoints, events, dashboard) unchanged on the CPU | 5-7 | the same run on `cpu` (Philox mode) and `gpu` produces identical event streams for a small configuration; real run >= 8x faster per generation |
+| G6 Evaluation and statistics | `cli evaluate`, batch runs, duplicate-deal analysis and useful-pass rollouts on the GPU | 4-5 | parity of the reported statistics |
+| G7 Optimisation | occupancy and register pressure, divergence (group matches by strategy mix), launch batching, Nsight profiling | 5-7 | target: >= 10x rounds/s on the two real training setups of Phase 19 |
+| G8 Release | `docs/GPU.md`, CPU-only default build and CI unchanged, GPU parity tests marked as optional (need a device), build and run instructions for Windows/Linux CUDA | 3 | CI green without a GPU |
+
+Core path to a useful result (G0-G3 without adaptive plus G5) is about 23-31
+working days; everything about 40-51 working days (8-10 weeks full time, or
+about 5 months in the evenings). Break-even on time saved alone is poor (a long
+run takes about 1.5 h today), so the case rests on what the speed enables: more
+matches per genome, larger populations, Phase 16 self-play and Phase 18's
+advisor probing many settings quickly.
+
+**Order relative to other phases:** 12 (statistics, in progress) -> 19 (CPU
+speed and simplification) -> 13 (NEAT inputs and fitness) -> 17/18 (analysis and
+advisor) -> G0 spike with the real Phase 19 numbers -> go/no-go -> 20 in full.
+
+**Risks.** Divergence between the matches of a warp (different games branch on
+every decision): mitigated by sorting/grouping matches and by checking the
+spike's number before investing; per-thread state size (double deck, 5-6
+players, histories for pass reading) causing register spilling: layout work in
+G1/G7; feature drift between CPU and GPU when Phase 13 adds features: every
+feature has a fixture test in both implementations and a single written
+specification table; reproducing `StdRng` instead of Philox if old-seed parity
+on the GPU is ever required (a day or two extra, not planned).
 
 ## Parked — deferred rule variants
 
