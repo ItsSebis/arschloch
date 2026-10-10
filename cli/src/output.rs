@@ -250,6 +250,8 @@ mod tests {
     /// The JSON of a real run with every skill mode and the useful-pass
     /// analysis on (their keys only exist with their flags).
     fn real_run_json() -> serde_json::Value {
+        // Two tests call this in one process: the file name must be unique per call.
+        static CALLS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
         let strategies: Vec<std::sync::Arc<dyn sim::Strategy>> = vec![
             std::sync::Arc::new(sim::LowestLegal),
             std::sync::Arc::new(sim::GreedyHighest),
@@ -281,8 +283,6 @@ mod tests {
         let statistics = sim::aggregate(&run.results);
         let extended = sim::extended_stats::aggregate_extended(&run.results);
 
-        // Two tests call this in one process: the file name must be unique per call.
-        static CALLS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
         let path = std::env::temp_dir().join(format!(
             "arschloch-catalog-paths-{}-{}.json",
             std::process::id(),
