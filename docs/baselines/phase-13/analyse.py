@@ -215,19 +215,20 @@ def summarise_arm(out, arm):
                 per_seed[seed] = c["mean"]
                 pl = c["placements"]
                 pooled = pl[:] if pooled is None else [a + b for a, b in zip(pooled, pl)]
-        h2h_scores = []
+        h2h_per_seed = {}
         for seed in sorted(h2h.get(label, {})):
             c = other_cell(h2h[label][seed])
             if c:
-                h2h_scores.append(c["mean"])
+                h2h_per_seed[seed] = c["mean"]
         m, se = mean_se(list(per_seed.values()))
-        hm, hse = mean_se(h2h_scores)
+        hm, hse = mean_se(list(h2h_per_seed.values()))
         settings[label] = dict(seeds=sorted(per_seed), per_seed=per_seed, mixed=m, se=se, h2h=hm,
-                               h2h_se=hse, role=role_stats(pooled) if pooled else None)
+                               h2h_se=hse, h2h_per_seed=h2h_per_seed,
+                               role=role_stats(pooled) if pooled else None)
     return dict(settings=settings, stall=stalls, gap=gaps, hidden=hidden)
 
 
-def comparisons(summary, best):
+def comparisons(summary, best, metric="per_seed"):
     """[(arm, label, control, verdict tuple or None)] in a fixed order."""
     rows = []
     ctl = controls_for(best)
@@ -245,7 +246,7 @@ def comparisons(summary, best):
                     rows.append((arm, label, c, None))
                     continue
                 rows.append((arm, label, c,
-                             verdict(list(r["per_seed"].values()), list(other["per_seed"].values()))))
+                             verdict(list(r[metric].values()), list(other[metric].values()))))
     return rows
 
 
@@ -277,6 +278,15 @@ def render(out, summary, best):
         else:
             d, t, df, crit, word, z = v
             lines.append(f"| {arm} | {label} | {c} | {d:+.3f} | {t:+.2f} | {df:.1f} | {crit:.2f} | {word} | {z:+.1f} |")
+    lines += ["", "## Head-to-head against the committed neat-v2 champion (per-seed scores, same rule)", "",
+              "The default battery saturates against weak opponents; the champion is the discriminating test.", "",
+              "| arm | setting | control | difference | Welch t | df | crit (95%) | verdict | z (2-SE rule) |",
+              "|---|---|---|---:|---:|---:|---:|---|---:|"]
+    for arm, label, c, v in comparisons(summary, best, "h2h_per_seed"):
+        if c is None or v is None:
+            continue
+        d, t, df, crit, word, z = v
+        lines.append(f"| {arm} | {label} | {c} | {d:+.3f} | {t:+.2f} | {df:.1f} | {crit:.2f} | {word} | {z:+.1f} |")
     lines += ["", "Rule: BETTER/WORSE only when |t| exceeds the two-sided 95% critical value of Student's t at the "
               "Welch-Satterthwaite degrees of freedom (the table lookup rounds the df down, i.e. conservatively); "
               "otherwise no difference. B1 is compared against C2 (same evaluation budget) and A2. "
