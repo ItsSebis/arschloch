@@ -4,6 +4,7 @@ use std::path::PathBuf;
 
 use clap::builder::TypedValueParser as _;
 use clap::Parser;
+use sim::training::FitnessKind;
 use sim::FeatureSet;
 
 use crate::args::{DeckVariantArg, DuplicateRuleArg};
@@ -41,6 +42,18 @@ fn unit_interval(text: &str) -> Result<f64, String> {
     }
 }
 
+/// A finite number above 0 and at most 1.
+fn positive_unit(text: &str) -> Result<f64, String> {
+    let value: f64 = text
+        .parse()
+        .map_err(|e| format!("`{text}` is not a number: {e}"))?;
+    if value > 0.0 && value <= 1.0 {
+        Ok(value)
+    } else {
+        Err(format!("`{text}` must be above 0 and at most 1"))
+    }
+}
+
 /// Evolve a NEAT player, generation by generation.
 #[derive(Parser, Debug, Clone)]
 #[command(
@@ -67,7 +80,8 @@ pub struct TrainArgs {
             "player_count", "deck_variant", "duplicate_rule", "pass_rule", "exchange_rule", "rounds", "population",
             "matches_per_genome", "reeval_matches", "seed", "opponent", "target_species",
             "champion_candidates", "hall_of_fame", "hall_interval", "weight_power", "runs",
-            "fitness_skill_weight", "features"
+            "fitness_skill_weight", "features", "fitness", "racing_top", "racing_matches",
+            "player_counts", "decks"
         ]
     )]
     pub resume: bool,
@@ -92,8 +106,33 @@ pub struct TrainArgs {
     #[arg(long, default_value_t = 4, value_parser = clap::value_parser!(u8).range(3..=6))]
     pub player_count: u8,
 
+    /// Train one model on several table sizes, a comma list such as `3,4,5,6`
+    /// (each 3-6). Mutually exclusive with --player-count. With --decks the
+    /// settings are every combination; each generation's matches cycle through
+    /// them (match i is played at setting i mod the number of settings, the
+    /// same for every genome). Use `--features all` so the network can see the
+    /// table (the `table` feature group); needs --matches-per-genome and
+    /// --reeval-matches of at least the number of settings. See docs/TRAINING.md.
+    #[arg(
+        long,
+        value_delimiter = ',',
+        value_parser = clap::value_parser!(u8).range(3..=6),
+        conflicts_with = "player_count"
+    )]
+    pub player_counts: Vec<u8>,
+
     #[arg(long, value_enum, default_value_t = DeckVariantArg::Single)]
     pub deck_variant: DeckVariantArg,
+
+    /// Train on several decks, a comma list of `single`, `double` (see
+    /// --player-counts). Mutually exclusive with --deck-variant.
+    #[arg(
+        long,
+        value_delimiter = ',',
+        value_enum,
+        conflicts_with = "deck_variant"
+    )]
+    pub decks: Vec<DeckVariantArg>,
 
     #[arg(long, value_enum, default_value_t = DuplicateRuleArg::FirstDealtWins)]
     pub duplicate_rule: DuplicateRuleArg,
@@ -177,6 +216,38 @@ pub struct TrainArgs {
     /// role score. An open experiment, see docs/TRAINING.md.
     #[arg(long, default_value_t = 0.0, value_parser = unit_interval)]
     pub fitness_skill_weight: f64,
+
+    /// What evolution maximises: `mean` (the mean role score, default),
+    /// `risk:L` (mean minus L standard deviations of the per-round role score:
+    /// rewards consistency) or `tanh:K` (mean of tanh(K*s)/tanh(K) over the
+    /// per-round role scores s: flattens the top, so a safe Vize is worth
+    /// nearly a President). Champion choice, re-evaluation and the held-out
+    /// confirmation use it too. Cannot be combined with --fitness-skill-weight.
+    /// An open experiment, see docs/TRAINING.md.
+    #[arg(long, value_parser = clap::value_parser!(FitnessKind), default_value_t = FitnessKind::Mean)]
+    pub fitness: FitnessKind,
+
+    /// Racing: the top fraction F (0 < F <= 1) of each generation's genomes by
+    /// fitness plays --racing-matches extra matches (same fresh matches for
+    /// all of them) and its fitness is pooled with them before selection, which
+    /// pulls back genomes that were merely lucky. Needs --racing-matches.
+    /// Cannot be combined with --fitness-skill-weight. See docs/TRAINING.md.
+    #[arg(
+        long,
+        value_name = "F",
+        requires = "racing_matches",
+        value_parser = positive_unit
+    )]
+    pub racing_top: Option<f64>,
+
+    /// Extra matches K each raced genome plays (needs --racing-top).
+    #[arg(
+        long,
+        value_name = "K",
+        requires = "racing_top",
+        value_parser = clap::builder::RangedI64ValueParser::<usize>::new().range(1..)
+    )]
+    pub racing_matches: Option<usize>,
 
     /// Which features the evolved networks see: `base` (the 20 of feature set
     /// v1, loadable by the casino port), `trick` (+ who is still in the
@@ -378,6 +449,95 @@ mod tests {
             );
         }
         assert!(parse(&["--out", "d", "--weight-power", "0.05"]).is_ok());
+    }
+
+    #[test]
+    fn the_phase_13_options_default_to_off_parse_and_cannot_change_on_resume() {
+        let args = parse(&["--out", "d"]).unwrap();
+        assert_eq!(args.fitness, FitnessKind::Mean);
+        assert!(args.racing_top.is_none() && args.racing_matches.is_none());
+        assert!(args.player_counts.is_empty() && args.decks.is_empty());
+        for (text, kind) in [
+            ("mean", FitnessKind::Mean),
+            ("risk:0.5", FitnessKind::Risk { lambda: 0.5 }),
+            ("tanh:4", FitnessKind::Tanh { kappa: 4.0 }),
+        ] {
+            assert_eq!(
+                parse(&["--out", "d", "--fitness", text]).unwrap().fitness,
+                kind
+            );
+        }
+        for bad in ["median", "risk", "risk:-1", "tanh:0", "tanh:x", "risk:nan"] {
+            assert!(parse(&["--out", "d", "--fitness", bad]).is_err(), "{bad}");
+        }
+        let race = parse(&[
+            "--out",
+            "d",
+            "--racing-top",
+            "0.2",
+            "--racing-matches",
+            "30",
+        ])
+        .unwrap();
+        assert_eq!(
+            (race.racing_top, race.racing_matches),
+            (Some(0.2), Some(30))
+        );
+        assert!(parse(&["--out", "d", "--racing-top", "0.2"]).is_err());
+        assert!(parse(&["--out", "d", "--racing-matches", "30"]).is_err());
+        for bad in ["0", "1.5", "-0.1", "nan"] {
+            assert!(
+                parse(&["--out", "d", "--racing-top", bad, "--racing-matches", "3"]).is_err(),
+                "{bad}"
+            );
+        }
+        assert!(parse(&["--out", "d", "--racing-top", "0.5", "--racing-matches", "0"]).is_err());
+        let multi = parse(&[
+            "--out",
+            "d",
+            "--player-counts",
+            "3,4,5,6",
+            "--decks",
+            "single,double",
+        ])
+        .unwrap();
+        assert_eq!(multi.player_counts, vec![3, 4, 5, 6]);
+        assert_eq!(
+            multi.decks,
+            vec![DeckVariantArg::Single, DeckVariantArg::Double]
+        );
+        assert!(parse(&["--out", "d", "--player-counts", "2,4"]).is_err());
+        assert!(parse(&["--out", "d", "--player-counts", "7"]).is_err());
+        assert!(parse(&["--out", "d", "--decks", "triple"]).is_err());
+        // The lists replace the single flags: giving both is an error.
+        assert!(parse(&[
+            "--out",
+            "d",
+            "--player-counts",
+            "3,4",
+            "--player-count",
+            "5"
+        ])
+        .is_err());
+        assert!(parse(&[
+            "--out",
+            "d",
+            "--decks",
+            "single",
+            "--deck-variant",
+            "double"
+        ])
+        .is_err());
+        for conflicting in [
+            vec!["--fitness", "risk:1"],
+            vec!["--racing-top", "0.5", "--racing-matches", "4"],
+            vec!["--player-counts", "3,4"],
+            vec!["--decks", "double"],
+        ] {
+            let mut args = vec!["--out", "d", "--resume"];
+            args.extend(conflicting.iter());
+            assert!(parse(&args).is_err(), "{conflicting:?}");
+        }
     }
 
     #[test]

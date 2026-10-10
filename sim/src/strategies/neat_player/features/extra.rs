@@ -119,23 +119,36 @@ impl HiddenState {
     /// `[p_win_trick, expected_beaters, my_unbeatable_fraction]` for
     /// `candidate`.
     ///
-    /// For a play of size `s` topped by `t`, `m` is the number of unseen
-    /// cards lying in rank groups of at least `s` unseen cards that hold a
-    /// card above `t`: the cards that could take part in a beating play.
-    /// This counts cards, not combinations, so it is exact for singles and
-    /// an upper bound on "holds a beater" for larger plays (a pair needs
-    /// two of the group's cards, not one). Opponent `i`, holding `h` of
-    /// the `U` unseen cards, is then taken to hold at least one of the `m`
-    /// as `P_i = 1 - prod_{j<h} (U - m - j) / (U - j)` (sampling without
-    /// replacement), and 0 if its pass ceiling proves it cannot beat the
-    /// play. The opponents' hands are treated as independent, although
-    /// they partition the unseen cards.
+    /// For a play of size `s` topped by `t`, the *beating groups* are the
+    /// ranks with `u >= s` unseen cards that can beat `t`: ranks above `t`
+    /// (any `s` of their cards beat it), and `t`'s own rank when some unseen
+    /// card of it is above `t` (higher suit, or the duplicate tiebreak),
+    /// `b` of its `u` cards. Opponent `i` holds `h` of the `U` unseen cards
+    /// (a uniformly random subset). It beats the play through a group when
+    /// it holds `k >= s` of the group's `u` cards, at least one of them a
+    /// beater (`b = u` for ranks above `t`): the chance is the exact
+    /// hypergeometric
+    /// `sum_{k>=s} (C(u,k) - C(u-b,k)) * C(U-u, h-k) / C(U,h)`.
+    /// - `s = 1`: any one beater card wins, so the beaters are pooled and
+    ///   `P_i = 1 - prod_{j<h} (U - m - j) / (U - j)` with `m` the number
+    ///   of beater cards; this is exact for one opponent.
+    /// - `s >= 2`: `P_i = 1 - prod_g (1 - P_g)`, treating the groups as
+    ///   independent (they are slightly negatively dependent: cards held
+    ///   for one group are not available for another). A pass ceiling that
+    ///   proves the opponent cannot beat the play sets `P_i = 0`.
+    ///
+    /// Across opponents the hands are also treated as independent, although
+    /// they partition the unseen cards. The binomials come from a Pascal
+    /// table of f64 sums, summed in a fixed order: deterministic.
     /// - `p_win_trick` = `prod (1 - P_i)` over the opponents in the trick
     ///   (1 when none is; 0 for a pass).
-    /// - `expected_beaters` = sum over them (not locked out) of
-    ///   `h * m / U`, the expected number of such cards in the hand,
-    ///   divided by `DECK_SCALE` (0 for a pass): at most `m`, so within
-    ///   `[0, 1]` in a single deck and up to about 2 in a double one.
+    /// - `expected_beaters` = sum over those not locked out of the expected
+    ///   number of cards the opponent holds in beating groups: `h * m / U`
+    ///   for `s = 1`, `sum_g sum_{k>=s} k * (C(u,k) - C(u-b,k)) *
+    ///   C(U-u, h-k) / C(U,h)` for `s >= 2` (only the cards of groups it
+    ///   holds in force count), divided by `DECK_SCALE` (0 for a pass): at
+    ///   most the beater-group cards, so within `[0, 1]` in a single deck
+    ///   and up to about 2 in a double one.
     /// - `my_unbeatable_fraction`: of the cards left in my hand after the
     ///   candidate, the share lying in a rank group that no unseen group
     ///   of at least its size can beat (its remaining cards played
@@ -152,20 +165,49 @@ impl HiddenState {
                 let top = combo.top_card(rule);
                 let size = combo.size();
                 let mask = summary.unseen_beating_rank_mask(top, size);
-                let beaters: usize = (0..13)
-                    .filter(|&rank| mask >> rank & 1 == 1)
-                    .map(|rank| usize::from(summary.unseen_set.per_rank[rank]))
-                    .sum();
+                let mut groups = [(0usize, 0usize); 13];
+                let mut group_count = 0;
+                for rank in (0..13).filter(|&rank| mask >> rank & 1 == 1) {
+                    let cards = usize::from(summary.unseen_set.per_rank[rank]);
+                    let beating = if rank == top.rank as usize {
+                        summary
+                            .unseen
+                            .iter()
+                            .filter(|c| c.rank == top.rank && c.compare(&top, rule).is_gt())
+                            .count()
+                    } else {
+                        cards
+                    };
+                    groups[group_count] = (cards, beating);
+                    group_count += 1;
+                }
+                let groups = &groups[..group_count];
+                let pooled: usize = groups.iter().map(|&(_, beating)| beating).sum();
                 let mut p_win = 1.0;
                 let mut expected = 0.0;
                 for o in summary.opponents.iter().filter(|o| o.active && o.in_trick) {
                     if o.pass_ceilings.cannot_beat(size, top, rule) {
                         continue;
                     }
-                    p_win *= 1.0 - beat_probability(self.unseen, beaters, o.hand_size);
-                    if self.unseen > 0 {
-                        expected += count(o.hand_size) * count(beaters) / count(self.unseen);
-                    }
+                    let hand = o.hand_size;
+                    let (p_beat, cards) = if size == 1 {
+                        let held = if self.unseen > 0 {
+                            count(hand) * count(pooled) / count(self.unseen)
+                        } else {
+                            0.0
+                        };
+                        (beat_probability(self.unseen, pooled, hand), held)
+                    } else {
+                        let (mut miss, mut held) = (1.0, 0.0);
+                        for &(cards, beating) in groups {
+                            let (p, e) = group_tail(self.unseen, cards, beating, hand, size);
+                            miss *= 1.0 - p;
+                            held += e;
+                        }
+                        ((1.0 - miss).clamp(0.0, 1.0), held)
+                    };
+                    p_win *= 1.0 - p_beat;
+                    expected += cards;
                 }
 
                 let rank = top.rank as usize;
@@ -217,6 +259,53 @@ pub(super) fn beat_probability(unseen: usize, beaters: usize, hand: usize) -> f6
         miss *= count(left - beaters) / count(left);
     }
     (1.0 - miss).clamp(0.0, 1.0)
+}
+
+/// `C(n, k)` as f64 for `n, k < 128` (0 for `k > n`), from a Pascal table.
+fn binomial(n: usize, k: usize) -> f64 {
+    static TABLE: std::sync::OnceLock<Vec<[f64; 128]>> = std::sync::OnceLock::new();
+    let table = TABLE.get_or_init(|| {
+        let mut rows = vec![[0.0f64; 128]; 128];
+        for n in 0..128 {
+            rows[n][0] = 1.0;
+            for k in 1..=n {
+                rows[n][k] = rows[n - 1][k - 1] + if k < n { rows[n - 1][k] } else { 0.0 };
+            }
+        }
+        rows
+    });
+    if n < 128 && k < 128 {
+        table[n][k]
+    } else {
+        0.0
+    }
+}
+
+/// For one rank group of `cards` unseen cards of which `beating` can beat
+/// the play, and an opponent holding `hand` of the `unseen` cards: the
+/// probability that it holds at least `size` of the group's cards including
+/// a beating one, and the expected number of the group's cards it holds in
+/// that case (`sum_k k * P(k cards held and a beater among them)`).
+pub(super) fn group_tail(
+    unseen: usize,
+    cards: usize,
+    beating: usize,
+    hand: usize,
+    size: usize,
+) -> (f64, f64) {
+    let hand = hand.min(unseen);
+    let total = binomial(unseen, hand);
+    if total == 0.0 {
+        return (0.0, 0.0);
+    }
+    let (mut probability, mut held) = (0.0, 0.0);
+    for k in size..=cards.min(hand) {
+        let with_beater = binomial(cards, k) - binomial(cards - beating, k);
+        let weight = with_beater * binomial(unseen - cards, hand - k) / total;
+        probability += weight;
+        held += count(k) * weight;
+    }
+    (probability.clamp(0.0, 1.0), held)
 }
 
 impl TurnSummary<'_> {

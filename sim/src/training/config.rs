@@ -6,6 +6,7 @@ use neat::NeatConfig;
 use serde::{Deserialize, Serialize};
 
 use super::evaluate::TableSpec;
+use super::fitness::FitnessKind;
 use crate::FeatureSet;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -77,6 +78,35 @@ pub struct TrainConfig {
     /// not written, so base runs keep their config files byte for byte.
     #[serde(default, skip_serializing_if = "is_base")]
     pub features: FeatureSet,
+    /// What the evolution maximises (see `FitnessKind`): the mean role
+    /// score (the default, not written to the config file) or a variant
+    /// that rewards consistency or flattens the top. Training fitness,
+    /// champion choice, re-evaluation, the held-out confirmation and the
+    /// `best.json` choice all use it. Incompatible with `skill_weight > 0`.
+    #[serde(default, skip_serializing_if = "FitnessKind::is_mean")]
+    pub fitness: FitnessKind,
+    /// Racing (noise-aware selection): the top fraction of the population,
+    /// by fitness, that is evaluated on `racing_matches` extra matches
+    /// before selection. 0 (the default, not written) is off; it must be
+    /// set together with `racing_matches`.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub racing_top: f64,
+    /// Extra matches per raced genome (0 = racing off).
+    #[serde(default, skip_serializing_if = "is_zero_count")]
+    pub racing_matches: usize,
+    /// Table sizes to train on. Empty (the default, not written) means just
+    /// `player_count`. With `decks` the settings are the product, table
+    /// size major (see `TrainConfig::tables`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub player_counts: Vec<u8>,
+    /// Decks to train on. Empty (the default, not written) means just `deck`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub decks: Vec<DeckChoice>,
+}
+
+#[allow(clippy::trivially_copy_pass_by_ref)] // serde's signature
+fn is_zero_count(value: &usize) -> bool {
+    *value == 0
 }
 
 #[allow(clippy::trivially_copy_pass_by_ref)] // serde's signature
@@ -108,10 +138,10 @@ fn five() -> u32 {
 }
 
 impl TrainConfig {
-    pub(crate) fn table(&self) -> TableSpec {
+    fn table_for(&self, player_count: u8, deck: DeckChoice) -> TableSpec {
         TableSpec {
-            player_count: self.player_count,
-            deck_variant: match self.deck {
+            player_count,
+            deck_variant: match deck {
                 DeckChoice::Single => DeckVariant::Single,
                 DeckChoice::Double => DeckVariant::Double,
             },
@@ -123,6 +153,51 @@ impl TrainConfig {
             exchange_rule: self.exchange_rule,
             rounds: self.rounds_per_match,
         }
+    }
+
+    /// The first setting's table (the only one unless several settings are
+    /// configured).
+    pub(crate) fn table(&self) -> TableSpec {
+        self.tables().remove(0)
+    }
+
+    /// Every training setting: the product of the table sizes and decks, in
+    /// table-size-major order (`player_counts` is the outer loop, `decks`
+    /// the inner one, each in the order given). Match `i` of an evaluation
+    /// is played at setting `i % tables().len()`. Without the lists it is
+    /// just `player_count` and `deck`.
+    #[must_use]
+    pub fn tables(&self) -> Vec<TableSpec> {
+        let counts: &[u8] = if self.player_counts.is_empty() {
+            std::slice::from_ref(&self.player_count)
+        } else {
+            &self.player_counts
+        };
+        let decks: &[DeckChoice] = if self.decks.is_empty() {
+            std::slice::from_ref(&self.deck)
+        } else {
+            &self.decks
+        };
+        counts
+            .iter()
+            .flat_map(|&count| decks.iter().map(move |&deck| self.table_for(count, deck)))
+            .collect()
+    }
+
+    /// How many raced genomes a generation has: `ceil(racing_top *
+    /// population)`, at least 1 (0 when racing is off).
+    #[must_use]
+    pub fn raced_count(&self) -> usize {
+        if self.racing_matches == 0 {
+            return 0;
+        }
+        #[allow(
+            clippy::cast_precision_loss,
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss
+        )]
+        let count = (self.racing_top * self.neat.population_size as f64).ceil() as usize;
+        count.clamp(1, self.neat.population_size)
     }
 
     /// # Errors
@@ -165,7 +240,65 @@ impl TrainConfig {
                 self.skill_weight
             ));
         }
+        self.validate_phase13()?;
         self.neat.validate().map_err(|e| e.to_string())
+    }
+
+    /// The settings added in Phase 13: fitness, racing, several settings.
+    fn validate_phase13(&self) -> Result<(), String> {
+        self.fitness.validate()?;
+        if !self.fitness.is_mean() && self.skill_weight > 0.0 {
+            return Err(format!(
+                "fitness {} cannot be combined with skill_weight {}: the luck-adjusted term is defined for the mean role score only",
+                self.fitness, self.skill_weight
+            ));
+        }
+        if !(0.0..=1.0).contains(&self.racing_top) {
+            return Err(format!(
+                "racing_top {} is not between 0 and 1",
+                self.racing_top
+            ));
+        }
+        if (self.racing_top > 0.0) != (self.racing_matches > 0) {
+            return Err(
+                "racing needs both racing_top (a fraction in (0, 1]) and racing_matches (at least 1); set both or neither"
+                    .into(),
+            );
+        }
+        if self.racing_matches > 0 && self.skill_weight > 0.0 {
+            return Err("racing cannot be combined with skill_weight > 0".into());
+        }
+        for (i, count) in self.player_counts.iter().enumerate() {
+            if !(3..=6).contains(count) {
+                return Err(format!("player_counts: {count} is not a table size (3-6)"));
+            }
+            if self.player_counts[..i].contains(count) {
+                return Err(format!("player_counts lists {count} twice"));
+            }
+        }
+        for (i, deck) in self.decks.iter().enumerate() {
+            if self.decks[..i].contains(deck) {
+                return Err(format!("decks lists {deck:?} twice"));
+            }
+        }
+        let settings = self.tables().len();
+        if settings > 1 && self.skill_weight > 0.0 {
+            return Err(
+                "several settings (player_counts, decks) cannot be combined with skill_weight > 0"
+                    .into(),
+            );
+        }
+        for (name, value) in [
+            ("matches_per_genome", self.matches_per_genome),
+            ("reeval_matches", self.reeval_matches),
+        ] {
+            if value < settings {
+                return Err(format!(
+                    "{name} ({value}) is less than the number of settings ({settings}): every setting must be played at least once"
+                ));
+            }
+        }
+        Ok(())
     }
 }
 
@@ -195,6 +328,11 @@ pub(crate) mod test_support {
             hall_of_fame_interval: 5,
             skill_weight: 0.0,
             features: FeatureSet::Base,
+            fitness: FitnessKind::Mean,
+            racing_top: 0.0,
+            racing_matches: 0,
+            player_counts: Vec::new(),
+            decks: Vec::new(),
         }
     }
 }
@@ -411,5 +549,200 @@ mod tests {
         let again: TrainConfig =
             serde_json::from_str(&serde_json::to_string(&sample()).unwrap()).unwrap();
         assert_eq!(again.exchange_rule, ExchangeRule::Forced);
+    }
+
+    #[test]
+    fn the_phase_13_options_default_to_off_are_not_written_and_old_configs_load() {
+        let config = sample();
+        assert_eq!(config.fitness, FitnessKind::Mean);
+        assert!(config.racing_top.abs() < f64::EPSILON && config.racing_matches == 0);
+        assert!(config.player_counts.is_empty() && config.decks.is_empty());
+        let text = serde_json::to_string(&config).unwrap();
+        for key in [
+            "fitness",
+            "racing_top",
+            "racing_matches",
+            "player_counts",
+            "decks",
+        ] {
+            assert!(!text.contains(key), "{key} written for a default: {text}");
+        }
+        let old: TrainConfig = serde_json::from_str(&text).unwrap();
+        assert_eq!(old, config);
+        assert_eq!(old.tables().len(), 1);
+        assert_eq!(old.raced_count(), 0);
+        // Set options round-trip and are written.
+        let set = TrainConfig {
+            fitness: FitnessKind::Risk { lambda: 0.5 },
+            racing_top: 0.25,
+            racing_matches: 7,
+            player_counts: vec![3, 5],
+            decks: vec![DeckChoice::Single, DeckChoice::Double],
+            ..sample()
+        };
+        let text = serde_json::to_string(&set).unwrap();
+        for key in [
+            "fitness",
+            "racing_top",
+            "racing_matches",
+            "player_counts",
+            "decks",
+        ] {
+            assert!(text.contains(key), "{key}: {text}");
+        }
+        assert_eq!(serde_json::from_str::<TrainConfig>(&text).unwrap(), set);
+        assert_eq!(set.validate(), Ok(()));
+    }
+
+    #[test]
+    fn settings_are_the_product_of_table_sizes_and_decks_table_size_first() {
+        let config = TrainConfig {
+            player_counts: vec![5, 3],
+            decks: vec![DeckChoice::Double, DeckChoice::Single],
+            ..sample()
+        };
+        let labels: Vec<String> = config.tables().iter().map(TableSpec::label).collect();
+        assert_eq!(labels, ["5p-double", "5p-single", "3p-double", "3p-single"]);
+        // Only one list: the other falls back to the single value.
+        let counts_only = TrainConfig {
+            player_counts: vec![3, 4, 6],
+            ..sample()
+        };
+        let labels: Vec<String> = counts_only.tables().iter().map(TableSpec::label).collect();
+        assert_eq!(labels, ["3p-single", "4p-single", "6p-single"]);
+        let decks_only = TrainConfig {
+            decks: vec![DeckChoice::Double, DeckChoice::Single],
+            ..sample()
+        };
+        let labels: Vec<String> = decks_only.tables().iter().map(TableSpec::label).collect();
+        assert_eq!(labels, ["4p-double", "4p-single"]);
+        assert_eq!(sample().tables().len(), 1);
+        assert_eq!(sample().table().player_count, 4);
+    }
+
+    #[test]
+    #[allow(clippy::too_many_lines)] // a table of cases
+    fn invalid_phase_13_settings_are_named() {
+        let cases: Vec<(TrainConfig, &str)> = vec![
+            (
+                TrainConfig {
+                    fitness: FitnessKind::Risk { lambda: -1.0 },
+                    ..sample()
+                },
+                "lambda",
+            ),
+            (
+                TrainConfig {
+                    fitness: FitnessKind::Tanh { kappa: 0.0 },
+                    ..sample()
+                },
+                "kappa",
+            ),
+            (
+                TrainConfig {
+                    fitness: FitnessKind::Tanh { kappa: 4.0 },
+                    skill_weight: 0.5,
+                    ..sample()
+                },
+                "skill_weight",
+            ),
+            (
+                TrainConfig {
+                    racing_top: 0.5,
+                    ..sample()
+                },
+                "both racing_top",
+            ),
+            (
+                TrainConfig {
+                    racing_matches: 5,
+                    ..sample()
+                },
+                "both racing_top",
+            ),
+            (
+                TrainConfig {
+                    racing_top: 1.5,
+                    racing_matches: 5,
+                    ..sample()
+                },
+                "racing_top",
+            ),
+            (
+                TrainConfig {
+                    racing_top: 0.5,
+                    racing_matches: 5,
+                    skill_weight: 0.5,
+                    ..sample()
+                },
+                "racing",
+            ),
+            (
+                TrainConfig {
+                    player_counts: vec![3, 7],
+                    ..sample()
+                },
+                "player_counts",
+            ),
+            (
+                TrainConfig {
+                    player_counts: vec![3, 3],
+                    ..sample()
+                },
+                "twice",
+            ),
+            (
+                TrainConfig {
+                    decks: vec![DeckChoice::Double, DeckChoice::Double],
+                    ..sample()
+                },
+                "twice",
+            ),
+            (
+                TrainConfig {
+                    player_counts: vec![3, 4],
+                    skill_weight: 0.5,
+                    ..sample()
+                },
+                "settings",
+            ),
+            (
+                TrainConfig {
+                    player_counts: vec![3, 4, 5, 6],
+                    matches_per_genome: 3,
+                    ..sample()
+                },
+                "matches_per_genome",
+            ),
+            (
+                TrainConfig {
+                    player_counts: vec![3, 4, 5, 6],
+                    reeval_matches: 3,
+                    ..sample()
+                },
+                "reeval_matches",
+            ),
+        ];
+        for (config, expected) in cases {
+            let error = config.validate().unwrap_err();
+            assert!(error.contains(expected), "{expected}: {error}");
+        }
+    }
+
+    #[test]
+    fn the_raced_count_is_the_rounded_up_fraction_of_the_population() {
+        let racing = |top: f64, population: usize| TrainConfig {
+            racing_top: top,
+            racing_matches: 4,
+            neat: NeatConfig {
+                population_size: population,
+                ..NeatConfig::default()
+            },
+            ..sample()
+        };
+        assert_eq!(racing(0.25, 12).raced_count(), 3);
+        assert_eq!(racing(0.2, 12).raced_count(), 3);
+        assert_eq!(racing(0.01, 12).raced_count(), 1);
+        assert_eq!(racing(1.0, 12).raced_count(), 12);
     }
 }

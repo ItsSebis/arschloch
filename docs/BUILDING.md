@@ -50,7 +50,9 @@ scores against a default battery of opponents; add `--opponent SPEC` to
 choose them, repeat `--genome` to compare several). Learning options:
 `--champion-candidates` (default 5), `--hall-of-fame` (default off) and
 `--weight-power` (default 0.2). `--fitness-skill-weight W` (0 to 1, default 0 = off, fixed for
-the run) is an experimental luck-adjusted fitness term, see `docs/TRAINING.md`; the evidence for the defaults is in
+the run) is an experimental luck-adjusted fitness term, see `docs/TRAINING.md`. Phase 13 adds `--fitness mean|risk:L|tanh:K`,
+`--racing-top F --racing-matches K` and `--player-counts` / `--decks` (comma lists, one model for several tables), all off by default
+and experiments (`docs/TRAINING.md`, "Fitness variants, racing and several tables"). The evidence for the defaults is in
 `docs/baselines/neat-v1/experiments.md`, and `docs/baselines/neat-v1`
 holds a committed champion with its comparison against the pre-NEAT
 strategies.

@@ -565,10 +565,12 @@ fn pairs_need_two_cards_of_a_group_and_double_decks_count_copies() {
         card(Rank::Nine, Suit::Diamonds),
         card(Rank::Nine, Suit::Hearts),
     ]);
-    approx(spec.feature("p_win_trick", &pair), 0.3, "pair p_win");
+    // Only both Kings beat a pair of Nines: 1 / C(5, 2) = 0.1, exactly.
+    approx(spec.feature("p_win_trick", &pair), 0.9, "pair p_win");
+    // The opponent holds the two Kings with probability 0.1: 0.2 cards.
     approx(
         spec.feature("expected_beaters", &pair),
-        2.0 * 2.0 / 5.0 / 52.0,
+        0.2 / 52.0,
         "pair beaters",
     );
     let single = play(&[card(Rank::Nine, Suit::Hearts)]);
@@ -605,7 +607,7 @@ fn pairs_need_two_cards_of_a_group_and_double_decks_count_copies() {
         card_n(Rank::Nine, Suit::Diamonds, 0),
         card_n(Rank::Nine, Suit::Hearts, 1),
     ]);
-    // One opponent holds all three unseen cards: m = 2 of 3, h = 3.
+    // One opponent holds all three unseen cards, so it holds both Aces.
     approx(
         double.feature("p_win_trick", &pair),
         0.0,
@@ -613,7 +615,7 @@ fn pairs_need_two_cards_of_a_group_and_double_decks_count_copies() {
     );
     approx(
         double.feature("expected_beaters", &pair),
-        3.0 * 2.0 / 3.0 / 52.0,
+        2.0 / 52.0,
         "double beaters",
     );
     // The Nines are beatable by the Aces; an Ace pair of mine would not be.
@@ -729,11 +731,12 @@ fn p_win_trick_is_exact_for_singles_against_one_opponent() {
 }
 
 #[test]
-fn p_win_trick_is_an_approximation_for_pairs_and_for_several_opponents() {
-    // Pairs: the formula counts the cards of groups that could beat, not the
-    // combinations. Unseen Ks Kd Ad 4c 5d against a pair of Nines, seat 1
-    // holding two cards: it beats only with both Kings, probability
-    // 1 / C(5, 2) = 0.1, so it fails with 0.9; the formula's m = 2 says 0.3.
+fn p_win_trick_is_exact_for_pairs_and_triples_against_one_opponent() {
+    // A play of size s needs s cards of one rank group, one of them a
+    // beater: for one opponent and one group the formula is the exact
+    // hypergeometric tail. Unseen Ks Kd Ad 4c 5d against a pair of Nines,
+    // seat 1 holding two cards: only both Kings beat it, 1 / C(5, 2) = 0.1.
+    // (The pooled single-card formula the pair used to get said 0.3.)
     let unseen = vec![
         card(Rank::King, Suit::Spades),
         card(Rank::King, Suit::Diamonds),
@@ -750,11 +753,83 @@ fn p_win_trick_is_an_approximation_for_pairs_and_for_several_opponents() {
         vec![opp(1, 2, true), opp(2, 3, false)],
     );
     let pair = play(&[card(Rank::Nine, Suit::Diamonds), nine_h]);
-    approx(spec.feature("p_win_trick", &pair), 0.3, "formula pair");
-    assert!(
-        spec.feature("p_win_trick", &pair) < exact,
-        "for pairs the formula is pessimistic"
+    approx(spec.feature("p_win_trick", &pair), exact, "formula pair");
+
+    // Triples: Ks Kd Kh Ac Ad 4c (U = 6), seat 1 holds 3: it beats a triple
+    // of Nines only with all three Kings, 1 / C(6, 3) = 0.05.
+    let unseen = vec![
+        card(Rank::King, Suit::Spades),
+        card(Rank::King, Suit::Diamonds),
+        card(Rank::King, Suit::Hearts),
+        card(Rank::Ace, Suit::Clubs),
+        card(Rank::Ace, Suit::Diamonds),
+        card(Rank::Four, Suit::Clubs),
+    ];
+    let nines = [
+        card(Rank::Nine, Suit::Diamonds),
+        card(Rank::Nine, Suit::Hearts),
+        card(Rank::Nine, Suit::Spades),
+    ];
+    let exact = exact_p_win(&unseen, &[3, 3], &[0], 3, nines[2]);
+    approx(exact, 0.95, "exact triple");
+    let spec = Spec::new(
+        nines.to_vec(),
+        unseen,
+        vec![opp(1, 3, true), opp(2, 3, false)],
     );
+    approx(
+        spec.feature("p_win_trick", &play(&nines)),
+        exact,
+        "formula triple",
+    );
+
+    // Only a subset of the rank beats the top: a pair 9h 9s against unseen
+    // 9d 9c 4c 5d: the Nine of Clubs is above the Spades, the Diamonds is
+    // not, and a pair needs both: 1 / C(4, 2).
+    let unseen = vec![
+        card(Rank::Nine, Suit::Diamonds),
+        card(Rank::Nine, Suit::Clubs),
+        card(Rank::Four, Suit::Clubs),
+        card(Rank::Five, Suit::Diamonds),
+    ];
+    let top = card(Rank::Nine, Suit::Spades);
+    let exact = exact_p_win(&unseen, &[2, 2], &[0], 2, top);
+    approx(exact, 5.0 / 6.0, "exact partial rank");
+    let spec = Spec::new(
+        vec![card(Rank::Nine, Suit::Hearts), top],
+        unseen,
+        vec![opp(1, 2, true), opp(2, 2, false)],
+    );
+    let pair = play(&[card(Rank::Nine, Suit::Hearts), top]);
+    approx(spec.feature("p_win_trick", &pair), exact, "formula partial");
+}
+
+#[test]
+fn p_win_trick_approximates_several_groups_and_several_opponents() {
+    // Two groups can beat a pair of Nines: Ks Kd and Ad Ac, plus 4c (U = 5),
+    // one opponent holding 2. It beats with exactly one of the pairs, 2 of
+    // C(5, 2) = 10 hands, so it fails with 0.8. The groups are treated as
+    // independent (each beats with 0.1): 0.9 * 0.9 = 0.81 won, within 0.011. The pooled
+    // single-card formula this replaced said 0.0 (a lost trick for sure).
+    let unseen = vec![
+        card(Rank::King, Suit::Spades),
+        card(Rank::King, Suit::Diamonds),
+        card(Rank::Ace, Suit::Clubs),
+        card(Rank::Ace, Suit::Diamonds),
+        card(Rank::Four, Suit::Clubs),
+    ];
+    let nine_h = card(Rank::Nine, Suit::Hearts);
+    let exact = exact_p_win(&unseen, &[2, 3], &[0], 2, nine_h);
+    approx(exact, 0.8, "exact two groups");
+    let spec = Spec::new(
+        vec![card(Rank::Nine, Suit::Diamonds), nine_h],
+        unseen,
+        vec![opp(1, 2, true), opp(2, 3, false)],
+    );
+    let pair = play(&[card(Rank::Nine, Suit::Diamonds), nine_h]);
+    let formula = spec.feature("p_win_trick", &pair);
+    approx(formula, 0.81, "formula two groups");
+    assert!((formula - exact).abs() < 0.011);
 
     // Two opponents (2 + 2 cards, one card with a passed seat): the hands are
     // not independent. Beating Kh needs Ks or Ad; with a third seat holding
@@ -783,6 +858,14 @@ fn p_win_trick_is_an_approximation_for_pairs_and_for_several_opponents() {
 }
 
 // ---------------------------------------------------------------- oracle
+
+/// `C(n, k)` by the multiplicative formula (0 for `k > n`).
+fn choose(n: usize, k: usize) -> f64 {
+    if k > n {
+        return 0.0;
+    }
+    (0..k).fold(1.0, |acc, i| acc * count(n - i) / count(i + 1))
+}
 
 /// The plain-loop reading of the `hidden` group (rank groups and scans).
 fn reference_hidden(context: &TurnContext<'_>, candidate: &Move, rule: DuplicateRule) -> [f64; 3] {
@@ -818,32 +901,59 @@ fn reference_hidden(context: &TurnContext<'_>, candidate: &Move, rule: Duplicate
         Move::Play(combo) => {
             let top = combo.top_card(rule);
             let size = combo.size();
-            let m = beats(size, top);
+            // Beating groups: (cards, beating cards) of the unseen ranks that
+            // have at least `size` cards and a card above `top`.
+            let groups: Vec<(usize, usize)> = unseen_groups
+                .iter()
+                .map(|g| {
+                    (
+                        g.len(),
+                        g.iter().filter(|c| c.compare(&top, rule).is_gt()).count(),
+                    )
+                })
+                .filter(|&(cards, beating)| cards >= size && beating > 0)
+                .collect();
+            let pooled: usize = groups.iter().map(|g| g.1).sum();
             let (mut p_win, mut expected) = (1.0, 0.0);
             for o in context.opponents.iter().filter(|o| o.active && o.in_trick) {
                 if o.pass_ceilings.cannot_beat(size, top, rule) {
                     continue;
                 }
-                let mut miss = 1.0;
-                let mut certain = false;
-                for j in 0..o.hand_size {
-                    if total.saturating_sub(j) <= m {
-                        certain = true;
-                        break;
+                let h = o.hand_size.min(total);
+                let (p_beat, cards) = if size == 1 {
+                    let mut miss = 1.0;
+                    for j in 0..h {
+                        miss *= count((total - j).saturating_sub(pooled)) / count(total - j);
                     }
-                    miss *= count(total - j - m) / count(total - j);
-                }
-                let p_beat = if m == 0 || o.hand_size == 0 {
-                    0.0
-                } else if certain {
-                    1.0
+                    let held = if total > 0 {
+                        count(o.hand_size) * count(pooled) / count(total)
+                    } else {
+                        0.0
+                    };
+                    (
+                        if pooled == 0 || h == 0 {
+                            0.0
+                        } else {
+                            1.0 - miss
+                        },
+                        held,
+                    )
                 } else {
-                    1.0 - miss
+                    let (mut miss, mut held) = (1.0, 0.0);
+                    for &(u, b) in &groups {
+                        let mut p = 0.0;
+                        for k in size..=u.min(h) {
+                            let w = (choose(u, k) - choose(u - b, k)) * choose(total - u, h - k)
+                                / choose(total, h);
+                            p += w;
+                            held += count(k) * w;
+                        }
+                        miss *= 1.0 - p;
+                    }
+                    (1.0 - miss, held)
                 };
                 p_win *= 1.0 - p_beat;
-                if total > 0 {
-                    expected += count(o.hand_size) * count(m) / count(total);
-                }
+                expected += cards;
             }
             let remaining: Vec<Card> = context
                 .hand
@@ -918,7 +1028,7 @@ fn the_new_groups_match_the_plain_reading_on_random_states() {
             for (k, expected) in hidden.iter().enumerate() {
                 let actual = features[25 + k];
                 assert!(
-                    (actual - expected).abs() < 1e-12,
+                    (actual - expected).abs() < 1e-9,
                     "hidden[{k}]: {actual} vs {expected} for {candidate:?}"
                 );
             }

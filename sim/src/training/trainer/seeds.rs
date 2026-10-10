@@ -12,6 +12,16 @@ pub(super) fn training_seeds(config: &TrainConfig, generation: u32) -> Vec<u64> 
         .collect()
 }
 
+/// The extra matches racing gives the top genomes of `generation`. Their
+/// own stream (training uses the even streams `2 * generation`, this the
+/// odd `2 * generation + 1`), so they are fresh every generation and never
+/// a match the genomes were already evaluated on.
+pub(super) fn racing_seeds(config: &TrainConfig, generation: u32) -> Vec<u64> {
+    (0..config.racing_matches as u64)
+        .map(|i| match_seed(config.seed, 2 * u64::from(generation) + 1, i))
+        .collect()
+}
+
 /// The fixed set every generation's champion is compared on: the same
 /// deals every time (so champions are compared like for like) and never
 /// part of training.

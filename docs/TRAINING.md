@@ -123,6 +123,9 @@ thread count.
 | `--hall-of-fame N` | 0 (off) | frozen past champions join the training opponents (`--hall-interval K`: every K generations). No measured benefit against the default pool; worth trying when the pool includes evolved opponents |
 | `--fitness-skill-weight W` | 0 (off) | experimental, 0 to 1: trains on `(1 - W) x mean role score + W x a luck-adjusted round-1 score` (see below). Fixed for the run (`--resume` cannot change it) |
 | `--features base\|trick\|hidden\|all` | base | which inputs the networks see (see "Feature sets" below). Fixed for the run (`--resume` cannot change it); a warm start (`--from`) needs the source's value |
+| `--fitness mean\|risk:L\|tanh:K` | mean | what evolution maximises (see "Fitness variants" below). Fixed for the run; cannot be combined with `--fitness-skill-weight` |
+| `--racing-top F --racing-matches K` | off | noise-aware selection: the top fraction F of each generation is evaluated on K extra matches before selection (see "Racing" below). Both together; fixed for the run |
+| `--player-counts 3,4,5,6`, `--decks single,double` | off | train one model on several table sizes and decks (see "One model for several tables" below). Replace `--player-count` / `--deck-variant`, which they exclude; fixed for the run |
 | `--target-species` | 8 | how many species the speciation steers toward |
 | `--deck-variant`, `--duplicate-rule` | single, first-dealt-wins | table rules |
 | `--exchange-rule` | forced | `forced`: the lower role of an exchange pair must give its highest cards (the rules of the game); `free`: it may choose (the older behaviour). Evolved players give their highest cards either way, so it only changes what the opponents do. Like `--pass-rule` it cannot change on `--resume`; runs written before it existed resume as `free` |
@@ -221,17 +224,25 @@ you before the trick comes back to the seat holding the table combo (all of them
 act after you when you lead).
 
 *Hidden.* For a candidate play of size s topped by card t, with U unseen cards,
-`m` = the unseen cards lying in rank groups of at least s unseen cards that hold
-a card above t (it counts cards, not combinations: exact for singles, optimistic
-for the opponent for pairs and larger). An opponent with h cards beats the play
-with probability `1 - prod_{j<h} (U - m - j) / (U - j)`, or 0 when its pass
-ceiling proves it cannot. `p_win_trick` is the product of the complements over
-the opponents in the trick (the hands are treated as independent, though they
-partition the unseen cards; 1 when nobody is in the trick, 0 for a pass),
-`expected_beaters` the sum of `h * m / U` over them / 52, and
-`my_unbeatable_fraction` the share of the cards left in your hand (after the
-candidate) in a rank group that no unseen group of at least its size can beat.
-All are exact deterministic functions of the cards counted so far, no randomness.
+the beating groups are the unseen ranks with u >= s cards that can beat t
+(ranks above t; t's own rank when some unseen card of it is above t in suit or
+duplicate order, b of its u cards). An opponent holding h of the U unseen cards
+beats the play through a group when it holds k >= s of its cards including a
+beater, probability `sum_{k>=s} (C(u,k) - C(u-b,k)) C(U-u,h-k) / C(U,h)` (exact for
+one opponent and one group). For s = 1 the beater cards are pooled
+(`1 - prod_{j<h} (U - m - j) / (U - j)`, m = number of beater cards), also
+exact. For s >= 2 the groups are combined as independent
+(`1 - prod_g (1 - P_g)`, slightly optimistic for the opponent, e.g. 0.81 against
+an exact 0.80 won for a pair against two beating pairs), and a pass ceiling that
+proves the opponent cannot beat the play gives 0. `p_win_trick` is the
+product of the complements over the opponents in the trick (the hands are also
+treated as independent, though they partition the unseen cards; 1 when nobody is
+in the trick, 0 for a pass), `expected_beaters` the expected number of cards each
+such opponent holds in beating groups (for s >= 2 only groups it holds in force
+count), summed and divided by 52, and `my_unbeatable_fraction` the share of the
+cards left in your hand (after the candidate) in a rank group that no unseen group
+of at least its size can beat. All are exact deterministic functions of the cards
+counted so far, no randomness.
 
 *Table.* `table_players` = (seats - 3) / 3, `table_double_deck` and
 `table_pass_final` are 0/1. They only vary when one model trains on several
@@ -249,6 +260,91 @@ context parts they read, so a `base` model costs what it always did. The casino
 TypeScript port implements feature set v1 only: models with `trick`, `hidden` or
 `all` features load in the Rust tools but not in the casino until its port is
 extended.
+
+## Fitness variants, racing and several tables (Phase 13 options)
+
+These three options are experiments: whether any of them produces a stronger or
+more robust player than the default is the open question of Phase 13, and this
+page does not claim they do. With none of them given a run is byte for byte what
+it was before they existed (`config.json` and the events only mention an option
+that is on, and the seed streams of the existing matches are untouched), so every
+older run directory still loads and resumes.
+
+### Fitness variants (`--fitness`)
+
+Every variant is a function of the per-round role scores `s` of the candidate
+over the rounds of an evaluation (+1 President .. -1 last, linear in the place,
+the same scale at every table size):
+
+| `--fitness` | formula |
+|---|---|
+| `mean` (default) | the mean of `s` (the mean of the match means, as before) |
+| `risk:L` (`L >= 0`) | `mean(s) - L x sd(s)`, `sd` the population standard deviation of `s` over all the rounds of the evaluation, `sqrt(sum(s^2)/n - mean^2)`. Rewards a player that finishes in the same place every round over one that alternates President and last |
+| `tanh:K` (`K > 0`) | the mean of `g(s) = tanh(K s) / tanh(K)`. `g(1) = 1`, `g(-1) = -1`, and `g` flattens towards the top: with `K = 4` a Vize (`s = 1/3` at four seats) is worth about 0.87 of a President, so the network is not pushed to gamble for the top place |
+
+The training fitness, the choice among `--champion-candidates`, the champion's
+re-evaluation, the held-out confirmation and the choice of `best.json` all use the
+configured fitness. Events always carry `mean` and `std_error` as before; with a
+non-mean fitness every score also carries `spread` (the `sd` above) and `fitness`
+(the configured scalar), and the terminal row adds `sd`. A mean run's events carry
+neither (adding them would change its bytes). `cli evaluate` always reports
+`spread` in its JSON cells. `--fitness` cannot be combined with
+`--fitness-skill-weight`: the luck-adjusted term is defined for the mean role score.
+
+### Racing (`--racing-top F --racing-matches K`)
+
+The training fitness of the genomes that look best is inflated by luck (the
+winner's curse), and selection and the champion choice then act on that inflated
+number. After the normal evaluation of a generation, the top `ceil(F x population)`
+genomes by fitness play `K` extra matches. The extra matches use a fresh seed
+stream (new every generation, and the same deals, seats, tables and opponents for
+every raced genome, so they are still common random numbers), and each raced
+genome's fitness becomes the fitness of all its `m + K` matches together
+(`m` = `--matches-per-genome`) before speciation, selection and the champion choice.
+Genomes that were not raced keep their fitness.
+
+Pooling is done on the moments, not on the scalars: an evaluation keeps `n`, the
+sum of `s`, the sum of `s^2` and the sum of `g(s)`; the two evaluations' sums are
+added and the configured fitness is taken of the totals. For `mean` this is
+exactly the match-weighted mean `(m x old + K x extra) / (m + K)`; for `tanh` the
+same weighted mean of the two `tanh` fitnesses; for `risk` it is *not* the
+weighted mean of the two risk values (the standard deviation of the pooled rounds
+is not the average of two standard deviations), which is why the sums are kept.
+Each generation's event has a `racing` object: `raced`, `extra_matches`,
+`mean_before`, `mean_after` and `mean_shift` of the raced genomes' fitness, so the
+correction is visible (a negative shift means the leaders were lucky). Cost: `raced
+x K` extra matches per generation, counted in `rounds_evaluated`. Racing cannot be
+combined with `--fitness-skill-weight`.
+
+### One model for several tables (`--player-counts`, `--decks`)
+
+`--player-counts 3,4,5,6` and/or `--decks single,double` (comma lists, validated)
+train one model on every combination of the lists, table size first: with
+`3,5` and `single,double` the settings are `3p-single, 3p-double, 5p-single,
+5p-double`. Match `i` of an evaluation is played at setting `i mod (number of
+settings)`, in seat `i mod (players of that table)`, the same for every genome, so
+common random numbers hold. The same cycle is used by the re-evaluations (mixed,
+per opponent, hall of fame), the candidate selection and the held-out
+confirmation, each with its own seeds. The fitness is the configured scalar
+averaged over the matches (role scores are already normalised per table size).
+The recorded decisions of a new best come from the first setting. The opponents
+are the same strategy objects at every table size (the hand-written ones and
+`neat:` opponents with the base features are table-size independent).
+
+The lists replace `--player-count` and `--deck-variant`; giving both is an error. A
+list with one entry is the single flag (and writes the same `config.json`). Both
+`--matches-per-genome` and `--reeval-matches` must be at least the number of
+settings, so every setting is played. A run with several settings should use
+`--features all`: only the `table` feature group lets the network see the table
+size and deck, and with another feature set it plays every setting the same way
+(`cli train` prints a warning, not an error). Several settings cannot be combined
+with `--fitness-skill-weight`. With more than one setting every score in the events
+also has `by_setting`: one entry per setting with `label` (such as `4p-single`),
+`matches`, `mean`, `spread`, `fitness` and `placements` at that table size
+(the top-level `placements` add the counts of equal place indices, so read the
+per-setting ones). `cli evaluate --player-counts 3,4,5,6 --decks single,double`
+evaluates every setting from the same seeds and prints one block per setting; its
+JSON keeps the first setting's `results` and adds `settings` with all of them.
 
 ## Building on an earlier run
 

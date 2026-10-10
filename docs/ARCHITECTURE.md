@@ -254,6 +254,13 @@ the resumable generational loop (`Trainer`, reporting through the
 `TrainObserver` trait). `cli train` prints a row per generation from
 those events; the dashboard (10d) will read the same files.
 
+Phase 13 additions in `sim::training`: `fitness` (`FitnessKind`: mean, risk, tanh, and `Moments`,
+the per-round sums an evaluation keeps so fitness can be computed and pooled), `evaluate_with`
+(several `TableSpec`s cycled by match index, a fitness kind, and a start index so a second batch
+of matches continues the cycle), `TrainConfig::tables()` (the settings: table sizes x decks,
+table size major) and racing (`Trainer::race`, the odd seed streams `2 * generation + 1`). All
+default to off and leave a default run byte for byte as before; see `docs/TRAINING.md`.
+
 ### `web` (Phase 10d; extended in Phase 11)
 
 The training dashboard (Phase 10d): a std-only HTTP server on

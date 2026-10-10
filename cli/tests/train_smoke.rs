@@ -814,11 +814,55 @@ fn small_run(out: &Path, threads: &str, extra: &[&str]) -> Output {
     cli(&args)
 }
 
-/// Runs trained before `--features` existed (captured with the build that
-/// preceded it): the default must reproduce their files byte for byte.
+/// FNV-1a of `bytes`.
+fn fnv_bytes(bytes: &[u8]) -> u64 {
+    bytes.iter().fold(0xcbf2_9ce4_8422_2325, |h, &b| {
+        (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3)
+    })
+}
+
+/// A hash of every event with its wall-clock fields removed (they differ
+/// from run to run), so the golden pins everything else the events say.
+fn timeless_events_hash(dir: &Path) -> u64 {
+    let lines: Vec<String> = std::fs::read_to_string(dir.join("events.jsonl"))
+        .unwrap()
+        .lines()
+        .map(|line| {
+            let mut value: serde_json::Value = serde_json::from_str(line).unwrap();
+            let object = value.as_object_mut().unwrap();
+            for key in [
+                "elapsed_secs",
+                "generation_secs",
+                "rounds_per_sec",
+                "timings",
+            ] {
+                object.remove(key);
+            }
+            value.to_string()
+        })
+        .collect();
+    fnv_bytes(lines.join("\n").as_bytes())
+}
+
+/// The hashes of the decision files, folded in file-name order.
+fn decisions_hash(dir: &Path) -> u64 {
+    let mut files: Vec<PathBuf> = std::fs::read_dir(dir.join("decisions"))
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .collect();
+    files.sort();
+    files.iter().fold(0xcbf2_9ce4_8422_2325, |h, path| {
+        (h ^ fnv(path)).wrapping_mul(0x0100_0000_01b3)
+    })
+}
+
+/// Runs trained before `--features` (and the Phase 13 training options)
+/// existed, captured with the build that preceded them: the default must
+/// reproduce their files byte for byte, and their events (apart from the
+/// wall-clock fields) and decision samples too.
 #[test]
 fn the_default_feature_set_trains_exactly_as_before_the_option_existed() {
-    for (name, extra, hashes) in [
+    for (name, extra, hashes, decisions, events) in [
         (
             "features-golden-4p",
             vec!["--generations", "3", "--seed", "7"],
@@ -828,6 +872,8 @@ fn the_default_feature_set_trains_exactly_as_before_the_option_existed() {
                 ("gen-0000.json", 0x68a4_edb8_1f21_e2b1),
                 ("gen-0002.json", 0x24da_74c1_3169_29f4),
             ],
+            0x2673_670c_3a47_bb12_u64,
+            0xe0ad_cf2b_4e0d_a49e_u64,
         ),
         (
             "features-golden-5p",
@@ -849,6 +895,31 @@ fn the_default_feature_set_trains_exactly_as_before_the_option_existed() {
                 ("gen-0000.json", 0x7a21_c9cb_6b2e_5f8f),
                 ("gen-0002.json", 0x78f3_660f_7e21_7bfb),
             ],
+            0xe504_b521_8170_29cd,
+            0x2de6_36c6_4235_77e1,
+        ),
+        (
+            "features-golden-hall",
+            vec![
+                "--generations",
+                "4",
+                "--seed",
+                "11",
+                "--hall-of-fame",
+                "2",
+                "--hall-interval",
+                "1",
+                "--champion-candidates",
+                "3",
+            ],
+            [
+                ("config.json", 0x4faa_348e_e06b_d4da),
+                ("best.json", 0xbf7f_3f1a_802e_59fc),
+                ("gen-0000.json", 0x5401_a5fd_fd2a_885c),
+                ("gen-0002.json", 0xbf7f_3f1a_802e_59fc),
+            ],
+            0x0838_4bae_06c3_7ae0,
+            0x1bea_9f9f_b24a_1bf7,
         ),
     ] {
         let out = run_dir(name);
@@ -857,12 +928,21 @@ fn the_default_feature_set_trains_exactly_as_before_the_option_existed() {
         for (file, expected) in hashes {
             assert_eq!(fnv(&out.join(file)), expected, "{name}/{file}");
         }
+        eprintln!(
+            "CAPTURE {name} {:#x} {:#x}",
+            decisions_hash(&out),
+            timeless_events_hash(&out)
+        );
+        assert_eq!(decisions_hash(&out), decisions, "{name} decisions");
+        assert_eq!(timeless_events_hash(&out), events, "{name} events");
         let config = std::fs::read_to_string(out.join("config.json")).unwrap();
-        assert!(!config.contains("features"), "{config}");
+        for option in ["features", "fitness", "racing", "player_counts", "decks"] {
+            assert!(!config.contains(option), "{option}: {config}");
+        }
         // Naming the default explicitly changes nothing either.
         let explicit = run_dir(&format!("{name}-explicit"));
         let mut again = extra.clone();
-        again.extend(["--features", "base"]);
+        again.extend(["--features", "base", "--fitness", "mean"]);
         assert!(small_run(&explicit, "1", &again).status.success());
         for (file, expected) in hashes {
             assert_eq!(
@@ -871,6 +951,8 @@ fn the_default_feature_set_trains_exactly_as_before_the_option_existed() {
                 "{name}/{file} explicit"
             );
         }
+        assert_eq!(decisions_hash(&explicit), decisions, "{name} explicit");
+        assert_eq!(timeless_events_hash(&explicit), events, "{name} explicit");
         std::fs::remove_dir_all(&out).unwrap();
         std::fs::remove_dir_all(&explicit).unwrap();
     }
@@ -1025,4 +1107,245 @@ fn a_warm_start_needs_the_same_feature_set_as_its_source() {
         assert!(!out.exists());
     }
     let _ = std::fs::remove_dir_all(&base);
+}
+
+fn config_json(out: &Path) -> serde_json::Value {
+    serde_json::from_str(&std::fs::read_to_string(out.join("config.json")).unwrap()).unwrap()
+}
+
+#[test]
+fn each_fitness_variant_trains_records_itself_refuses_a_resume_change_and_bad_values() {
+    for (spec, expected) in [
+        ("risk:0.5", serde_json::json!({"risk": {"lambda": 0.5}})),
+        ("tanh:4", serde_json::json!({"tanh": {"kappa": 4.0}})),
+    ] {
+        let out = run_dir(&format!("fitness-{}", spec.replace(':', "-")));
+        let result = small_run(&out, "2", &["--generations", "2", "--fitness", spec]);
+        assert!(result.status.success(), "{spec}: {}", text(&result.stderr));
+        assert_eq!(config_json(&out)["fitness"], expected);
+        let events = std::fs::read_to_string(out.join("events.jsonl")).unwrap();
+        assert!(events.contains("\"spread\""), "{spec}: spread is reported");
+        // The fitness is fixed for the run: a resume may not change it, but
+        // continues with it.
+        let conflict = cli(&[
+            "train",
+            "--out",
+            out.to_str().unwrap(),
+            "--resume",
+            "--fitness",
+            "mean",
+        ]);
+        assert!(!conflict.status.success());
+        let resumed = cli(&[
+            "train",
+            "--out",
+            out.to_str().unwrap(),
+            "--resume",
+            "--generations",
+            "3",
+            "--quiet",
+        ]);
+        assert!(resumed.status.success(), "{}", text(&resumed.stderr));
+        std::fs::remove_dir_all(&out).unwrap();
+    }
+    for bad in ["median", "risk:-1", "tanh:0", "risk"] {
+        let out = run_dir("fitness-bad");
+        let result = small_run(&out, "1", &["--fitness", bad]);
+        assert!(!result.status.success(), "{bad}");
+        assert!(!out.exists(), "{bad}: nothing is written");
+    }
+    // Not with the luck-adjusted term.
+    let out = run_dir("fitness-skill");
+    let result = small_run(
+        &out,
+        "1",
+        &["--fitness", "risk:1", "--fitness-skill-weight", "0.5"],
+    );
+    assert!(!result.status.success());
+    assert!(
+        text(&result.stderr).contains("skill_weight"),
+        "{}",
+        text(&result.stderr)
+    );
+    assert!(!out.exists());
+}
+
+#[test]
+fn racing_needs_both_flags_trains_reports_the_shift_and_cannot_change_on_resume() {
+    let out = run_dir("racing");
+    let result = cli(&[
+        "train",
+        "--out",
+        out.to_str().unwrap(),
+        "--population",
+        "20",
+        "--matches-per-genome",
+        "6",
+        "--reeval-matches",
+        "10",
+        "--rounds",
+        "3",
+        "--generations",
+        "2",
+        "--threads",
+        "2",
+        "--racing-top",
+        "0.25",
+        "--racing-matches",
+        "8",
+    ]);
+    assert!(result.status.success(), "{}", text(&result.stderr));
+    let stdout = text(&result.stdout);
+    assert!(
+        stdout.contains("racing: top 5 genomes x 8 extra matches"),
+        "{stdout}"
+    );
+    assert!(stdout.contains("shift"), "{stdout}");
+    let config = config_json(&out);
+    assert_eq!(
+        (
+            config["racing_top"].as_f64(),
+            config["racing_matches"].as_u64()
+        ),
+        (Some(0.25), Some(8))
+    );
+    let events = std::fs::read_to_string(out.join("events.jsonl")).unwrap();
+    assert!(
+        events.contains("\"racing\":{\"raced\":5,\"extra_matches\":8"),
+        "{events}"
+    );
+    assert!(!cli(&[
+        "train",
+        "--out",
+        out.to_str().unwrap(),
+        "--resume",
+        "--racing-top",
+        "0.5"
+    ])
+    .status
+    .success());
+    std::fs::remove_dir_all(&out).unwrap();
+    for bad in [
+        vec!["--racing-top", "0.25"],
+        vec!["--racing-matches", "8"],
+        vec!["--racing-top", "0", "--racing-matches", "8"],
+        vec!["--racing-top", "1.5", "--racing-matches", "8"],
+    ] {
+        let out = run_dir("racing-bad");
+        let result = small_run(&out, "1", &bad);
+        assert!(!result.status.success(), "{bad:?}");
+        assert!(!out.exists());
+    }
+}
+
+#[test]
+#[allow(clippy::too_many_lines)] // one scenario per option of the group
+fn several_settings_train_warn_without_the_table_features_and_record_the_lists() {
+    let out = run_dir("multi");
+    let result = small_run(
+        &out,
+        "2",
+        &[
+            "--generations",
+            "2",
+            "--player-counts",
+            "3,5",
+            "--decks",
+            "single,double",
+            "--features",
+            "all",
+        ],
+    );
+    assert!(result.status.success(), "{}", text(&result.stderr));
+    assert!(
+        !text(&result.stderr).contains("warning"),
+        "{}",
+        text(&result.stderr)
+    );
+    let config = config_json(&out);
+    assert_eq!(config["player_counts"], serde_json::json!([3, 5]));
+    assert_eq!(config["decks"], serde_json::json!(["Single", "Double"]));
+    assert_eq!(
+        config["player_count"], 3,
+        "the first entry stays the single value"
+    );
+    let events = std::fs::read_to_string(out.join("events.jsonl")).unwrap();
+    assert!(events.contains("\"by_setting\""), "{events}");
+    std::fs::remove_dir_all(&out).unwrap();
+
+    // Without the table inputs it still runs, with a warning (not an error).
+    let out = run_dir("multi-base");
+    let result = small_run(&out, "2", &["--generations", "1", "--player-counts", "3,4"]);
+    assert!(result.status.success(), "{}", text(&result.stderr));
+    assert!(
+        text(&result.stderr).contains("warning") && text(&result.stderr).contains("--features all"),
+        "{}",
+        text(&result.stderr)
+    );
+    std::fs::remove_dir_all(&out).unwrap();
+
+    // A single-entry list is the single flag: the config file does not change.
+    let (listed, single) = (run_dir("one-listed"), run_dir("one-single"));
+    assert!(small_run(
+        &listed,
+        "1",
+        &[
+            "--generations",
+            "1",
+            "--player-counts",
+            "5",
+            "--decks",
+            "double"
+        ]
+    )
+    .status
+    .success());
+    assert!(small_run(
+        &single,
+        "1",
+        &[
+            "--generations",
+            "1",
+            "--player-count",
+            "5",
+            "--deck-variant",
+            "double"
+        ]
+    )
+    .status
+    .success());
+    assert_eq!(
+        std::fs::read(listed.join("config.json")).unwrap(),
+        std::fs::read(single.join("config.json")).unwrap()
+    );
+    std::fs::remove_dir_all(&listed).unwrap();
+    std::fs::remove_dir_all(&single).unwrap();
+
+    // Too few matches for the settings, a duplicate, and the single flag together with a list.
+    for bad in [
+        vec!["--player-counts", "3,4,5,6", "--matches-per-genome", "3"],
+        vec!["--player-counts", "3,3"],
+        vec!["--player-counts", "3,4", "--player-count", "5"],
+        vec!["--player-counts", "3,4", "--fitness-skill-weight", "0.5"],
+    ] {
+        let out = run_dir("multi-bad");
+        let result = cli(&[
+            "train",
+            "--out",
+            out.to_str().unwrap(),
+            "--population",
+            "12",
+            "--reeval-matches",
+            "10",
+            "--rounds",
+            "2",
+            "--quiet",
+        ]
+        .iter()
+        .chain(bad.iter())
+        .copied()
+        .collect::<Vec<_>>());
+        assert!(!result.status.success(), "{bad:?}");
+        assert!(!out.exists(), "{bad:?}");
+    }
 }

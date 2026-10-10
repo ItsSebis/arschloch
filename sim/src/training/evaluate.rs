@@ -14,6 +14,7 @@ use rand::rngs::Xoshiro256PlusPlus;
 use rand::{RngExt, SeedableRng};
 use rayon::prelude::*;
 
+use super::fitness::{FitnessKind, Moments};
 use crate::hand_features::HandFeatures;
 use crate::{run_match_with, MatchConfig, RunOptions, Strategy};
 
@@ -26,6 +27,18 @@ pub struct TableSpec {
     pub pass_rule: PassRule,
     pub exchange_rule: ExchangeRule,
     pub rounds: usize,
+}
+
+impl TableSpec {
+    /// A short name of the setting, such as `4p-single`.
+    #[must_use]
+    pub fn label(&self) -> String {
+        let deck = match self.deck_variant {
+            DeckVariant::Single => "single",
+            DeckVariant::Double => "double",
+        };
+        format!("{}p-{deck}", self.player_count)
+    }
 }
 
 /// Who fills the other seats.
@@ -45,6 +58,36 @@ pub struct Score {
     pub matches: usize,
     /// How often the candidate finished in each place, best first
     /// (`placements[0]` is President), over every round of every match.
+    /// Over several table sizes the counts of the same place index are
+    /// added (the vector is as long as the largest table); `by_setting`
+    /// has the per-table numbers.
+    pub placements: Vec<u64>,
+    /// The standard deviation of the per-round role score over every round
+    /// of every match (not of the match means: that is `std_error`).
+    pub spread: f64,
+    /// The configured fitness (`kind`) of this evaluation. For
+    /// `FitnessKind::Mean` it is `mean`, bit for bit.
+    pub fitness: f64,
+    pub kind: FitnessKind,
+    /// The sums behind `spread` and `fitness`, so evaluations of one
+    /// genome can be pooled (`Moments::pooled`).
+    pub moments: Moments,
+    /// One entry per setting, in setting order; empty when the evaluation
+    /// used a single table.
+    pub by_setting: Vec<SettingScore>,
+}
+
+/// One setting's share of an evaluation over several tables.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SettingScore {
+    /// `TableSpec::label`, such as `4p-single`.
+    pub label: String,
+    pub matches: usize,
+    /// Mean of the setting's match means.
+    pub mean: f64,
+    pub spread: f64,
+    pub fitness: f64,
+    /// Places as in `Score::placements`, for this table only.
     pub placements: Vec<u64>,
 }
 
@@ -108,7 +151,45 @@ pub fn evaluate(
     opponents: Opponents<'_>,
     seeds: &[u64],
 ) -> Score {
-    evaluate_inner(candidate, table, opponents, seeds, false).0
+    evaluate_with(
+        candidate,
+        std::slice::from_ref(table),
+        opponents,
+        seeds,
+        FitnessKind::Mean,
+        0,
+    )
+}
+
+/// `evaluate` over several settings and with a fitness variant. Match `i`
+/// of `seeds` is played at `tables[(first_index + i) % tables.len()]`, in
+/// seat `(first_index + i) % players` of that table, so every candidate
+/// evaluated on the same seeds meets the same table, seat and opponents
+/// (common random numbers). `first_index` lets a second batch of matches
+/// continue the cycle of the first. With one table, `FitnessKind::Mean` and
+/// `first_index` 0 this is exactly `evaluate`.
+///
+/// # Panics
+///
+/// As `evaluate`, and if `tables` is empty.
+pub fn evaluate_with(
+    candidate: &Arc<dyn Strategy>,
+    tables: &[TableSpec],
+    opponents: Opponents<'_>,
+    seeds: &[u64],
+    kind: FitnessKind,
+    first_index: usize,
+) -> Score {
+    evaluate_inner(
+        candidate,
+        tables,
+        opponents,
+        seeds,
+        kind,
+        first_index,
+        false,
+    )
+    .0
 }
 
 /// `evaluate`, also returning one `Round1Obs` per match. The matches
@@ -123,99 +204,192 @@ pub fn evaluate_with_round1(
     opponents: Opponents<'_>,
     seeds: &[u64],
 ) -> (Score, Vec<Round1Obs>) {
-    evaluate_inner(candidate, table, opponents, seeds, true)
+    evaluate_inner(
+        candidate,
+        std::slice::from_ref(table),
+        opponents,
+        seeds,
+        FitnessKind::Mean,
+        0,
+        true,
+    )
 }
 
 /// What one match says about the candidate, before the cross-match sums.
 struct MatchOutcome {
+    /// Which table of the cycle the match was played at (set by the caller).
+    setting: usize,
     /// Mean role score over the match's rounds.
     mean: f64,
+    /// The match's own sums of the per-round role scores.
+    moments: Moments,
     /// The candidate's place (index into the table's roles) in each round.
     places: Vec<usize>,
     round1: Option<Round1Obs>,
 }
 
+/// The cross-match sums of one setting (or of all of them).
+struct Totals {
+    matches: usize,
+    /// Sum of the match means.
+    sum_of_means: f64,
+    moments: Moments,
+    placements: Vec<u64>,
+}
+
+impl Totals {
+    fn new(players: usize) -> Self {
+        Self {
+            matches: 0,
+            sum_of_means: 0.0,
+            moments: Moments::default(),
+            placements: vec![0; players],
+        }
+    }
+
+    fn add(&mut self, outcome: &MatchOutcome) {
+        self.matches += 1;
+        self.sum_of_means += outcome.mean;
+        self.moments = self.moments.pooled(&outcome.moments);
+        for &place in &outcome.places {
+            self.placements[place] += 1;
+        }
+    }
+}
+
 fn evaluate_inner(
     candidate: &Arc<dyn Strategy>,
-    table: &TableSpec,
+    tables: &[TableSpec],
     opponents: Opponents<'_>,
     seeds: &[u64],
+    kind: FitnessKind,
+    first_index: usize,
     record_round1: bool,
 ) -> (Score, Vec<Round1Obs>) {
     assert!(!seeds.is_empty(), "evaluation needs at least one match");
-    let players = usize::from(table.player_count);
-    let roles = roles_for_player_count(table.player_count).expect("supported table size");
+    assert!(!tables.is_empty(), "evaluation needs at least one table");
     let options = RunOptions {
         record_deal_features: record_round1,
         ..RunOptions::default()
     };
     // Matches are independent (everything about one is a function of its
     // seed), so they run in parallel; the order-preserving collect and the
-    // sequential sums below keep the result bit-identical to a serial loop.
+    // sequential sums in `summarise` keep the result bit-identical to a
+    // serial loop.
     let outcomes: Vec<MatchOutcome> = seeds
         .par_iter()
         .enumerate()
         .map(|(index, &seed)| {
-            let seat = index % players;
-            let mut pick = Xoshiro256PlusPlus::seed_from_u64(mix(seed ^ 0x5EA7));
-            let strategies: Vec<Arc<dyn Strategy>> = (0..players)
-                .map(|s| {
-                    if s == seat {
-                        return candidate.clone();
-                    }
-                    match opponents {
-                        Opponents::Only(only) => only.clone(),
-                        Opponents::Mixed(pool) => pool[pick.random_range(0..pool.len())].clone(),
-                    }
-                })
-                .collect();
-            let result = run_match_with(
-                &MatchConfig {
-                    player_count: table.player_count,
-                    deck_variant: table.deck_variant,
-                    duplicate_rule: table.duplicate_rule,
-                    rounds: table.rounds,
-                    seed,
-                    pass_rule: table.pass_rule,
-                    exchange_rule: table.exchange_rule,
-                },
-                &strategies,
+            let index = first_index + index;
+            let setting = index % tables.len();
+            let mut outcome = play_match(
+                candidate,
+                &tables[setting],
+                opponents,
+                kind,
                 &options,
+                index,
+                seed,
             );
-            let round1 = result
-                .first_hand_features
-                .as_ref()
-                .map(|features| Round1Obs {
-                    score: role_score(result.role_history[0][seat], table.player_count),
-                    features: HandFeatures::as_vector(&features[seat]),
-                });
-            let mut total = 0.0;
-            let mut places = Vec::with_capacity(result.role_history.len());
-            for round in &result.role_history {
-                total += role_score(round[seat], table.player_count);
-                places.push(
-                    roles
-                        .iter()
-                        .position(|&r| r == round[seat])
-                        .expect("role belongs to this table"),
-                );
+            outcome.setting = setting;
+            outcome
+        })
+        .collect();
+    summarise(outcomes, tables, kind)
+}
+
+/// Plays match number `index` of the cycle (at `table`, in seat `index mod
+/// players`) with `seed`.
+fn play_match(
+    candidate: &Arc<dyn Strategy>,
+    table: &TableSpec,
+    opponents: Opponents<'_>,
+    kind: FitnessKind,
+    options: &RunOptions,
+    index: usize,
+    seed: u64,
+) -> MatchOutcome {
+    let players = usize::from(table.player_count);
+    let roles = roles_for_player_count(table.player_count).expect("supported table size");
+    let seat = index % players;
+    let mut pick = Xoshiro256PlusPlus::seed_from_u64(mix(seed ^ 0x5EA7));
+    let strategies: Vec<Arc<dyn Strategy>> = (0..players)
+        .map(|s| {
+            if s == seat {
+                return candidate.clone();
             }
-            #[allow(clippy::cast_precision_loss)]
-            let mean = total / result.role_history.len() as f64;
-            MatchOutcome {
-                mean,
-                places,
-                round1,
+            match opponents {
+                Opponents::Only(only) => only.clone(),
+                Opponents::Mixed(pool) => pool[pick.random_range(0..pool.len())].clone(),
             }
         })
         .collect();
-    let mut placements = vec![0u64; players];
+    let result = run_match_with(
+        &MatchConfig {
+            player_count: table.player_count,
+            deck_variant: table.deck_variant,
+            duplicate_rule: table.duplicate_rule,
+            rounds: table.rounds,
+            seed,
+            pass_rule: table.pass_rule,
+            exchange_rule: table.exchange_rule,
+        },
+        &strategies,
+        options,
+    );
+    let round1 = result
+        .first_hand_features
+        .as_ref()
+        .map(|features| Round1Obs {
+            score: role_score(result.role_history[0][seat], table.player_count),
+            features: HandFeatures::as_vector(&features[seat]),
+        });
+    let mut total = 0.0;
+    let mut moments = Moments::default();
+    let mut places = Vec::with_capacity(result.role_history.len());
+    for round in &result.role_history {
+        let s = role_score(round[seat], table.player_count);
+        total += s;
+        moments.add_round(s, kind.squash(s));
+        places.push(
+            roles
+                .iter()
+                .position(|&r| r == round[seat])
+                .expect("role belongs to this table"),
+        );
+    }
+    #[allow(clippy::cast_precision_loss)]
+    let mean = total / result.role_history.len() as f64;
+    MatchOutcome {
+        setting: 0,
+        mean,
+        moments,
+        places,
+        round1,
+    }
+}
+
+/// The cross-match statistics of the outcomes, summed in match order.
+fn summarise(
+    outcomes: Vec<MatchOutcome>,
+    tables: &[TableSpec],
+    kind: FitnessKind,
+) -> (Score, Vec<Round1Obs>) {
+    let largest = tables
+        .iter()
+        .map(|t| usize::from(t.player_count))
+        .max()
+        .expect("at least one table");
+    let mut all = Totals::new(largest);
+    let mut per_setting: Vec<Totals> = tables
+        .iter()
+        .map(|t| Totals::new(usize::from(t.player_count)))
+        .collect();
     let mut per_match = Vec::with_capacity(outcomes.len());
     let mut round1 = Vec::new();
     for outcome in outcomes {
-        for place in outcome.places {
-            placements[place] += 1;
-        }
+        all.add(&outcome);
+        per_setting[outcome.setting].add(&outcome);
         per_match.push(outcome.mean);
         round1.extend(outcome.round1);
     }
@@ -228,11 +402,42 @@ fn evaluate_inner(
         let variance = per_match.iter().map(|m| (m - mean).powi(2)).sum::<f64>() / (count - 1.0);
         (variance / count).sqrt()
     };
+    let fitness = if kind.is_mean() {
+        mean
+    } else {
+        all.moments.fitness(&kind)
+    };
+    let by_setting = if tables.len() > 1 {
+        tables
+            .iter()
+            .zip(per_setting)
+            .filter(|(_, totals)| totals.matches > 0)
+            .map(|(table, totals)| {
+                #[allow(clippy::cast_precision_loss)]
+                let matches = totals.matches as f64;
+                SettingScore {
+                    label: table.label(),
+                    matches: totals.matches,
+                    mean: totals.sum_of_means / matches,
+                    spread: totals.moments.spread(),
+                    fitness: totals.moments.fitness(&kind),
+                    placements: totals.placements,
+                }
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
     let score = Score {
         mean,
         std_error,
         matches: per_match.len(),
-        placements,
+        placements: all.placements,
+        spread: all.moments.spread(),
+        fitness,
+        kind,
+        moments: all.moments,
+        by_setting,
     };
     (score, round1)
 }
@@ -380,6 +585,7 @@ mod tests {
         let roles = roles_for_player_count(table.player_count).unwrap();
         let mut placements = vec![0u64; players];
         let mut per_match = Vec::new();
+        let mut moments = Moments::default();
         for (index, &seed) in seeds.iter().enumerate() {
             let seat = index % players;
             let mut pick = Xoshiro256PlusPlus::seed_from_u64(mix(seed ^ 0x5EA7));
@@ -408,10 +614,14 @@ mod tests {
                 &RunOptions::default(),
             );
             let mut total = 0.0;
+            let mut match_moments = Moments::default();
             for round in &result.role_history {
-                total += role_score(round[seat], table.player_count);
+                let s = role_score(round[seat], table.player_count);
+                total += s;
+                match_moments.add_round(s, 0.0);
                 placements[roles.iter().position(|&r| r == round[seat]).unwrap()] += 1;
             }
+            moments = moments.pooled(&match_moments);
             per_match.push(total / result.role_history.len() as f64);
         }
         let count = per_match.len() as f64;
@@ -428,6 +638,11 @@ mod tests {
             std_error,
             matches: per_match.len(),
             placements,
+            spread: moments.spread(),
+            fitness: mean,
+            kind: FitnessKind::Mean,
+            moments,
+            by_setting: Vec::new(),
         }
     }
 
@@ -463,5 +678,252 @@ mod tests {
     fn evaluating_zero_matches_panics() {
         let candidate: Arc<dyn Strategy> = Arc::new(LowestLegal);
         let _ = evaluate(&candidate, &TABLE, Opponents::Only(&candidate), &[]);
+    }
+
+    /// The per-round role scores of an evaluation, rebuilt from its
+    /// placements: `(score, how many rounds)` per place of a table of
+    /// `players`.
+    #[allow(clippy::cast_precision_loss)]
+    fn scores_from_placements(placements: &[u64], players: u8) -> Vec<(f64, f64)> {
+        let roles = roles_for_player_count(players).unwrap();
+        placements
+            .iter()
+            .enumerate()
+            .map(|(place, &n)| (role_score(roles[place], players), n as f64))
+            .collect()
+    }
+
+    #[test]
+    #[allow(clippy::cast_precision_loss)]
+    fn each_fitness_variant_equals_its_formula_on_the_rebuilt_round_scores() {
+        let candidate: Arc<dyn Strategy> = Arc::new(RandomLegal);
+        let pool: Vec<Arc<dyn Strategy>> = vec![Arc::new(LowestLegal), Arc::new(RandomLegal)];
+        let many = seeds(40);
+        let run = |kind| {
+            evaluate_with(
+                &candidate,
+                std::slice::from_ref(&TABLE),
+                Opponents::Mixed(&pool),
+                &many,
+                kind,
+                0,
+            )
+        };
+        let plain = run(FitnessKind::Mean);
+        assert_eq!(
+            plain,
+            evaluate(&candidate, &TABLE, Opponents::Mixed(&pool), &many)
+        );
+        assert_eq!(plain.fitness.to_bits(), plain.mean.to_bits());
+        let rounds = scores_from_placements(&plain.placements, 4);
+        let n: f64 = rounds.iter().map(|r| r.1).sum();
+        assert!((n - 160.0).abs() < 1e-9);
+        let mean: f64 = rounds.iter().map(|&(s, c)| s * c).sum::<f64>() / n;
+        let variance: f64 = rounds
+            .iter()
+            .map(|&(s, c)| (s - mean).powi(2) * c)
+            .sum::<f64>()
+            / n;
+        assert!((plain.mean - mean).abs() < 1e-12);
+        assert!((plain.spread - variance.sqrt()).abs() < 1e-12);
+        assert!(plain.spread > 0.1, "a random player's rounds differ");
+
+        let risk = run(FitnessKind::Risk { lambda: 0.7 });
+        assert!((risk.fitness - (mean - 0.7 * variance.sqrt())).abs() < 1e-12);
+        let kappa = 3.0f64;
+        let tanh = run(FitnessKind::Tanh { kappa });
+        let expected: f64 = rounds
+            .iter()
+            .map(|&(s, c)| (kappa * s).tanh() / kappa.tanh() * c)
+            .sum::<f64>()
+            / n;
+        assert!((tanh.fitness - expected).abs() < 1e-12);
+        // The variant changes neither the matches nor the reported mean,
+        // standard error, placements or spread, bit for bit.
+        for other in [&risk, &tanh] {
+            assert_eq!(other.mean.to_bits(), plain.mean.to_bits());
+            assert_eq!(other.std_error.to_bits(), plain.std_error.to_bits());
+            assert_eq!(other.placements, plain.placements);
+            assert_eq!(other.spread.to_bits(), plain.spread.to_bits());
+            assert_eq!(other.matches, plain.matches);
+        }
+        assert_eq!(risk.kind, FitnessKind::Risk { lambda: 0.7 });
+    }
+
+    #[test]
+    fn a_lambda_of_zero_is_the_mean_up_to_rounding_and_the_pooled_moments_match_the_parts() {
+        let candidate: Arc<dyn Strategy> = Arc::new(RandomLegal);
+        let opponent: Arc<dyn Strategy> = Arc::new(LowestLegal);
+        let a = evaluate_with(
+            &candidate,
+            std::slice::from_ref(&TABLE),
+            Opponents::Only(&opponent),
+            &seeds(12),
+            FitnessKind::Risk { lambda: 0.0 },
+            0,
+        );
+        assert!((a.fitness - a.mean).abs() < 1e-12);
+        assert_eq!(a.moments.rounds, 48);
+        // Evaluating 12 matches in two halves and pooling the moments
+        // equals the moments of the whole: the first half is matches 0..6,
+        // the second continues the seat cycle at index 6.
+        let all = seeds(12);
+        let half = |range: std::ops::Range<usize>| {
+            evaluate_with(
+                &candidate,
+                std::slice::from_ref(&TABLE),
+                Opponents::Only(&opponent),
+                &all[range.clone()],
+                FitnessKind::Mean,
+                range.start,
+            )
+        };
+        let pooled = half(0..6).moments.pooled(&half(6..12).moments);
+        assert_eq!(pooled.rounds, a.moments.rounds);
+        assert!((pooled.sum - a.moments.sum).abs() < 1e-12);
+        assert!((pooled.sum_sq - a.moments.sum_sq).abs() < 1e-12);
+    }
+
+    fn mixed_tables() -> Vec<TableSpec> {
+        [
+            (3, DeckVariant::Single),
+            (4, DeckVariant::Double),
+            (6, DeckVariant::Single),
+        ]
+        .into_iter()
+        .map(|(player_count, deck_variant)| TableSpec {
+            player_count,
+            deck_variant,
+            ..TABLE
+        })
+        .collect()
+    }
+
+    #[test]
+    #[allow(clippy::cast_precision_loss)]
+    fn several_tables_cycle_by_match_index_and_the_columns_add_up() {
+        let tables = mixed_tables();
+        let candidate: Arc<dyn Strategy> = Arc::new(RandomLegal);
+        let pool: Vec<Arc<dyn Strategy>> = vec![Arc::new(LowestLegal), Arc::new(RandomLegal)];
+        let many = seeds(20);
+        let run = |first_index| {
+            evaluate_with(
+                &candidate,
+                &tables,
+                Opponents::Mixed(&pool),
+                &many,
+                FitnessKind::Tanh { kappa: 2.0 },
+                first_index,
+            )
+        };
+        let score = run(0);
+        let labels: Vec<&str> = score.by_setting.iter().map(|s| s.label.as_str()).collect();
+        assert_eq!(labels, ["3p-single", "4p-double", "6p-single"]);
+        // Matches 0..20 go to settings 0,1,2,0,1,2,...
+        let counts: Vec<usize> = score.by_setting.iter().map(|s| s.matches).collect();
+        assert_eq!(counts, [7, 7, 6]);
+        assert_eq!(counts.iter().sum::<usize>(), score.matches);
+        // Each setting's placements are as long as its table and cover its rounds.
+        for (setting, players) in score.by_setting.iter().zip([3usize, 4, 6]) {
+            assert_eq!(setting.placements.len(), players);
+            assert_eq!(
+                setting.placements.iter().sum::<u64>(),
+                (setting.matches * 4) as u64
+            );
+        }
+        // The overall placements are the per-place sums, as long as the largest table.
+        assert_eq!(score.placements.len(), 6);
+        for place in 0..6 {
+            let total: u64 = score
+                .by_setting
+                .iter()
+                .filter_map(|s| s.placements.get(place))
+                .sum();
+            assert_eq!(score.placements[place], total, "place {place}");
+        }
+        // The mean is the match-weighted mean of the settings' means.
+        let weighted: f64 = score
+            .by_setting
+            .iter()
+            .map(|s| s.mean * s.matches as f64)
+            .sum::<f64>()
+            / score.matches as f64;
+        assert!((score.mean - weighted).abs() < 1e-12);
+        // So is the tanh fitness (every match has the same number of rounds).
+        let weighted: f64 = score
+            .by_setting
+            .iter()
+            .map(|s| s.fitness * s.matches as f64)
+            .sum::<f64>()
+            / score.matches as f64;
+        assert!((score.fitness - weighted).abs() < 1e-12);
+        assert_eq!(score, run(0), "deterministic");
+        // Continuing the cycle at an offset moves the match counts along.
+        let shifted = run(1);
+        let counts: Vec<usize> = shifted.by_setting.iter().map(|s| s.matches).collect();
+        assert_eq!(counts, [6, 7, 7]);
+    }
+
+    #[test]
+    fn every_candidate_meets_the_same_settings_and_one_table_is_the_plain_evaluation() {
+        let tables = mixed_tables();
+        let pool: Vec<Arc<dyn Strategy>> = vec![Arc::new(LowestLegal)];
+        let many = seeds(9);
+        let a: Arc<dyn Strategy> = Arc::new(RandomLegal);
+        let b: Arc<dyn Strategy> = Arc::new(LowestLegal);
+        let shape = |candidate: &Arc<dyn Strategy>| {
+            evaluate_with(
+                candidate,
+                &tables,
+                Opponents::Mixed(&pool),
+                &many,
+                FitnessKind::Mean,
+                0,
+            )
+            .by_setting
+            .iter()
+            .map(|s| (s.label.clone(), s.matches, s.placements.len()))
+            .collect::<Vec<_>>()
+        };
+        assert_eq!(shape(&a), shape(&b));
+        let one = evaluate_with(
+            &a,
+            &tables[..1],
+            Opponents::Mixed(&pool),
+            &many,
+            FitnessKind::Mean,
+            0,
+        );
+        assert!(one.by_setting.is_empty(), "no columns for a single setting");
+        assert_eq!(
+            one,
+            evaluate(&a, &tables[0], Opponents::Mixed(&pool), &many)
+        );
+    }
+
+    #[test]
+    fn several_tables_do_not_depend_on_the_thread_count() {
+        let tables = mixed_tables();
+        let candidate: Arc<dyn Strategy> = Arc::new(RandomLegal);
+        let pool: Vec<Arc<dyn Strategy>> = vec![Arc::new(LowestLegal), Arc::new(RandomLegal)];
+        let many = seeds(14);
+        let run = || {
+            evaluate_with(
+                &candidate,
+                &tables,
+                Opponents::Mixed(&pool),
+                &many,
+                FitnessKind::Risk { lambda: 0.5 },
+                3,
+            )
+        };
+        let expected = run();
+        for threads in [1, 4] {
+            let rayon_pool = rayon::ThreadPoolBuilder::new()
+                .num_threads(threads)
+                .build()
+                .unwrap();
+            assert_eq!(rayon_pool.install(run), expected, "{threads} threads");
+        }
     }
 }

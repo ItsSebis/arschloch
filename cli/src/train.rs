@@ -77,14 +77,28 @@ fn freeze_neat_specs(specs: &[String], out: &Path) -> anyhow::Result<Vec<String>
     Ok(frozen)
 }
 
+fn deck_choice(arg: DeckVariantArg) -> DeckChoice {
+    match arg {
+        DeckVariantArg::Single => DeckChoice::Single,
+        DeckVariantArg::Double => DeckChoice::Double,
+    }
+}
+
+/// `--player-counts` / `--decks` with one entry are the same as the single
+/// flags, so they are written as those (the config file stays as it was
+/// before the lists existed); the first entry of a longer list is also the
+/// config's `player_count` / `deck`, which older readers use.
 fn new_config(args: &TrainArgs, specs: Vec<String>) -> TrainConfig {
+    let single_count = args
+        .player_counts
+        .first()
+        .copied()
+        .unwrap_or(args.player_count);
+    let single_deck = args.decks.first().copied().unwrap_or(args.deck_variant);
     TrainConfig {
         seed: args.seed,
-        player_count: args.player_count,
-        deck: match args.deck_variant {
-            DeckVariantArg::Single => DeckChoice::Single,
-            DeckVariantArg::Double => DeckChoice::Double,
-        },
+        player_count: single_count,
+        deck: deck_choice(single_deck),
         duplicate_rule: match args.duplicate_rule {
             DuplicateRuleArg::FirstDealtWins => DuplicateChoice::FirstDealtWins,
             DuplicateRuleArg::LastDealtWins => DuplicateChoice::LastDealtWins,
@@ -108,6 +122,19 @@ fn new_config(args: &TrainArgs, specs: Vec<String>) -> TrainConfig {
         hall_of_fame_interval: args.hall_interval,
         skill_weight: args.fitness_skill_weight,
         features: args.features,
+        fitness: args.fitness,
+        racing_top: args.racing_top.unwrap_or(0.0),
+        racing_matches: args.racing_matches.unwrap_or(0),
+        player_counts: if args.player_counts.len() > 1 {
+            args.player_counts.clone()
+        } else {
+            Vec::new()
+        },
+        decks: if args.decks.len() > 1 {
+            args.decks.iter().copied().map(deck_choice).collect()
+        } else {
+            Vec::new()
+        },
     }
 }
 
@@ -159,6 +186,14 @@ fn new_trainer(args: &TrainArgs, out: &Path) -> anyhow::Result<Trainer> {
     let frozen = freeze_neat_specs(&specs, out)?;
     let opponents = build_opponents(&frozen, out)?;
     let config = new_config(&args, frozen);
+    if config.tables().len() > 1 && config.features != sim::FeatureSet::All {
+        eprintln!(
+            "warning: training on {} settings with `--features {}`: the network cannot see the table size or deck, so it plays every setting the same way; \
+             `--features all` adds the table inputs",
+            config.tables().len(),
+            config.features
+        );
+    }
     Ok(match &args.from {
         Some(from) => Trainer::new_from(config, opponents, out, from)?,
         None => Trainer::new(config, opponents, out)?,

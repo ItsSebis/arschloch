@@ -191,3 +191,92 @@ fn operator_mistakes_fail_clearly_without_a_panic() {
     }
     std::fs::remove_dir_all(&base).unwrap();
 }
+
+#[test]
+fn several_table_sizes_and_decks_get_a_block_each_and_the_single_setting_output_is_unchanged() {
+    let base = temp("settings");
+    let g = base.join("g.json");
+    genome(&g, 3);
+    let common = |extra: &[&str], json: &Path| {
+        let mut args = vec![
+            "--genome",
+            g.to_str().unwrap(),
+            "--opponent",
+            "lowest-legal",
+            "--matches",
+            "12",
+            "--rounds",
+            "2",
+            "--seed",
+            "4",
+            "--json",
+            json.to_str().unwrap(),
+        ];
+        args.extend_from_slice(extra);
+        evaluate(&args)
+    };
+    let multi_json = base.join("multi.json");
+    let output = common(
+        &["--player-counts", "3,5", "--decks", "single,double"],
+        &multi_json,
+    );
+    assert!(output.status.success(), "stderr: {}", text(&output.stderr));
+    let stdout = text(&output.stdout);
+    for label in ["3p-single", "3p-double", "5p-single", "5p-double"] {
+        assert!(
+            stdout.contains(&format!("=== setting {label} ===")),
+            "{stdout}"
+        );
+    }
+    let value: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&multi_json).unwrap()).unwrap();
+    let settings = value["settings"].as_array().unwrap();
+    assert_eq!(settings.len(), 4);
+    assert_eq!(settings[2]["player_count"], 5);
+    assert_eq!(settings[1]["deck_variant"], "Double");
+    // Placements are as long as the table, and every cell reports the spread.
+    let cell = &settings[2]["results"][0]["cells"][0];
+    assert_eq!(cell["placements"].as_array().unwrap().len(), 5);
+    assert!(cell["spread"].as_f64().unwrap() > 0.0);
+    // The top-level `results` stay the first setting's.
+    assert_eq!(value["results"], settings[0]["results"]);
+    assert_eq!(value["player_count"], 3);
+
+    // One setting: no blocks, no `settings` key, the same table as the plain flags.
+    let (one_json, plain_json) = (base.join("one.json"), base.join("plain.json"));
+    let one = common(&["--player-counts", "5"], &one_json);
+    let plain = common(&["--player-count", "5"], &plain_json);
+    assert!(one.status.success() && plain.status.success());
+    assert_eq!(one.stdout, plain.stdout);
+    assert!(!text(&one.stdout).contains("=== setting"));
+    let one_value: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&one_json).unwrap()).unwrap();
+    assert!(one_value.get("settings").is_none());
+    assert_eq!(
+        std::fs::read_to_string(&one_json).unwrap(),
+        std::fs::read_to_string(&plain_json).unwrap()
+    );
+    // The lists and the single flags exclude each other; bad lists are refused.
+    assert!(!common(
+        &["--player-counts", "3,4", "--player-count", "5"],
+        &one_json
+    )
+    .status
+    .success());
+    assert!(!common(
+        &["--decks", "single", "--deck-variant", "double"],
+        &one_json
+    )
+    .status
+    .success());
+    assert!(!common(&["--player-counts", "3,3"], &one_json)
+        .status
+        .success());
+    assert!(!common(&["--decks", "double,double"], &one_json)
+        .status
+        .success());
+    assert!(!common(&["--player-counts", "2,4"], &one_json)
+        .status
+        .success());
+    std::fs::remove_dir_all(&base).unwrap();
+}

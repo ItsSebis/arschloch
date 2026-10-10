@@ -342,8 +342,11 @@ impl Trainer {
         let mut timings = StageTimings::default();
 
         let stage = Instant::now();
-        let (fitness, skill_terms) = self.evaluate_population(generation, observer);
+        let mut eval = self.evaluate_population(generation, observer);
+        // Racing is part of the training evaluation (and of its timing).
+        let racing = self.race(generation, &mut eval);
         timings.training_evaluation = stage.elapsed().as_secs_f64();
+        let (fitness, skill_terms) = (eval.fitness, eval.skill);
         let stage = Instant::now();
         let (champion_index, training_rank) = self.select_champion(&fitness);
         timings.champion_selection = stage.elapsed().as_secs_f64();
@@ -363,7 +366,7 @@ impl Trainer {
         let is_new_best = self
             .best
             .as_ref()
-            .is_none_or(|b| reeval.mean > b.reeval.mean);
+            .is_none_or(|b| reeval.fitness > b.reeval.fitness_value());
         let genome_file = self.dir.write_champion(generation, &champion)?;
         let mut files_secs = stage.elapsed().as_secs_f64();
         let heldout = if is_new_best {
@@ -396,7 +399,11 @@ impl Trainer {
                         + self.opponents.len() as u64
                         + u64::from(hall_score.is_some()))
                 // A new best also plays one match to record its decisions.
-                + heldout.as_ref().map_or(0, |h| h.matches as u64 + 1));
+                + heldout.as_ref().map_or(0, |h| h.matches as u64 + 1))
+            // Racing's extra matches.
+            + racing
+                .as_ref()
+                .map_or(0, |r| rounds_per_match * (r.raced * r.extra_matches) as u64);
         self.total_rounds += rounds_evaluated;
         // Neither `generation_secs` nor the timings include writing the
         // event line and the checkpoint (they come after the event is built).
@@ -433,6 +440,7 @@ impl Trainer {
                 mean_enabled_connections: report.mean_enabled_connections,
                 innovation_count: report.innovation_count,
             },
+            racing,
             timings: Some(timings),
         };
 

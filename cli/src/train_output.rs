@@ -56,6 +56,32 @@ pub fn render_banner(start: &RunStart, out: &std::path::Path) -> String {
         config.rounds_per_match,
         config.seed
     );
+    // Only the Phase 13 options that are on are mentioned, so a default
+    // run's banner is what it was.
+    let tables = config.tables();
+    if tables.len() > 1 {
+        let labels: Vec<String> = tables.iter().map(sim::training::TableSpec::label).collect();
+        let _ = writeln!(
+            text,
+            "settings: {} (matches cycle through them)",
+            labels.join(", ")
+        );
+    }
+    if !config.fitness.is_mean() {
+        let _ = writeln!(
+            text,
+            "fitness: {} (best/mean columns are this fitness; the champion column is its mean role score, sd = spread of its per-round score)",
+            config.fitness
+        );
+    }
+    if config.racing_matches > 0 {
+        let _ = writeln!(
+            text,
+            "racing: top {} genomes x {} extra matches (shift = mean fitness change of the raced genomes)",
+            config.raced_count(),
+            config.racing_matches
+        );
+    }
     let legend: Vec<String> = start
         .opponents
         .iter()
@@ -125,6 +151,12 @@ pub fn render_row(event: &GenerationEvent, eta_secs: Option<f64>, show_hall: boo
         format_rate(event.rounds_per_sec),
         eta_secs.map_or_else(|| "--:--:--".to_owned(), format_duration)
     );
+    if let Some(spread) = champion.reeval.spread {
+        let _ = write!(text, " sd{spread:.2}");
+    }
+    if let Some(racing) = &event.racing {
+        let _ = write!(text, " shift{:+.3}", racing.mean_shift);
+    }
     if champion.is_new_best {
         text.push_str(" *");
     }
@@ -324,6 +356,9 @@ mod tests {
             std_error: 0.021,
             matches: 100,
             placements: vec![1, 2, 3, 4],
+            spread: None,
+            fitness: None,
+            by_setting: None,
         }
     }
 
@@ -374,6 +409,7 @@ mod tests {
                 mean_enabled_connections: 20.0,
                 innovation_count: 30,
             },
+            racing: None,
             timings: None,
         }
     }
@@ -519,6 +555,11 @@ mod tests {
             hall_of_fame_interval: 5,
             skill_weight: 0.0,
             features: sim::FeatureSet::Base,
+            fitness: sim::training::FitnessKind::Mean,
+            racing_top: 0.0,
+            racing_matches: 0,
+            player_counts: Vec::new(),
+            decks: Vec::new(),
             pass_rule: sim::PassRule::default(),
             exchange_rule: sim::ExchangeRule::default(),
         }
