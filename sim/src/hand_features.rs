@@ -30,7 +30,10 @@ pub struct HandFeatures {
     pub hand_size: u32,
 }
 
-fn strength(card: Card) -> f64 {
+/// Position of `card` in the 52-card order (rank first, then suit), in
+/// `[0, 1]`. Ignores the double-deck duplicate tiebreak, which has no
+/// strength meaning of its own. Shared with the NEAT features.
+pub(crate) fn strength(card: Card) -> f64 {
     f64::from(card.rank as u8 * 4 + card.suit as u8) / 51.0
 }
 

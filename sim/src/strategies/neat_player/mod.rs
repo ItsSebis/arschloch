@@ -10,6 +10,7 @@
 mod features;
 mod genome_file;
 
+use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::path::Path;
 
@@ -19,7 +20,7 @@ use neat::{Genome, Network};
 pub use features::{TurnSummary, FEATURE_COUNT, FEATURE_NAMES, FEATURE_SET_VERSION};
 pub use genome_file::{GenomeFile, GenomeFileError, FORMAT_VERSION};
 
-use crate::strategy::{Strategy, TurnContext};
+use crate::strategy::{ContextNeeds, Strategy, TurnContext};
 
 #[derive(Debug, Clone)]
 pub struct NeatStrategy {
@@ -61,6 +62,20 @@ impl NeatStrategy {
     }
 }
 
+thread_local! {
+    /// The network's node values, reused by every decision of a thread.
+    static SCRATCH: RefCell<Vec<f64>> = const { RefCell::new(Vec::new()) };
+}
+
+/// Runs `f` with this thread's scratch buffer (a fresh one if it is
+/// somehow already borrowed).
+fn with_scratch<R>(f: impl FnOnce(&mut Vec<f64>) -> R) -> R {
+    SCRATCH.with(|cell| match cell.try_borrow_mut() {
+        Ok(mut scratch) => f(&mut scratch),
+        Err(_) => f(&mut Vec::new()),
+    })
+}
+
 /// Which of two exactly-tied candidates to prefer (`Less`: `a`): a play
 /// over a pass, then the smaller combo, then the weaker top card (spec
 /// section 4). Full ties keep the earlier-listed move.
@@ -100,20 +115,21 @@ impl NeatStrategy {
         context: &TurnContext<'_>,
     ) -> Vec<ScoredCandidate> {
         let summary = TurnSummary::new(context, duplicate_rule);
-        let mut scratch = Vec::new();
-        legal_moves
-            .iter()
-            .map(|candidate| {
-                let features = summary.features(candidate);
-                let raw_score = self.network.score(&features, &mut scratch);
-                ScoredCandidate {
-                    candidate: *candidate,
-                    features,
-                    raw_score,
-                    activation: raw_score.tanh(),
-                }
-            })
-            .collect()
+        with_scratch(|scratch| {
+            legal_moves
+                .iter()
+                .map(|candidate| {
+                    let features = summary.features(candidate);
+                    let raw_score = self.network.score(&features, scratch);
+                    ScoredCandidate {
+                        candidate: *candidate,
+                        features,
+                        raw_score,
+                        activation: raw_score.tanh(),
+                    }
+                })
+                .collect()
+        })
     }
 }
 
@@ -130,28 +146,31 @@ impl Strategy for NeatStrategy {
         _rng: &mut dyn rand::Rng,
     ) -> Move {
         let summary = TurnSummary::new(context, duplicate_rule);
-        let mut scratch = Vec::new();
         let mut best: Option<(&Move, f64)> = None;
-        for candidate in legal_moves {
-            // Compare raw scores, not `tanh` activations: the latter
-            // saturate to exactly 1.0 and turn distinct scores into ties.
-            let score = self
-                .network
-                .score(&summary.features(candidate), &mut scratch);
-            let better = best.is_none_or(|(incumbent, top)| match score.total_cmp(&top) {
-                Ordering::Greater => true,
-                Ordering::Equal => {
-                    tie_break(candidate, incumbent, duplicate_rule) == Ordering::Less
+        with_scratch(|scratch| {
+            for candidate in legal_moves {
+                // Compare raw scores, not `tanh` activations: the latter
+                // saturate to exactly 1.0 and turn distinct scores into ties.
+                let score = self.network.score(&summary.features(candidate), scratch);
+                let better = best.is_none_or(|(incumbent, top)| match score.total_cmp(&top) {
+                    Ordering::Greater => true,
+                    Ordering::Equal => {
+                        tie_break(candidate, incumbent, duplicate_rule) == Ordering::Less
+                    }
+                    Ordering::Less => false,
+                });
+                if better {
+                    best = Some((candidate, score));
                 }
-                Ordering::Less => false,
-            });
-            if better {
-                best = Some((candidate, score));
             }
-        }
+        });
         *best
             .expect("a seat to move always has at least one legal move")
             .0
+    }
+
+    fn needs(&self) -> ContextNeeds {
+        ContextNeeds::OPPONENT_PASS_CEILINGS.union(ContextNeeds::UNSEEN)
     }
 
     fn choose_exchange_cards(
@@ -363,5 +382,87 @@ mod tests {
     fn the_strategy_can_be_shared_across_threads() {
         fn assert_send_sync<T: Send + Sync>() {}
         assert_send_sync::<NeatStrategy>();
+    }
+
+    /// `choose_play` (fast features, shared scratch) picks the same move as
+    /// the same selection rule fed by the reference features, for evolved
+    /// networks on random states.
+    #[test]
+    fn choose_play_matches_the_reference_features_on_random_states() {
+        use neat::{NeatConfig, Population};
+        use rand::RngExt;
+
+        use super::features::reference::ReferenceTurnSummary;
+        use crate::hand_reading::PassTracker;
+        use crate::match_runner::turn_context_for;
+        use crate::strategy::ContextNeeds;
+        use crate::test_support::for_each_state;
+
+        let config = NeatConfig {
+            population_size: 30,
+            add_node_rate: 0.3,
+            add_connection_rate: 0.3,
+            toggle_enable_rate: 0.1,
+            ..NeatConfig::default()
+        };
+        let mut population = Population::new(FEATURE_COUNT, config, 5).unwrap();
+        let mut fitness_rng = rand::rngs::StdRng::seed_from_u64(2);
+        for _ in 0..12 {
+            let fitness = (0..30)
+                .map(|_| fitness_rng.random_range(0.0..1.0))
+                .collect();
+            population.set_fitness(fitness);
+            population.advance();
+        }
+        let strategies: Vec<NeatStrategy> = population
+            .genomes()
+            .iter()
+            .take(6)
+            .map(|g| NeatStrategy::new("n", g).unwrap())
+            .collect();
+
+        let mut tracker = None;
+        let mut decisions = 0;
+        for_each_state(8, 6, |state, rng| {
+            let round = state.round;
+            if round.play_history().is_empty() && round.pass_history().is_empty() {
+                tracker = Some(PassTracker::new(usize::from(state.players), state.rule));
+            }
+            let seat = round.seat_to_move().unwrap();
+            let context = turn_context_for(
+                round,
+                seat,
+                state.players,
+                state.round_deck,
+                tracker.as_mut().unwrap(),
+                ContextNeeds::ALL,
+            );
+            let legal = round.legal_moves();
+            let reference = ReferenceTurnSummary::new(&context, state.rule);
+            for strategy in &strategies {
+                let mut expected: Option<(&Move, f64)> = None;
+                let mut scratch = Vec::new();
+                for candidate in &legal {
+                    let score = strategy
+                        .network
+                        .score(&reference.features(candidate), &mut scratch);
+                    let better =
+                        expected.is_none_or(|(incumbent, top)| match score.total_cmp(&top) {
+                            Ordering::Greater => true,
+                            Ordering::Equal => {
+                                tie_break(candidate, incumbent, state.rule) == Ordering::Less
+                            }
+                            Ordering::Less => false,
+                        });
+                    if better {
+                        expected = Some((candidate, score));
+                    }
+                }
+                let chosen = strategy.choose_play(&legal, state.rule, &context, rng);
+                assert_eq!(chosen, *expected.unwrap().0);
+                decisions += 1;
+            }
+        });
+        assert!(decisions > 10_000, "only {decisions}");
     }
 }

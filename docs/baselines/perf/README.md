@@ -117,6 +117,66 @@ still allocates its one result `Vec`):
 `TurnSummary::new` is unchanged work (1.1-1.7 us), now the largest single
 item of a turn for the classic strategies.
 
+### After step 5 (strategy context and features)
+
+Measured in one session (before = the step 4 binary, after = this change,
+run back to back, same laptop and `powersave` governor: compare only within
+this table). Checksums are identical on every row and `check12.sh` prints
+REFERENCE IDENTICAL. What changed:
+
+- `Strategy::needs() -> ContextNeeds` (default: everything). The match loops
+  build only what the acting seat's strategy reads: the four strategies that
+  never read the context (lowest-legal, greedy-highest, random-legal,
+  hold-back-pairs) get no opponents, no unseen list and no tracker update;
+  endgame-denial gets hand sizes only; card-counter the unseen list; NEAT
+  opponents with pass ceilings plus the unseen list; adaptive the union of
+  its base and enabled modifiers. The `PassTracker` is advanced only on
+  turns that need a ceiling and catches up on the full histories later
+  (tested against the reverse sweep with skipped turns).
+- The unseen list is built from a `u128` mask over deal indices into one
+  exactly sized `Vec` (before: a 256-byte array and a `Vec` that regrew
+  about five times).
+- `TurnSummary` works on per-rank counts and 52-slot bit masks (popcounts for
+  "unseen outranking" and "hand below top", a per-size rank mask for "unseen
+  beaters"), allocates nothing, and `NeatStrategy` reuses one thread-local
+  scratch buffer. `PassCeilings` stores the upward-closed minimum per size, so
+  `ceiling` is a lookup. The old `TurnSummary` is the test-only oracle
+  (bit-identical `f64` features on more than 10,000 random states plus
+  unphysical contexts; identical chosen moves for evolved networks).
+- `CardCounter::choose_play` is one pass without collecting `Vec`s;
+  `highest_unseen` and `strength` are shared helpers.
+
+| workload (1 thread) | before | after | checksum (both) |
+|---------------------|-------:|------:|-----------------|
+| 4x lowest-legal | 1.14 s | 0.44 s | `e686c2a079c1b476` |
+| 4x neat | 3.84 s | 1.88 s | `f25c9146e47d417f` |
+| mixed (1 neat + 3 classic) | 1.99 s | 1.16 s | `ce79c92cd31c0ecc` |
+| 5p double deck, 2 neat + adaptive + 2 lowest-legal, 1000 matches | 2.57 s | 1.28 s | `9fe3bd9172cca244` |
+| 4x card-counter | 1.42 s | 1.01 s | `1ded4d66fcea8ac8` |
+| 4x endgame-denial | 1.17 s | 0.52 s | `11aab2a4d00bfd38` |
+| 4x adaptive:reading,tempo,bully | 1.18 s | 1.12 s | `2c54b4c39e8d7a04` |
+| all threads: lowest-legal / neat / mixed | 0.28 / 0.89 / 0.47 s | 0.12 / 0.44 / 0.28 s | same |
+| train, pop 60 x 4 gen | 5.72 s | 3.37 s | `85d7c401da1bb195` |
+
+Micro-benchmarks (`--test-threads=1`, faster of two runs, ns per call; the
+`choose_play` rows include cloning the context and `legal_moves`):
+
+| setup | `TurnSummary::new` before / after | new + every move's `features` before / after | NEAT `choose_play` before / after | card-counter `choose_play` before / after |
+|-------|---------------:|---------------:|---------------:|---------------:|
+| single deck, 4 players, leading   | 1170 / 106 | 4555 / 866 | 5760 / 1981 | 705 / 440 |
+| single deck, 4 players, following | 1114 / 105 | 3219 / 685 | 4248 / 1503 | 622 / 400 |
+| double deck, 5 players, leading   | 1754 / 156 | 11494 / 1582 | 13700 / 3577 | 1283 / 936 |
+| double deck, 5 players, following | 1740 / 152 | 6839 / 1093 | 8153 / 2225 | 977 / 744 |
+
+Where the time is now: a NEAT decision is mostly the network evaluation
+(about 75 ns per candidate in `neat::Network`), no longer the features. For
+the adaptive and card-counter rows the largest remaining item is the unseen
+list (about 0.4 s of the 1.12 s adaptive row; replacing the needs of the
+adaptive row by none gives 0.45 s, by ceilings only 0.64 s, by the unseen
+list only 0.85 s), which `Adaptive` reads only on the rare turns where an
+opponent or this seat is close to going out: a per-turn `needs` (decided
+from hand sizes) or a mask-carrying context would remove most of it.
+
 ### Training thread scaling (`docs/baselines/perf/scaling.sh`)
 
 `THREADS_LIST="1 2 4 8" docs/baselines/perf/scaling.sh`: population 150, 100

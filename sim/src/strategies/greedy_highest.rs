@@ -5,7 +5,7 @@
 
 use engine::{Card, DuplicateRule, Move};
 
-use crate::strategy::{Strategy, TurnContext};
+use crate::strategy::{ContextNeeds, Strategy, TurnContext};
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct GreedyHighest;
@@ -33,6 +33,10 @@ impl Strategy for GreedyHighest {
                     .then_with(|| a.1.compare(&b.1, duplicate_rule))
             })
             .map_or(Move::Pass, |(_, _, mv)| *mv)
+    }
+
+    fn needs(&self) -> ContextNeeds {
+        ContextNeeds::NONE
     }
 
     fn choose_exchange_cards(

@@ -15,10 +15,10 @@ use rand::SeedableRng;
 use rayon::prelude::*;
 
 use crate::hand_features::HandFeatures;
-use crate::hand_reading::PassTracker;
+use crate::hand_reading::{PassCeilings, PassTracker};
 use crate::match_config::MatchConfig;
 use crate::match_result::MatchResult;
-use crate::strategy::{OpponentHand, Strategy, TurnContext};
+use crate::strategy::{ContextNeeds, OpponentHand, Strategy, TurnContext};
 use crate::training::evaluate::mix;
 
 /// Builds the `TurnContext` for `seat`'s upcoming `choose_play` call:
@@ -28,50 +28,80 @@ use crate::training::evaluate::mix;
 /// combo currently on the table (if any). `round_deck` is the full set
 /// of cards dealt this round (see `run_match`'s `round_deck`), used as
 /// the starting point before subtracting what's now visible.
+///
+/// Only the parts in `needs` (the seat's `Strategy::needs`) are built;
+/// the rest hold empty/default values. The pass tracker is only advanced
+/// when some pass ceiling is needed: it is incremental over the round's
+/// complete histories, so a later call that needs ceilings catches up on
+/// everything skipped and yields the same ceilings.
 pub(crate) fn turn_context_for<'a>(
     round: &'a Round,
     seat: SeatId,
     player_count: u8,
     round_deck: &[Card],
     tracker: &mut PassTracker,
+    needs: ContextNeeds,
 ) -> TurnContext<'a> {
-    tracker.update(round.play_history(), round.pass_history());
+    let ceilings_needed = needs.pass_ceilings();
+    if ceilings_needed {
+        tracker.update(round.play_history(), round.pass_history());
+    }
     let all_ceilings = tracker.ceilings();
 
-    let opponents: Vec<OpponentHand> = (0..player_count)
-        .filter(|&s| s != seat)
-        .map(|s| OpponentHand {
-            seat: s,
-            hand_size: round.hand_size(s),
-            active: round.is_active(s),
-            pass_ceilings: all_ceilings[usize::from(s)],
-        })
-        .collect();
+    let opponents: Vec<OpponentHand> = if needs.contains(ContextNeeds::OPPONENTS) {
+        let with_ceilings = needs.contains(ContextNeeds::OPPONENT_PASS_CEILINGS);
+        (0..player_count)
+            .filter(|&s| s != seat)
+            .map(|s| OpponentHand {
+                seat: s,
+                hand_size: round.hand_size(s),
+                active: round.is_active(s),
+                pass_ceilings: if with_ceilings {
+                    all_ceilings[usize::from(s)]
+                } else {
+                    PassCeilings::default()
+                },
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
 
     // Every card of the round has its own `deal_index` (run_match numbers
-    // the deck), so "seen" is a bit per index; the unseen cards keep the
-    // deck's order.
-    let mut seen = [false; 256];
-    for card in round.hand(seat).iter().chain(
-        round
-            .play_history()
-            .iter()
-            .flat_map(|(_, combo)| combo.cards()),
-    ) {
-        seen[usize::from(card.deal_index)] = true;
-    }
-    let unseen_cards: Vec<Card> = round_deck
-        .iter()
-        .filter(|card| !seen[usize::from(card.deal_index)])
-        .copied()
-        .collect();
+    // the deck; decks hold at most 104 cards), so "seen" is a bit per
+    // index; the unseen cards keep the deck's order.
+    let unseen_cards: Vec<Card> = if needs.contains(ContextNeeds::UNSEEN) {
+        let bit = |card: &Card| {
+            1u128
+                .checked_shl(u32::from(card.deal_index))
+                .expect("deal indices of a round's deck are below 128")
+        };
+        let mut seen = 0u128;
+        for card in round.hand(seat).iter().chain(
+            round
+                .play_history()
+                .iter()
+                .flat_map(|(_, combo)| combo.cards()),
+        ) {
+            seen |= bit(card);
+        }
+        let mut unseen = Vec::with_capacity(round_deck.len());
+        unseen.extend(round_deck.iter().filter(|card| seen & bit(card) == 0));
+        unseen
+    } else {
+        Vec::new()
+    };
 
     TurnContext {
         seat,
         hand: round.hand(seat),
         opponents,
         unseen_cards,
-        own_pass_ceilings: all_ceilings[usize::from(seat)],
+        own_pass_ceilings: if needs.contains(ContextNeeds::OWN_PASS_CEILINGS) {
+            all_ceilings[usize::from(seat)]
+        } else {
+            PassCeilings::default()
+        },
         current_combo: round.current_combo(),
     }
 }
@@ -148,14 +178,17 @@ pub fn play_out(
         }
         round.legal_moves_into(&mut legal_moves);
 
-        let context = turn_context_for(round, seat, config.player_count, round_deck, &mut tracker);
-
-        let chosen = strategies[usize::from(seat)].choose_play(
-            &legal_moves,
-            config.duplicate_rule,
-            &context,
-            rng,
+        let strategy = &strategies[usize::from(seat)];
+        let context = turn_context_for(
+            round,
+            seat,
+            config.player_count,
+            round_deck,
+            &mut tracker,
+            strategy.needs(),
         );
+
+        let chosen = strategy.choose_play(&legal_moves, config.duplicate_rule, &context, rng);
 
         if chosen == Move::Pass {
             counters.pass_counts[usize::from(seat)] += 1;
@@ -818,5 +851,44 @@ mod tests {
             "expected at least one seed's match to produce a non-default \
              PassCeilings somewhere in the recorded OpponentHand.pass_ceilings"
         );
+    }
+
+    /// The unseen cards are exactly the round's deck minus the actor's
+    /// hand minus every played card, in deck order.
+    #[test]
+    fn unseen_cards_are_the_deck_minus_hand_and_played_cards() {
+        use crate::test_support::for_each_state;
+
+        let mut tracker = None;
+        let mut checked = 0;
+        for_each_state(23, 6, |state, _| {
+            let round = state.round;
+            if round.play_history().is_empty() && round.pass_history().is_empty() {
+                tracker = Some(PassTracker::new(usize::from(state.players), state.rule));
+            }
+            let seat = round.seat_to_move().unwrap();
+            let context = turn_context_for(
+                round,
+                seat,
+                state.players,
+                state.round_deck,
+                tracker.as_mut().unwrap(),
+                ContextNeeds::UNSEEN,
+            );
+            let played: Vec<Card> = round
+                .play_history()
+                .iter()
+                .flat_map(|(_, combo)| combo.cards().iter().copied())
+                .collect();
+            let expected: Vec<Card> = state
+                .round_deck
+                .iter()
+                .copied()
+                .filter(|c| !round.hand(seat).contains(c) && !played.contains(c))
+                .collect();
+            assert_eq!(context.unseen_cards, expected);
+            checked += 1;
+        });
+        assert!(checked > 3000);
     }
 }

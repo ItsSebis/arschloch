@@ -625,17 +625,18 @@ impl Session {
             let chosen = {
                 let round = self.round.as_ref().expect("a round is in progress");
                 let legal = round.legal_moves();
+                let strategy = &self.ai[usize::from(seat)]
+                    .as_ref()
+                    .expect("only the human seat has no strategy")
+                    .strategy;
                 let context = turn_context_for(
                     round,
                     seat,
                     self.config.player_count,
                     &self.round_deck,
                     &mut self.tracker,
+                    strategy.needs(),
                 );
-                let strategy = &self.ai[usize::from(seat)]
-                    .as_ref()
-                    .expect("only the human seat has no strategy")
-                    .strategy;
                 strategy.choose_play(&legal, self.config.duplicate_rule, &context, &mut self.rng)
             };
             self.apply(seat, &chosen)
@@ -840,6 +841,7 @@ impl Session {
             self.config.player_count,
             &self.round_deck,
             &mut tracker,
+            advisor.needs(),
         );
         let mut scored = advisor.score_candidates(&legal, self.config.duplicate_rule, &context);
         // Best first; equal scores keep the engine's listing order.
@@ -1759,7 +1761,14 @@ mod tests {
         // What the model itself would play in this exact situation.
         let round = session.round.as_ref().unwrap();
         let mut tracker = session.tracker.clone();
-        let context = turn_context_for(round, 0, 4, &session.round_deck, &mut tracker);
+        let context = turn_context_for(
+            round,
+            0,
+            4,
+            &session.round_deck,
+            &mut tracker,
+            crate::strategy::ContextNeeds::ALL,
+        );
         let mut rng = rand::rngs::StdRng::seed_from_u64(0);
         let chosen = model.choose_play(&legal, DuplicateRule::FirstDealtWins, &context, &mut rng);
         let top = &advice[0];

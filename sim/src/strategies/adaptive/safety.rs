@@ -21,6 +21,7 @@ use std::cmp::Ordering;
 
 use engine::{Card, DuplicateRule, Move};
 
+use crate::strategies::highest_unseen;
 use crate::strategy::TurnContext;
 
 /// The cheapest legal play that's provably unbeatable by every
@@ -33,15 +34,10 @@ pub(super) fn cheapest_universally_safe_play(
     duplicate_rule: DuplicateRule,
     context: &TurnContext<'_>,
 ) -> Option<Move> {
-    let active_opponents: Vec<_> = context.opponents.iter().filter(|o| o.active).collect();
-    let highest_unseen = context
-        .unseen_cards
-        .iter()
-        .copied()
-        .max_by(|a, b| a.compare(b, duplicate_rule));
+    let highest_unseen = highest_unseen(&context.unseen_cards, duplicate_rule);
     let locks_out_every_opponent = |size: usize, top: Card| {
         highest_unseen.is_none_or(|h| top.compare(&h, duplicate_rule) != Ordering::Less)
-            || active_opponents.iter().all(|o| {
+            || context.opponents.iter().filter(|o| o.active).all(|o| {
                 size > o.hand_size || o.pass_ceilings.cannot_beat(size, top, duplicate_rule)
             })
     };

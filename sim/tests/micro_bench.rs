@@ -17,6 +17,7 @@ use std::hint::black_box;
 use std::time::Instant;
 
 use engine::{deal, standard_deck, Card, DeckVariant, DuplicateRule, Move, Round, SeatId};
+use rand::SeedableRng;
 use sim::strategies::TurnSummary;
 use sim::{OpponentHand, PassCeilings, TurnContext};
 
@@ -202,6 +203,46 @@ fn turn_summary_ns_per_call() {
         let (legal_ns, _) = ns_per_call(&turns, |turn| turn.round.legal_moves().len());
         println!(
             "  {:<36} new {new_ns:>7.0} ns   new + legal_moves + features of every move {all_ns:>8.0} ns (legal_moves alone {legal_ns:.0} ns)",
+            setup.label
+        );
+    }
+}
+
+/// One decision of a seat: `choose_play` of a trained network and of
+/// `CardCounter` on the fixed states (the context is cloned per call in
+/// both, so only the strategy's own work differs between code versions).
+#[test]
+#[ignore = "micro-benchmark: run with --ignored --nocapture"]
+fn choose_play_ns_per_call() {
+    use sim::{CardCounter, NeatStrategy, Strategy};
+
+    let neat = NeatStrategy::from_file(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../docs/baselines/neat-v1/champion.json"),
+    )
+    .expect("the v1 champion genome loads");
+    println!("\nchoose_play per decision (mean over {STATES_PER_SETUP} fixed states, incl. the context clone)");
+    for setup in &SETUPS {
+        let turns: Vec<Turn> = rounds(setup)
+            .into_iter()
+            .map(|r| Turn::new(r, setup.players))
+            .collect();
+        let mut rng = rand::rngs::StdRng::seed_from_u64(1);
+        let mut measure = |strategy: &dyn Strategy| {
+            ns_per_call(&turns, |turn| {
+                let context = turn.context();
+                let moves = turn.round.legal_moves();
+                match strategy.choose_play(&moves, RULE, &context, &mut rng) {
+                    Move::Pass => 0,
+                    Move::Play(combo) => combo.size(),
+                }
+            })
+            .0
+        };
+        let neat_ns = measure(&neat);
+        let counter_ns = measure(&CardCounter);
+        println!(
+            "  {:<36} neat {neat_ns:>7.0} ns   card-counter {counter_ns:>7.0} ns",
             setup.label
         );
     }

@@ -17,7 +17,7 @@ pub use config::{AdaptiveConfig, DenialMode};
 use engine::{Card, DuplicateRule, Move};
 
 use crate::strategies::{CardCounter, LowestLegal};
-use crate::strategy::{Strategy, TurnContext};
+use crate::strategy::{ContextNeeds, Strategy, TurnContext};
 
 /// A configurable strategy: `LowestLegal` (or `CardCounter`, if
 /// `config.counting`) as its base play selection, with endgame denial,
@@ -27,6 +27,7 @@ use crate::strategy::{Strategy, TurnContext};
 pub struct Adaptive {
     config: AdaptiveConfig,
     name: String,
+    needs: ContextNeeds,
 }
 
 impl Adaptive {
@@ -39,6 +40,7 @@ impl Adaptive {
         assert!(config.is_valid(), "invalid AdaptiveConfig: {config:?}");
         Self {
             name: format!("Adaptive({config})"),
+            needs: needs_of(&config),
             config,
         }
     }
@@ -47,6 +49,40 @@ impl Adaptive {
     pub fn config(&self) -> &AdaptiveConfig {
         &self.config
     }
+}
+
+/// The context fields `choose_play` can read under `config`: the union of
+/// the base (`CardCounter` reads the unseen cards, `LowestLegal` nothing)
+/// and every enabled modifier. `bully` reads only the hand; `denial`
+/// (`HandSize`) the opponents' hand sizes; `denial` (`HandReading`) and
+/// `tempo` go through `safety`, which reads opponent pass ceilings and
+/// the unseen cards; `deception` reads the opponents' sizes and this
+/// seat's own ceilings.
+fn needs_of(config: &AdaptiveConfig) -> ContextNeeds {
+    let mut needs = ContextNeeds::NONE;
+    if config.counting {
+        needs = needs.union(ContextNeeds::UNSEEN);
+    }
+    match config.denial {
+        DenialMode::Off => {}
+        DenialMode::HandSize { .. } => needs = needs.union(ContextNeeds::OPPONENTS),
+        DenialMode::HandReading { .. } => {
+            needs = needs
+                .union(ContextNeeds::OPPONENT_PASS_CEILINGS)
+                .union(ContextNeeds::UNSEEN);
+        }
+    }
+    if config.tempo {
+        needs = needs
+            .union(ContextNeeds::OPPONENT_PASS_CEILINGS)
+            .union(ContextNeeds::UNSEEN);
+    }
+    if config.deception_rate > 0.0 {
+        needs = needs
+            .union(ContextNeeds::OPPONENTS)
+            .union(ContextNeeds::OWN_PASS_CEILINGS);
+    }
+    needs
 }
 
 impl Default for Adaptive {
@@ -113,6 +149,10 @@ impl Strategy for Adaptive {
         }
 
         base
+    }
+
+    fn needs(&self) -> ContextNeeds {
+        self.needs
     }
 
     fn choose_exchange_cards(

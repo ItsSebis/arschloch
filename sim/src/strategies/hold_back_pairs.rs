@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use engine::{rank_groups, Card, DuplicateRule, Move, Rank};
 
 use crate::strategies::LowestLegal;
-use crate::strategy::{Strategy, TurnContext};
+use crate::strategy::{ContextNeeds, Strategy, TurnContext};
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct HoldBackPairs;
@@ -66,6 +66,10 @@ impl Strategy for HoldBackPairs {
                 .expect("safe_top_card was derived from a Play move in legal_moves"),
             None => Move::Pass,
         }
+    }
+
+    fn needs(&self) -> ContextNeeds {
+        ContextNeeds::NONE
     }
 
     fn choose_exchange_cards(

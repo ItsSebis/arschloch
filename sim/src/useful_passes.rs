@@ -354,8 +354,14 @@ pub fn replay_match(
                 counters.trick_count += 1;
             }
             round.legal_moves_into(&mut legal_moves);
-            let context =
-                turn_context_for(&round, seat, config.player_count, &round_deck, &mut tracker);
+            let context = turn_context_for(
+                &round,
+                seat,
+                config.player_count,
+                &round_deck,
+                &mut tracker,
+                strategies[usize::from(seat)].needs(),
+            );
             let chosen = strategies[usize::from(seat)].choose_play(
                 &legal_moves,
                 config.duplicate_rule,

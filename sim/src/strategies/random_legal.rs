@@ -5,7 +5,7 @@
 use engine::{Card, DuplicateRule, Move};
 use rand::seq::{IndexedRandom, SliceRandom};
 
-use crate::strategy::{Strategy, TurnContext};
+use crate::strategy::{ContextNeeds, Strategy, TurnContext};
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct RandomLegal;
@@ -26,6 +26,10 @@ impl Strategy for RandomLegal {
             .choose(rng)
             .copied()
             .expect("legal_moves is never empty when a seat is actually to move")
+    }
+
+    fn needs(&self) -> ContextNeeds {
+        ContextNeeds::NONE
     }
 
     fn choose_exchange_cards(

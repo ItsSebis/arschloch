@@ -21,6 +21,16 @@ pub use neat_player::{
 };
 pub use random_legal::RandomLegal;
 
+/// The highest of the `unseen` cards under `Card::compare`, or `None` when
+/// none is left (then nothing can beat any play). Shared by `CardCounter`
+/// and `Adaptive`'s safety proof.
+pub(crate) fn highest_unseen(unseen: &[Card], duplicate_rule: DuplicateRule) -> Option<Card> {
+    unseen
+        .iter()
+        .copied()
+        .max_by(|a, b| a.compare(b, duplicate_rule))
+}
+
 /// The naive "give up your highest `count` cards" behavior from Phase 1
 /// (`engine::exchange`'s old default), reused by strategies that have no
 /// stronger opinion about which cards to give up.

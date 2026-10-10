@@ -26,7 +26,7 @@
 use engine::{Card, DuplicateRule, Move};
 
 use crate::strategies::{GreedyHighest, LowestLegal};
-use crate::strategy::{Strategy, TurnContext};
+use crate::strategy::{ContextNeeds, Strategy, TurnContext};
 
 /// A still-active opponent at or below this many cards is "close to
 /// finishing" — see the module doc comment for the threshold
@@ -57,6 +57,10 @@ impl Strategy for EndgameDenial {
         } else {
             LowestLegal.choose_play(legal_moves, duplicate_rule, context, rng)
         }
+    }
+
+    fn needs(&self) -> ContextNeeds {
+        ContextNeeds::OPPONENTS
     }
 
     fn choose_exchange_cards(

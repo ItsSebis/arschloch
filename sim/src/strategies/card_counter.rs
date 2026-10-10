@@ -38,7 +38,7 @@ use std::cmp::Ordering;
 
 use engine::{Card, DuplicateRule, Move};
 
-use crate::strategy::{Strategy, TurnContext};
+use crate::strategy::{ContextNeeds, Strategy, TurnContext};
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct CardCounter;
@@ -55,40 +55,42 @@ impl Strategy for CardCounter {
         context: &TurnContext<'_>,
         _rng: &mut dyn rand::Rng,
     ) -> Move {
-        let highest_unseen = context
-            .unseen_cards
-            .iter()
-            .copied()
-            .max_by(|a, b| a.compare(b, duplicate_rule));
+        let highest_unseen =
+            crate::strategies::highest_unseen(&context.unseen_cards, duplicate_rule);
         let is_precious = |top: Card| {
             highest_unseen
                 .is_none_or(|highest| top.compare(&highest, duplicate_rule) != Ordering::Less)
         };
 
-        let plays: Vec<(usize, Card, bool, &Move)> = legal_moves
-            .iter()
-            .filter_map(|mv| match mv {
-                Move::Play(combo) => {
-                    let top = combo.top_card(duplicate_rule);
-                    Some((combo.size(), top, is_precious(top), mv))
-                }
-                Move::Pass => None,
-            })
-            .collect();
-
-        let lowest = |pool: &[(usize, Card, bool, &Move)]| {
-            pool.iter()
-                .min_by(|a, b| {
-                    a.0.cmp(&b.0)
-                        .then_with(|| a.1.compare(&b.1, duplicate_rule))
-                })
-                .map(|&(_, _, _, mv)| *mv)
+        // The `LowestLegal` order (smallest size, then lowest top card) over
+        // the non-precious plays, else over all plays; the first of equals.
+        let mut lowest_any: Option<(usize, Card, &Move)> = None;
+        let mut lowest_non_precious: Option<(usize, Card, &Move)> = None;
+        let precedes = |a: (usize, Card), b: (usize, Card)| {
+            a.0.cmp(&b.0)
+                .then_with(|| a.1.compare(&b.1, duplicate_rule))
+                == Ordering::Less
         };
+        for mv in legal_moves {
+            let Move::Play(combo) = mv else { continue };
+            let top = combo.top_card(duplicate_rule);
+            let key = (combo.size(), top);
+            if lowest_any.is_none_or(|(size, card, _)| precedes(key, (size, card))) {
+                lowest_any = Some((key.0, key.1, mv));
+            }
+            if !is_precious(top)
+                && lowest_non_precious.is_none_or(|(size, card, _)| precedes(key, (size, card)))
+            {
+                lowest_non_precious = Some((key.0, key.1, mv));
+            }
+        }
+        lowest_non_precious
+            .or(lowest_any)
+            .map_or(Move::Pass, |(_, _, mv)| *mv)
+    }
 
-        let non_precious: Vec<_> = plays.iter().copied().filter(|&(_, _, p, _)| !p).collect();
-        lowest(&non_precious)
-            .or_else(|| lowest(&plays))
-            .unwrap_or(Move::Pass)
+    fn needs(&self) -> ContextNeeds {
+        ContextNeeds::UNSEEN
     }
 
     fn choose_exchange_cards(
@@ -254,5 +256,76 @@ mod tests {
             chosen,
             Move::Play(Combo::new(vec![card(Rank::King, Suit::Clubs)]).unwrap())
         );
+    }
+
+    /// The straightforward selection `choose_play` was rewritten from
+    /// (collects the plays, filters the non-precious ones).
+    fn reference_choice(
+        legal_moves: &[Move],
+        duplicate_rule: DuplicateRule,
+        unseen: &[Card],
+    ) -> Move {
+        let highest_unseen = unseen
+            .iter()
+            .copied()
+            .max_by(|a, b| a.compare(b, duplicate_rule));
+        let is_precious = |top: Card| {
+            highest_unseen
+                .is_none_or(|highest| top.compare(&highest, duplicate_rule) != Ordering::Less)
+        };
+        let plays: Vec<(usize, Card, bool, &Move)> = legal_moves
+            .iter()
+            .filter_map(|mv| match mv {
+                Move::Play(combo) => {
+                    let top = combo.top_card(duplicate_rule);
+                    Some((combo.size(), top, is_precious(top), mv))
+                }
+                Move::Pass => None,
+            })
+            .collect();
+        let lowest = |pool: &[(usize, Card, bool, &Move)]| {
+            pool.iter()
+                .min_by(|a, b| {
+                    a.0.cmp(&b.0)
+                        .then_with(|| a.1.compare(&b.1, duplicate_rule))
+                })
+                .map(|&(_, _, _, mv)| *mv)
+        };
+        let non_precious: Vec<_> = plays.iter().copied().filter(|&(_, _, p, _)| !p).collect();
+        lowest(&non_precious)
+            .or_else(|| lowest(&plays))
+            .unwrap_or(Move::Pass)
+    }
+
+    #[test]
+    fn the_single_pass_selection_equals_the_collecting_one_on_random_states() {
+        use crate::hand_reading::PassTracker;
+        use crate::match_runner::turn_context_for;
+        use crate::test_support::for_each_state;
+
+        let mut tracker = None;
+        let mut checked = 0;
+        for_each_state(17, 10, |state, rng| {
+            let round = state.round;
+            if round.play_history().is_empty() && round.pass_history().is_empty() {
+                tracker = Some(PassTracker::new(usize::from(state.players), state.rule));
+            }
+            let seat = round.seat_to_move().unwrap();
+            let context = turn_context_for(
+                round,
+                seat,
+                state.players,
+                state.round_deck,
+                tracker.as_mut().unwrap(),
+                CardCounter.needs(),
+            );
+            let legal = round.legal_moves();
+            assert_eq!(
+                CardCounter.choose_play(&legal, state.rule, &context, rng),
+                reference_choice(&legal, state.rule, &context.unseen_cards)
+            );
+            checked += 1;
+        });
+        assert!(checked > 5000);
     }
 }
