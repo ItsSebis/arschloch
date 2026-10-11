@@ -360,7 +360,7 @@ mod tests {
             "--quiet",
         ];
         crate::train::run(args.iter().map(|a| (*a).to_owned())).unwrap();
-        let runs = sim::training::load_runs(&dir).unwrap();
+        let runs = sim::training::load_runs(&dir).unwrap().runs;
         assert_eq!(runs.len(), 1);
         let analysis = sim::training::analyse(&runs[0]);
         let element = serde_json::json!({

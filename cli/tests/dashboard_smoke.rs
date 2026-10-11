@@ -293,8 +293,9 @@ fn watch_serves_the_run_analysis_page_and_data() {
     );
     assert!(get(&address, "/analysis.js").contains("/api/analysis"));
 
-    let runs = json(&get(&address, "/api/analysis"));
-    let runs = runs.as_array().unwrap();
+    let body = json(&get(&address, "/api/analysis"));
+    assert_eq!(body["skipped_runs"].as_array().unwrap().len(), 0);
+    let runs = body["runs"].as_array().unwrap();
     assert_eq!(runs.len(), 1);
     assert_eq!(runs[0]["analysis"]["generations"], 2);
     assert_eq!(runs[0]["series"]["generation"].as_array().unwrap().len(), 2);

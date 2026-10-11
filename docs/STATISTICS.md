@@ -51,7 +51,7 @@ How to read these statistics. Every number comes from simulated play, so it is a
 - [Winner's curse: re-evaluation minus held-out](#analysis_curse_reeval_minus_heldout) (`analysis_curse_reeval_minus_heldout`)
 - [Training fitness minus re-evaluation](#analysis_curse_train_minus_reeval) (`analysis_curse_train_minus_reeval`)
 - [Per opponent: first and last third](#analysis_opponent_means) (`analysis_opponent_means`)
-- [Per opponent: trend and class](#analysis_opponent_trend) (`analysis_opponent_trend`)
+- [Per opponent: trends and class](#analysis_opponent_trend) (`analysis_opponent_trend`)
 - [Network growth](#analysis_growth) (`analysis_growth`)
 - [Population convergence](#analysis_population_top_bin_share) (`analysis_population_top_bin_share`)
 - [Species and compatibility threshold](#analysis_population_species) (`analysis_population_species`)
@@ -59,6 +59,7 @@ How to read these statistics. Every number comes from simulated play, so it is a
 - [Seconds per stage](#analysis_timings) (`analysis_timings`)
 - [Skipped lines](#analysis_skipped_lines) (`analysis_skipped_lines`)
 - [Verdict: still improving](#analysis_verdict_still_improving) (`analysis_verdict_still_improving`)
+- [Verdict: declining](#analysis_verdict_declining) (`analysis_verdict_declining`)
 - [Verdict: noise limited](#analysis_verdict_noise_limited) (`analysis_verdict_noise_limited`)
 - [Verdict: pool limited](#analysis_verdict_pool_limited) (`analysis_verdict_pool_limited`)
 - [Verdict: model limited](#analysis_verdict_model_limited) (`analysis_verdict_model_limited`)
@@ -413,7 +414,7 @@ How to read these statistics. Every number comes from simulated play, so it is a
 
 **Reading it.** Everything else is a statement about this many points. Under about 30 generations the intervals are wide and the verdict is a rough hint only.
 
-**Caveats.** A resumed run counts the generations of every part that is in the file. Generation indices in the other numbers (stall generation) count generations in the file from 0, which equals the generation number only for a run that started at 0.
+**Caveats.** A resumed run counts the generations of every part that is in the file (a generation that was run twice counts once). The stall and peak generations are generation numbers, not positions in this count; stall_index and peak_index are the positions.
 
 **JSON path.** `analysis.generations`
 
@@ -463,29 +464,29 @@ How to read these statistics. Every number comes from simulated play, so it is a
 
 <a id="analysis_peak_smoothed"></a>`analysis_peak_smoothed` - run analysis (cli analyse-run), unit: score, range: -1..+1, since phase 17
 
-**Meaning.** The highest value of the champion re-evaluation curve after smoothing, the level the stall generation is measured against.
+**Meaning.** The highest value of the champion re-evaluation curve after smoothing, the level the stall generation is measured against, and where it is reached.
 
-**Formula.** The per-generation series is the champion's fixed-set re-evaluation score (the mean role score of the best genome of each generation against the fixed opponent pool on the same fixed matches). It is smoothed with a trailing mean over the last 10 generations (shorter at the start); the peak is the maximum of the smoothed series.
+**Formula.** The per-generation series is the champion's fixed-set re-evaluation score (the mean role score of the best genome of each generation against the fixed opponent pool on the same fixed matches). It is smoothed with a trailing mean over the last 10 generations (shorter at the start); peak_smoothed is the maximum of the smoothed series, peak_index the position of its first maximum and peak_generation the generation number there. final_smoothed is the smoothed value at the last generation, last_generation the number of the last generation.
 
-**Reading it.** Higher is better. The smoothed peak is lower than the best single generation because single maxima are partly luck.
+**Reading it.** Higher is better. The smoothed peak is lower than the best single generation because single maxima are partly luck. A peak in the last 5 percent of the run means the curve was still rising at the end (verdict still_improving); a final_smoothed more than one single-evaluation error below the peak means the run ended worse than it was (verdict declining).
 
 **Caveats.** The window of 10 generations is fixed. A short run is smoothed over a large part of itself.
 
-**JSON path.** `analysis.peak_smoothed`
+**JSON path.** `analysis.peak_smoothed; analysis.peak_index; analysis.peak_generation; analysis.final_smoothed; analysis.last_generation`
 
 ## Stall generation
 
-<a id="analysis_stall_generation"></a>`analysis_stall_generation` - run analysis (cli analyse-run), unit: generation index, range: 0..generations-1, since phase 17
+<a id="analysis_stall_generation"></a>`analysis_stall_generation` - run analysis (cli analyse-run), unit: generation number, range: first..last generation number, since phase 17
 
 **Meaning.** The point from which the champion stopped getting better in a way the measurement can see: the first generation from which the smoothed re-evaluation score stays within one standard error of its peak.
 
-**Formula.** Smooth the champion re-evaluation series with a trailing mean over 10 generations. The stall generation is the first index i such that every smoothed value from i to the end is at least peak_smoothed - single_se, where single_se is analysis_noise_single_se (the mean standard error of one re-evaluation). If the last value itself is outside that band the index is the last generation. The rule is the one of docs/baselines/phase-13/analyse.py.
+**Formula.** Smooth the champion re-evaluation series with a trailing mean over 10 generations. stall_index is the first position i such that every smoothed value from i to the end is at least peak_smoothed - single_se, where single_se is analysis_noise_single_se (the mean standard error of one re-evaluation); stall_generation is the generation number at that position (generation numbers need not start at 0 or be gap free). If the last smoothed value itself is below that band no such position exists: stall_index is then the last position and stall_fallback is true (the fallback of docs/baselines/phase-13/analyse.py, whose index equals stall_index).
 
-**Reading it.** A stall generation near the last one (95 percent of the run or later) means the run was still improving when it ended; one in the first 60 percent means a long tail added nothing. See the verdicts still_improving and stop_early.
+**Reading it.** The generation after which the smoothed curve never leaves one noise unit of its peak. A stall in the first 60 percent of the run (by position) without a later best generation or a rising end means a long tail added nothing (verdict stop_early). stall_fallback true means the run ended below its peak, not that it was still improving: see the verdict declining.
 
-**Caveats.** A band of one single-evaluation standard error is generous: the smoothed curve has less noise than one evaluation, so a real but slow improvement can hide inside the band and the stall is reported too early. It is an index into the generations of the file (0 is the first one).
+**Caveats.** A band of one single-evaluation standard error is generous: the smoothed curve has less noise than one evaluation, so a real but slow improvement can hide inside the band and the stall is reported too early. A stall at the last generation says nothing about progress on its own (a falling curve gets it too): still_improving is decided by the position of the smoothed peak and the last-third trend, not by the stall.
 
-**JSON path.** `analysis.stall_generation`
+**JSON path.** `analysis.stall_generation; analysis.stall_index; analysis.stall_fallback`
 
 ## Noise: one evaluation
 
@@ -509,7 +510,7 @@ How to read these statistics. Every number comes from simulated play, so it is a
 
 **Formula.** Sample standard deviation (n - 1 divisor) of the differences re-evaluation mean(g+1) - re-evaluation mean(g) over consecutive generations; null below two differences (three generations).
 
-**Reading it.** If it is about twice the single-evaluation standard error or more, the curve moves by more than the measurement noise explains, which is the sign of selection noise (a different champion each generation) rather than steady progress. The noise_limited verdict uses this ratio.
+**Reading it.** If it is more than twice the single-evaluation standard error, the curve moves by more than the measurement noise explains, which is the sign of selection noise (a different champion each generation) rather than steady progress. The noise_limited verdict uses this comparison (strictly greater, and only with a single-evaluation standard error above 0).
 
 **Caveats.** Differences of a rising curve include the rise, so a fast steady climb also raises it; read it together with the trend.
 
@@ -521,11 +522,11 @@ How to read these statistics. Every number comes from simulated play, so it is a
 
 **Meaning.** How fast the champion's re-evaluation score changed on average over the whole run, with a 95 percent interval.
 
-**Formula.** Ordinary least-squares slope of the champion's fixed-set re-evaluation score (the mean role score of the best genome of each generation against the fixed opponent pool on the same fixed matches) on the generation number, times 100. The 95 percent interval is slope +- t * standard error of the slope, with the t quantile for n - 2 degrees of freedom when there are fewer than 30 generations and 1.96 from 30 on. Null below three generations.
+**Formula.** Ordinary least-squares slope of the champion's fixed-set re-evaluation score (the mean role score of the best genome of each generation against the fixed opponent pool on the same fixed matches) on the generation number, times 100. The 95 percent interval is slope +- t * standard error of the slope, with the t quantile for n - 2 degrees of freedom (table up to 30, then interpolated linearly in 1/df between 30, 40, 60, 120 and the normal 1.96 at infinity), and the standard error is corrected for lag-1 autocorrelation: with r the lag-1 autocorrelation of the residuals of the fit, when r > 0 it is multiplied by sqrt((1 + r) / (1 - r)), at most 5. Null below three generations.
 
 **Reading it.** Positive is improving. If the interval contains 0 the run shows no trend it can tell from luck. Early progress usually makes the whole-run trend positive even when the end is flat, so look at the last third as well.
 
-**Caveats.** The generations are not independent (the champion of one generation is related to the next), so the true interval is wider than the one shown. A straight line is a rough description of a curve that rises fast and then flattens.
+**Caveats.** Generations are not independent (the champion of one generation is related to the next). The interval is corrected for lag-1 autocorrelation of the residuals (the correction of an AR(1) process, estimated from the data; approximate, and noisy for few points), which widens it but may still be too narrow for strongly structured curves. A straight line is a rough description of a curve that rises fast and then flattens.
 
 **JSON path.** `analysis.trend.overall.{value,low,high}`
 
@@ -535,11 +536,11 @@ How to read these statistics. Every number comes from simulated play, so it is a
 
 **Meaning.** The same trend, fitted only to the last third of the run: is the champion still getting better at the end?
 
-**Formula.** As analysis_trend_overall, over the last third of the generations (the last max(1, n div 3) of them). A trend counts as rising when the whole interval is above 0, falling when it is below 0 and flat when it contains 0. Null with fewer than three generations in the third, so runs shorter than nine generations have none.
+**Formula.** As analysis_trend_overall (including the interval corrected for lag-1 autocorrelation), over the last third of the generations (the last max(1, n div 3) of them). A trend counts as rising when the whole interval is above 0, falling when it is below 0 and flat when it contains 0. Null with fewer than three generations in the third, so runs shorter than nine generations have none.
 
-**Reading it.** The key number of the verdicts: flat means the run has reached its plateau, rising means it should be continued. A flat interval that is very wide says only that the data cannot tell.
+**Reading it.** The key number of the verdicts: flat means the run has reached its plateau, rising means it should be continued, falling means it got worse (verdict declining). A flat interval that is very wide says only that the data cannot tell.
 
-**Caveats.** Fewer points than the whole run, so a wide interval; with the autocorrelation of consecutive generations the real interval is wider still. Flat is not the same as proven zero.
+**Caveats.** Fewer points than the whole run, so a wide interval; the interval is corrected for autocorrelation, approximately. Flat is not the same as proven zero.
 
 **JSON path.** `analysis.trend.last_third.{value,low,high}`
 
@@ -549,13 +550,13 @@ How to read these statistics. Every number comes from simulated play, so it is a
 
 **Meaning.** How much better the best champion looked on the matches it was selected on than on fresh matches. A positive gap is the selection effect: picking the maximum of many noisy numbers picks some luck with it.
 
-**Formula.** best_reeval.mean - best_heldout.mean from the run_end event (value), and the same divided by the held-out standard error (in_heldout_se; null when that error is 0). Null without run_end or without a held-out score.
+**Formula.** best_reeval.mean - best_heldout.mean from the run_end event (value); in_heldout_se is the same divided by the held-out standard error, in_combined_se divided by sqrt(se_reeval^2 + se_heldout^2), the standard error of the difference of the two measurements (each null when that error is 0). Null without run_end or without a held-out score.
 
-**Reading it.** Around 0 means the best generation is as good as it looked. A gap of one held-out standard error or more means a large part of the best generation's lead is luck, so it is not evidence of progress. The noise_limited verdict uses 1 standard error.
+**Reading it.** Around 0 means the best generation is as good as it looked. A gap of two combined standard errors or more means a large part of the best generation's lead is luck, so it is not evidence of progress. The noise_limited verdict uses in_combined_se >= 2 (the held-out standard error alone is not used: with a maximum selected from many generations a gap of one is almost always there).
 
 **Caveats.** A selection effect, not a defect of the model: it exists whenever a maximum is selected from a noisy series, and it is expected to be positive on average. A single run's gap is itself noisy; look at the gaps of several seeds.
 
-**JSON path.** `analysis.curse.reeval_minus_heldout.{value,in_heldout_se}`
+**JSON path.** `analysis.curse.reeval_minus_heldout.{value,in_heldout_se,in_combined_se}`
 
 ## Training fitness minus re-evaluation
 
@@ -575,9 +576,9 @@ How to read these statistics. Every number comes from simulated play, so it is a
 
 <a id="analysis_opponent_means"></a>`analysis_opponent_means` - run analysis (cli analyse-run), unit: score, range: -1..+1, since phase 17
 
-**Meaning.** The champion's score against one fixed opponent alone, averaged over the first and over the last third of the generations that report it.
+**Meaning.** The champion's score against one fixed opponent alone, averaged over the first and over the last third of the run: the same windows as the champion's own last-third trend.
 
-**Formula.** For each opponent name, the mean of champion.opponents[name].score.mean over the first third and over the last third of the generations that carry that opponent (each third at least one generation).
+**Formula.** For each opponent name, the mean of champion.opponents[name].score.mean over the generations of the first third and of the last third of the run (the last max(1, n div 3) generations, like analysis_trend_last_third) that carry that opponent. Null when no generation of the window carries it.
 
 **Reading it.** A last-third mean far above the first third means the champion learned to beat that opponent. The difference between opponents shows where the remaining headroom is (a score near +1 leaves little).
 
@@ -585,19 +586,19 @@ How to read these statistics. Every number comes from simulated play, so it is a
 
 **JSON path.** `analysis.opponents.[].{name,first_third_mean,last_third_mean}`
 
-## Per opponent: trend and class
+## Per opponent: trends and class
 
 <a id="analysis_opponent_trend"></a>`analysis_opponent_trend` - run analysis (cli analyse-run), unit: score per 100 generations, range: -unbounded..+unbounded, since phase 17
 
 **Meaning.** How the champion's score against one opponent changed over the run, and whether that change is rising, flat or falling.
 
-**Formula.** The slope with its 95 percent interval, computed as analysis_trend_overall but over the generations that report this opponent (value, low, high; null below three points). class is rising if the interval is above 0, falling if it is below 0, flat if it contains 0; null if there is no slope.
+**Formula.** last_third_slope: the slope with its 95 percent interval (value, low, high), computed as analysis_trend_last_third (interval corrected for lag-1 autocorrelation) over the generations of the last third of the run that report this opponent; null below three points. overall_slope: the same over every generation that reports it. class is taken from last_third_slope: rising if its interval is above 0, falling if below 0, flat if it contains 0; null if there is no slope.
 
-**Reading it.** Flat against every opponent points to noise or missing information, rising against some and flat against others means the pool teaches against the rising ones and no longer against the flat ones (verdict pool_limited).
+**Reading it.** The class describes the same window as the champion's last-third trend, so the verdict pool_limited (rising against some opponents and flat against others while the champion is flat) says what the last third measured. overall_slope is the whole-run slope for comparison: an opponent that rose early and is flat now is flat here.
 
 **Caveats.** Flat means not distinguishable from 0, not that the champion cannot improve. A score already near +1 cannot rise: such an opponent is flat because it is beaten, which says it has nothing left to teach.
 
-**JSON path.** `analysis.opponents.[].slope.{value,low,high}; analysis.opponents.[].class`
+**JSON path.** `analysis.opponents.[].last_third_slope.{value,low,high}; analysis.opponents.[].overall_slope.{value,low,high}; analysis.opponents.[].class`
 
 ## Network growth
 
@@ -605,13 +606,13 @@ How to read these statistics. Every number comes from simulated play, so it is a
 
 **Meaning.** How large the champion's network was in the first and the last generation, and whether it kept growing without getting better.
 
-**Formula.** first/last_hidden_nodes and first/last_connections: the hidden nodes and enabled connections of the champion in the first and last generation. without_gain is true if the hidden node count at the last generation is higher than at the start of the last third and the last-third trend interval contains 0.
+**Formula.** first/last_hidden_nodes and first/last_connections: the hidden nodes and enabled connections of the champion in the first and last generation. third_start_nodes and third_end_nodes: the mean hidden-node count of the first and of the last third_window generations of the last third (third_window = the third's length div 2, between 1 and 3). without_gain is true if third_end_nodes > third_start_nodes and the last-third trend interval contains 0.
 
 **Reading it.** Growth together with a rising score is the normal case. without_gain means complexity is added that does not pay; see the verdict growth_without_gain.
 
-**Caveats.** Counts the champion of each generation, not the whole population.
+**Caveats.** Counts the champion of each generation, not the whole population. Means over up to three generations make a node gained or lost in a single generation count less; a short run (third under six generations) uses fewer generations per mean.
 
-**JSON path.** `analysis.growth.{first_hidden_nodes,last_hidden_nodes,first_connections,last_connections,without_gain}`
+**JSON path.** `analysis.growth.{first_hidden_nodes,last_hidden_nodes,first_connections,last_connections,third_start_nodes,third_end_nodes,third_window,without_gain}`
 
 ## Population convergence
 
@@ -689,11 +690,25 @@ How to read these statistics. Every number comes from simulated play, so it is a
 
 **Meaning.** The run was still getting better when it ended.
 
-**Formula.** Fires when the stall generation is at least 0.95 times the last generation index (and the run has more than one generation), or when the last-third trend interval lies entirely above 0. The rules are independent, several can fire; they are listed in the order of importance. Each message quotes the numbers that made the rule fire.
+**Formula.** Fires when the peak of the smoothed curve is in the last 5 percent of the run (peak_index >= 0.95 * the last index, more than one generation) or the last-third trend interval lies entirely above 0, and in both cases only if the run did not end below its peak (analysis_verdict_declining does not apply: the last-third interval is not strictly below 0 and stall_fallback is false). While it fires, noise_limited, pool_limited, model_limited, growth_without_gain and stop_early do not. The rules are independent except as described here; several can fire and they are listed in the order of importance. Each message quotes the numbers that made the rule fire.
 
-**Reading it.** Train longer (--resume or --from): the plateau has not been reached. When this fires, stop_early cannot.
+**Reading it.** Train longer (--resume or --from): the plateau has not been reached. A run that stalls at its last generation only because its curve fell is not called still improving.
 
 **Caveats.** A rising last third over a short run can be a recovery from a bad stretch; the intervals of short runs are wide, a fired rule is a hint. A verdict is a heuristic with fixed thresholds, not a statistical test.
+
+**JSON path.** `analysis.verdict.[].{code,message}`
+
+## Verdict: declining
+
+<a id="analysis_verdict_declining"></a>`analysis_verdict_declining` - run analysis (cli analyse-run), unit: verdict, range: present or absent, since phase 17
+
+**Meaning.** The run ended worse than its smoothed peak: the final champion is not the best one.
+
+**Formula.** Fires when the last-third trend interval lies entirely below 0, or the final smoothed value is below peak_smoothed - single_se (stall_fallback is true). The message names the peak generation, the peak and the final smoothed value. The rules are independent except as described here; several can fire and they are listed in the order of importance. Each message quotes the numbers that made the rule fire.
+
+**Reading it.** Use the genome of the best generation (the trainer keeps it as best.json) or stop earlier; training longer from this population is unlikely to help. The best generation of a falling run is usually well before its end.
+
+**Caveats.** The final smoothed value covers the last 10 generations, so a recent dip of a few generations does not trigger it. A decline of one noise unit is within what a single evaluation can show: the band is the generous one of the stall rule. A verdict is a heuristic with fixed thresholds, not a statistical test.
 
 **JSON path.** `analysis.verdict.[].{code,message}`
 
@@ -701,13 +716,13 @@ How to read these statistics. Every number comes from simulated play, so it is a
 
 <a id="analysis_verdict_noise_limited"></a>`analysis_verdict_noise_limited` - run analysis (cli analyse-run), unit: verdict, range: present or absent, since phase 17
 
-**Meaning.** The progress that remains is smaller than the measurement noise.
+**Meaning.** The last-third trend cannot be told from zero given the noise: what progress remains is not distinguishable from noise.
 
-**Formula.** Fires when the last-third trend interval contains 0 and either the change standard deviation is at least 2 times the single-evaluation standard error (analysis_noise_change_sd >= 2 * analysis_noise_single_se) or the winner's-curse gap is at least 1 held-out standard error. The rules are independent, several can fire; they are listed in the order of importance. Each message quotes the numbers that made the rule fire.
+**Formula.** Fires when still_improving did not fire, the last-third trend interval contains 0, single_se is above 0 and either the change standard deviation is more than 2 times the single-evaluation standard error (analysis_noise_change_sd > 2 * analysis_noise_single_se) or the winner's-curse gap is at least 2 combined standard errors (analysis_curse_reeval_minus_heldout.in_combined_se >= 2). The rules are independent except as described here; several can fire and they are listed in the order of importance. Each message quotes the numbers that made the rule fire.
 
 **Reading it.** More --matches-per-genome, the duplicate-deal skill fitness, several seeds and a winner chosen on fresh matches (the Phase 13 recommendation). Without noise_limited a flat curve is attributed to the model (model_limited) or to the pool.
 
-**Caveats.** Both thresholds are fixed heuristics, not a test; a run can be both noisy and limited in other ways. A verdict is a heuristic with fixed thresholds, not a statistical test.
+**Caveats.** Both thresholds are fixed heuristics, not a test; a run can be both noisy and limited in other ways. The message says the trend is not distinguishable from zero, not that there is none. A verdict is a heuristic with fixed thresholds, not a statistical test.
 
 **JSON path.** `analysis.verdict.[].{code,message}`
 
@@ -717,7 +732,7 @@ How to read these statistics. Every number comes from simulated play, so it is a
 
 **Meaning.** The opponents no longer teach against some of the pool.
 
-**Formula.** Fires when the last-third trend interval contains 0 and at least one opponent's trend is rising and at least one other opponent's trend is flat (analysis_opponent_trend classes). The rules are independent, several can fire; they are listed in the order of importance. Each message quotes the numbers that made the rule fire.
+**Formula.** Fires when still_improving did not fire, the last-third trend interval contains 0 and at least one opponent's last-third trend is rising and at least one other opponent's is flat (analysis_opponent_trend classes, which are computed on the last third). The rules are independent except as described here; several can fire and they are listed in the order of importance. Each message quotes the numbers that made the rule fire.
 
 **Reading it.** Harder or additional opponents. Flat opponents that are already beaten by a wide margin have nothing left to teach, which is the case this rule is for.
 
@@ -731,7 +746,7 @@ How to read these statistics. Every number comes from simulated play, so it is a
 
 **Meaning.** Flat everywhere, above the noise: the model's inputs or the fitness cap what it can learn.
 
-**Formula.** Fires when the last-third trend interval contains 0, no opponent's trend is rising and noise_limited did not fire. The rules are independent, several can fire; they are listed in the order of importance. Each message quotes the numbers that made the rule fire.
+**Formula.** Fires when still_improving did not fire, the last-third trend interval contains 0, no opponent's last-third trend is rising and noise_limited did not fire. The rules are independent except as described here; several can fire and they are listed in the order of importance. Each message quotes the numbers that made the rule fire.
 
 **Reading it.** New inputs (--features hidden) or a different fitness. The Phase 13 measurement found that hidden-information inputs beat the base set.
 
@@ -745,11 +760,11 @@ How to read these statistics. Every number comes from simulated play, so it is a
 
 **Meaning.** The network keeps growing while the score no longer rises.
 
-**Formula.** Fires when analysis_growth.without_gain is true: hidden nodes at the last generation exceed those at the start of the last third and the last-third trend interval contains 0. The rules are independent, several can fire; they are listed in the order of importance. Each message quotes the numbers that made the rule fire.
+**Formula.** Fires when still_improving did not fire and analysis_growth.without_gain is true: the mean hidden-node count over the last generations of the last third is above that over its first generations (third_end_nodes > third_start_nodes) and the last-third trend interval contains 0. The rules are independent except as described here; several can fire and they are listed in the order of importance. Each message quotes the numbers that made the rule fire.
 
 **Reading it.** A stagnation limit or complexity penalty so the structure stops growing, or a shorter run.
 
-**Caveats.** Compares two champions' node counts only; a champion that gained a node in the last generation is enough. A verdict is a heuristic with fixed thresholds, not a statistical test.
+**Caveats.** Compares two means of up to three champions' node counts; a steady one-node gain is enough. A verdict is a heuristic with fixed thresholds, not a statistical test.
 
 **JSON path.** `analysis.verdict.[].{code,message}`
 
@@ -773,11 +788,11 @@ How to read these statistics. Every number comes from simulated play, so it is a
 
 **Meaning.** A long tail of generations added nothing.
 
-**Formula.** Fires when still_improving did not fire, the run has more than one generation and the stall generation is at most 0.6 times the last generation index. The rules are independent, several can fire; they are listed in the order of importance. Each message quotes the numbers that made the rule fire.
+**Formula.** Fires when still_improving did not fire, the run has more than one generation, the stall position is at most 0.6 times the last position (stall_index <= 0.6 * (generations - 1)), the last-third trend point estimate is not above 0 and the best generation (from run_end) is not later than the stall generation. The rules are independent except as described here; several can fire and they are listed in the order of importance. Each message quotes the numbers that made the rule fire.
 
-**Reading it.** Stop earlier next time; the generations after the stall generation were wasted. The message quotes how many.
+**Reading it.** Stop earlier next time; after the stall generation the smoothed score stayed within one noise unit of its peak. The message names the stall generation and how many generations followed.
 
-**Caveats.** The stall rule uses a generous band (one single-evaluation standard error), see analysis_stall_generation; it can name a stall that is too early on a slow climb. A verdict is a heuristic with fixed thresholds, not a statistical test.
+**Caveats.** The stall rule uses a generous band (one single-evaluation standard error), see analysis_stall_generation; it can name a stall that is too early on a slow climb, which is why a later best generation or a rising point estimate suppresses it. A verdict is a heuristic with fixed thresholds, not a statistical test.
 
 **JSON path.** `analysis.verdict.[].{code,message}`
 
@@ -787,7 +802,7 @@ How to read these statistics. Every number comes from simulated play, so it is a
 
 **Meaning.** No rule fired.
 
-**Formula.** Appears alone when none of the other seven rules fires. The rules are independent, several can fire; they are listed in the order of importance. Each message quotes the numbers that made the rule fire.
+**Formula.** Appears alone when none of the other eight rules fires. The rules are independent except as described here; several can fire and they are listed in the order of importance. Each message quotes the numbers that made the rule fire.
 
 **Reading it.** Read the numbers and charts yourself; the absence of a finding is not a finding of health.
 

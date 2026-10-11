@@ -14,8 +14,8 @@ pub mod skill_term;
 pub mod trainer;
 
 pub use analysis::{
-    analyse, load_runs, series, slope_with_interval, AnalysisError, RunAnalysis, RunData,
-    RunSeries, Slope,
+    analyse, load_runs, load_runs_within, qualify_labels, series, slope_with_interval,
+    AnalysisError, Loaded, RunAnalysis, RunData, RunSeries, Slope,
 };
 pub use config::{DeckChoice, DuplicateChoice, TrainConfig};
 pub use decisions::{record_decisions, DecisionFile, DecisionRecord};

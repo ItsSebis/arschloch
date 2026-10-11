@@ -4,6 +4,7 @@
 //! fixed-set re-evaluation score, the one `docs/baselines/phase-13/
 //! analyse.py` uses. See docs/superpowers/specs/2026-10-11-phase-17-run-analysis-design.md.
 
+mod lean;
 mod load;
 mod stats;
 #[cfg(test)]
@@ -12,13 +13,16 @@ mod verdict;
 
 use serde::Serialize;
 
-use super::events::{GenerationEvent, ScoreStat, StageTimings};
+use super::events::StageTimings;
 
-pub use load::{load_runs, parse_run, AnalysisError, RunData};
-pub use stats::{slope_with_interval, Slope};
+pub use lean::{LeanEnd, LeanGeneration, LeanScore, RunStartInfo};
+pub use load::{
+    load_runs, load_runs_within, parse_run, qualify_labels, AnalysisError, Loaded, RunData,
+};
+pub use stats::{slope_with_interval, t_quantile, Slope};
 pub use verdict::{verdict_for, Verdict, VerdictCode};
 
-use stats::{mean, smooth, stall_index, std_dev};
+use stats::{argmax, mean, smooth, stall_index, std_dev};
 
 /// Trailing-mean window of the smoothed champion curve.
 const SMOOTHING_WINDOW: usize = 10;
@@ -32,8 +36,8 @@ pub struct ScoreSummary {
     pub std_error: f64,
 }
 
-impl From<&ScoreStat> for ScoreSummary {
-    fn from(stat: &ScoreStat) -> Self {
+impl From<&LeanScore> for ScoreSummary {
+    fn from(stat: &LeanScore) -> Self {
         Self {
             mean: stat.mean,
             std_error: stat.std_error,
@@ -46,7 +50,8 @@ pub struct Noise {
     /// Mean standard error of one champion re-evaluation.
     pub single_se: f64,
     /// Standard deviation of the generation-to-generation change of the
-    /// re-evaluation mean (`None` below two generations).
+    /// re-evaluation mean (`None` below three generations: it needs two
+    /// changes).
     pub change_sd: Option<f64>,
 }
 
@@ -65,6 +70,9 @@ pub struct HeldoutGap {
     pub value: f64,
     /// In held-out standard errors (`None` when that error is zero).
     pub in_heldout_se: Option<f64>,
+    /// In `sqrt(se_reeval^2 + se_heldout^2)` units, the error of the
+    /// difference of the two measurements (`None` when that is zero).
+    pub in_combined_se: Option<f64>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
@@ -87,22 +95,31 @@ pub enum TrendClass {
 pub struct OpponentAnalysis {
     pub name: String,
     /// Mean of the champion's score against this opponent over the first
-    /// and the last third of the generations that report it.
-    pub first_third_mean: f64,
-    pub last_third_mean: f64,
-    /// Per 100 generations.
-    pub slope: Option<Slope>,
+    /// and the last third of the run's generations (the same windows as the
+    /// champion's trend); `None` when no generation of the window reports it.
+    pub first_third_mean: Option<f64>,
+    pub last_third_mean: Option<f64>,
+    /// Slope per 100 generations over the whole run.
+    pub overall_slope: Option<Slope>,
+    /// Slope per 100 generations over the last third: the window of the
+    /// champion's last-third trend, and the one `class` is taken from.
+    pub last_third_slope: Option<Slope>,
     pub class: Option<TrendClass>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 pub struct Growth {
     pub first_hidden_nodes: usize,
     pub last_hidden_nodes: usize,
     pub first_connections: usize,
     pub last_connections: usize,
-    /// Nodes grew in the last third while the last-third trend interval
-    /// contains zero.
+    /// Mean hidden-node count of the first `third_window` generations of
+    /// the last third, and of its last `third_window` generations.
+    pub third_start_nodes: f64,
+    pub third_end_nodes: f64,
+    pub third_window: usize,
+    /// The node count grew within the last third (`third_end_nodes >
+    /// third_start_nodes`) while the last-third trend interval contains zero.
     pub without_gain: bool,
 }
 
@@ -135,11 +152,26 @@ pub struct RunAnalysis {
     pub best_generation: Option<u32>,
     pub final_reeval: Option<ScoreSummary>,
     pub final_heldout: Option<ScoreSummary>,
+    /// Number of the last generation (`generations` counts events, and a
+    /// run need not start at 0 or be gap free).
+    pub last_generation: u32,
     /// Peak of the smoothed re-evaluation curve.
     pub peak_smoothed: f64,
-    /// Index (into the generations) from which the smoothed curve stays
-    /// within one mean standard error of its peak.
-    pub stall_generation: usize,
+    /// Where the peak is: an index into the generations, and the generation
+    /// number there.
+    pub peak_index: usize,
+    pub peak_generation: u32,
+    /// The smoothed value at the last generation.
+    pub final_smoothed: f64,
+    /// Generation NUMBER from which the smoothed curve stays within one
+    /// mean standard error of its peak (`stall_index` is the position in
+    /// the list of generations).
+    pub stall_generation: u32,
+    pub stall_index: usize,
+    /// The final smoothed value is itself below `peak - single_se`: no
+    /// stall exists and `stall_index` is the last index (the fallback of
+    /// `analyse.py`); the run ended below its peak.
+    pub stall_fallback: bool,
     pub noise: Noise,
     pub trend: Trend,
     pub curse: Curse,
@@ -168,7 +200,8 @@ pub struct RunSeries {
     pub reeval_mean: Vec<f64>,
     pub reeval_se: Vec<f64>,
     pub smoothed: Vec<f64>,
-    pub train_fitness: Vec<f64>,
+    /// `None` where the event does not carry the training fitness.
+    pub train_fitness: Vec<Option<f64>>,
     /// Held-out mean of the generations that set a new best.
     pub heldout_mean: Vec<Option<f64>>,
     pub opponents: Vec<OpponentSeries>,
@@ -187,7 +220,7 @@ fn opponent_names(run: &RunData) -> Vec<String> {
     names
 }
 
-fn opponent_score(g: &GenerationEvent, name: &str) -> Option<f64> {
+fn opponent_score(g: &LeanGeneration, name: &str) -> Option<f64> {
     g.opponents
         .iter()
         .find(|o| o.name == name)
@@ -235,29 +268,46 @@ fn class_of(slope: &Slope) -> TrendClass {
     }
 }
 
-fn opponent_analysis(run: &RunData, name: String) -> OpponentAnalysis {
-    // Only generations that report the opponent take part, so thirds are
-    // taken over those.
-    let points: Vec<(f64, f64)> = run
-        .generations
+/// The `(generation, score)` points of an opponent within a window of
+/// generation indices.
+fn opponent_points(
+    run: &RunData,
+    name: &str,
+    window: std::ops::Range<usize>,
+) -> (Vec<f64>, Vec<f64>) {
+    run.generations[window]
         .iter()
-        .filter_map(|g| opponent_score(g, &name).map(|m| (f64::from(g.generation), m)))
-        .collect();
-    let (first, last) = thirds(points.len());
-    let ys: Vec<f64> = points.iter().map(|p| p.1).collect();
-    let xs: Vec<f64> = points.iter().map(|p| p.0).collect();
-    let slope = slope_with_interval(&xs, &ys).map(|s| s.scaled(PER));
+        .filter_map(|g| opponent_score(g, name).map(|m| (f64::from(g.generation), m)))
+        .unzip()
+}
+
+fn opponent_analysis(
+    run: &RunData,
+    name: String,
+    first: &std::ops::Range<usize>,
+    last: &std::ops::Range<usize>,
+) -> OpponentAnalysis {
+    let slope = |window: std::ops::Range<usize>| {
+        let (xs, ys) = opponent_points(run, &name, window);
+        slope_with_interval(&xs, &ys).map(|s| s.scaled(PER))
+    };
+    let window_mean = |window: &std::ops::Range<usize>| {
+        let (_, ys) = opponent_points(run, &name, window.clone());
+        (!ys.is_empty()).then(|| mean(&ys))
+    };
+    let last_third_slope = slope(last.clone());
     OpponentAnalysis {
-        first_third_mean: mean(&ys[first]),
-        last_third_mean: mean(&ys[last]),
-        class: slope.as_ref().map(class_of),
-        slope,
+        first_third_mean: window_mean(first),
+        last_third_mean: window_mean(last),
+        overall_slope: slope(0..run.generations.len()),
+        class: last_third_slope.as_ref().map(class_of),
+        last_third_slope,
         name,
     }
 }
 
 #[allow(clippy::cast_precision_loss)]
-fn top_bin_share(g: &GenerationEvent) -> Option<f64> {
+fn top_bin_share(g: &LeanGeneration) -> Option<f64> {
     let total: u32 = g.fitness.histogram.iter().sum();
     let top = g.fitness.histogram.last()?;
     (total > 0).then(|| f64::from(*top) / f64::from(total))
@@ -277,11 +327,9 @@ fn racing_totals(run: &RunData) -> Option<RacingTotals> {
         .iter()
         .map(|r| (r.raced_final.max(r.raced) * r.extra_matches) as u64)
         .sum();
-    let extra_share = run.start.as_ref().map(|s| {
-        let base = (run.generations.len()
-            * s.config.neat.population_size
-            * s.config.matches_per_genome) as f64;
-        extra_matches as f64 / (extra_matches as f64 + base)
+    let extra_share = run.start.as_ref().and_then(|s| {
+        let base = (run.generations.len() * s.population_size()? * s.matches_per_genome()?) as f64;
+        Some(extra_matches as f64 / (extra_matches as f64 + base))
     });
     Some(RacingTotals {
         generations: racing.len(),
@@ -314,10 +362,23 @@ fn heldout_gap(run: &RunData) -> Option<HeldoutGap> {
     let reeval = end.best_reeval.as_ref()?;
     let heldout = end.best_heldout.as_ref()?;
     let value = reeval.mean - heldout.mean;
+    let combined = reeval.std_error.hypot(heldout.std_error);
     Some(HeldoutGap {
         value,
         in_heldout_se: (heldout.std_error > 0.0).then(|| value / heldout.std_error),
+        in_combined_se: (combined > 0.0).then(|| value / combined),
     })
+}
+
+/// Mean hidden-node count over `gens[range]`.
+#[allow(clippy::cast_precision_loss)]
+fn mean_nodes(gens: &[LeanGeneration]) -> f64 {
+    mean(
+        &gens
+            .iter()
+            .map(|g| g.champion.hidden_nodes as f64)
+            .collect::<Vec<_>>(),
+    )
 }
 
 /// Analyses a run.
@@ -330,7 +391,7 @@ pub fn analyse(run: &RunData) -> RunAnalysis {
     let gens = &run.generations;
     assert!(!gens.is_empty(), "a run to analyse has generation events");
     let n = gens.len();
-    let (_, last) = thirds(n);
+    let (first, last) = thirds(n);
 
     let xs: Vec<f64> = gens.iter().map(|g| f64::from(g.generation)).collect();
     let means: Vec<f64> = gens.iter().map(|g| g.champion.reeval.mean).collect();
@@ -338,6 +399,8 @@ pub fn analyse(run: &RunData) -> RunAnalysis {
     let smoothed = smooth(&means, SMOOTHING_WINDOW);
     let single_se = mean(&ses);
     let changes: Vec<f64> = means.windows(2).map(|w| w[1] - w[0]).collect();
+    let peak_index = argmax(&smoothed).unwrap_or(0);
+    let stall = stall_index(&smoothed, single_se).expect("a non-empty curve has a stall");
 
     let trend = Trend {
         overall: slope_with_interval(&xs, &means).map(|s| s.scaled(PER)),
@@ -346,17 +409,22 @@ pub fn analyse(run: &RunData) -> RunAnalysis {
     };
     let train_gap: Vec<f64> = gens
         .iter()
-        .map(|g| g.champion.train_fitness - g.champion.reeval.mean)
+        .filter_map(|g| g.champion.train_fitness.map(|t| t - g.champion.reeval.mean))
         .collect();
 
     let (first_gen, last_gen) = (&gens[0], &gens[n - 1]);
-    let nodes_at_last_third_start = gens[last.start].champion.hidden_nodes;
+    let window = (last.len() / 2).clamp(1, 3);
+    let third_start_nodes = mean_nodes(&gens[last.start..last.start + window]);
+    let third_end_nodes = mean_nodes(&gens[n - window..]);
     let growth = Growth {
         first_hidden_nodes: first_gen.champion.hidden_nodes,
         last_hidden_nodes: last_gen.champion.hidden_nodes,
         first_connections: first_gen.champion.enabled_connections,
         last_connections: last_gen.champion.enabled_connections,
-        without_gain: last_gen.champion.hidden_nodes > nodes_at_last_third_start
+        third_start_nodes,
+        third_end_nodes,
+        third_window: window,
+        without_gain: third_end_nodes > third_start_nodes
             && trend.last_third.is_some_and(|s| s.contains_zero()),
     };
     let shares: Vec<f64> = gens[last.clone()]
@@ -373,6 +441,7 @@ pub fn analyse(run: &RunData) -> RunAnalysis {
 
     let mut analysis = RunAnalysis {
         generations: n,
+        last_generation: last_gen.generation,
         best_generation: run.end.as_ref().and_then(|e| e.best_generation),
         final_reeval: run
             .end
@@ -384,8 +453,13 @@ pub fn analyse(run: &RunData) -> RunAnalysis {
             .as_ref()
             .and_then(|e| e.best_heldout.as_ref())
             .map(ScoreSummary::from),
-        peak_smoothed: smoothed.iter().copied().fold(f64::NEG_INFINITY, f64::max),
-        stall_generation: stall_index(&smoothed, single_se).unwrap_or(0),
+        peak_smoothed: smoothed[peak_index],
+        peak_index,
+        peak_generation: gens[peak_index].generation,
+        final_smoothed: smoothed[n - 1],
+        stall_generation: gens[stall.index].generation,
+        stall_index: stall.index,
+        stall_fallback: stall.fallback,
         noise: Noise {
             single_se,
             change_sd: (changes.len() >= 2).then(|| std_dev(&changes)),
@@ -397,7 +471,7 @@ pub fn analyse(run: &RunData) -> RunAnalysis {
         },
         opponents: opponent_names(run)
             .into_iter()
-            .map(|name| opponent_analysis(run, name))
+            .map(|name| opponent_analysis(run, name, &first, &last))
             .collect(),
         growth,
         population,

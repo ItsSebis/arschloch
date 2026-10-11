@@ -442,7 +442,8 @@ mod tests {
         assert_eq!(response.status, 200);
         assert!(response.content_type.starts_with("application/json"));
         let body = json_of(&response);
-        let runs = body.as_array().expect("an array");
+        assert_eq!(body["skipped_runs"], json!([]));
+        let runs = body["runs"].as_array().expect("an array of runs");
         assert_eq!(runs.len(), 1);
         let run = &runs[0];
         assert!(run["label"].as_str().is_some_and(|l| !l.is_empty()));
@@ -466,7 +467,8 @@ mod tests {
         let dir = crate::test_fixture::fixture_set_dir("analysis");
         let app = App::new(dir.clone());
         let all = json_of(&app.handle("GET", "/api/analysis"));
-        let labels: Vec<&str> = all
+        assert_eq!(all["skipped_runs"], json!([]));
+        let labels: Vec<&str> = all["runs"]
             .as_array()
             .unwrap()
             .iter()
@@ -474,10 +476,10 @@ mod tests {
             .collect();
         assert_eq!(labels, ["run-01", "run-02"]);
         let one = json_of(&app.handle("GET", "/api/analysis?path=run-01"));
-        assert_eq!(one.as_array().unwrap().len(), 1);
-        assert_eq!(one[0]["analysis"]["generations"], 3);
+        assert_eq!(one["runs"].as_array().unwrap().len(), 1);
+        assert_eq!(one["runs"][0]["analysis"]["generations"], 3);
         let file = json_of(&app.handle("GET", "/api/analysis?path=run-02%2Fevents.jsonl"));
-        assert_eq!(file[0]["analysis"]["generations"], 1);
+        assert_eq!(file["runs"][0]["analysis"]["generations"], 1);
         std::fs::remove_dir_all(dir).ok();
     }
 
@@ -493,6 +495,18 @@ mod tests {
         #[cfg(unix)]
         std::os::unix::fs::symlink(&outside, dir.join("escape")).unwrap();
         let app = App::new(dir.clone());
+        // A symlinked run directory that points outside is not listed in the set.
+        #[cfg(unix)]
+        {
+            let all = json_of(&app.handle("GET", "/api/analysis"));
+            let labels: Vec<&str> = all["runs"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|r| r["label"].as_str().unwrap())
+                .collect();
+            assert_eq!(labels, ["run-01", "run-02"], "escape/ is left out");
+        }
         let outside_text = outside.display().to_string();
         let mut hostile = vec![
             "..".to_string(),
@@ -566,5 +580,67 @@ mod tests {
         for dir in [empty, corrupt, start_only] {
             std::fs::remove_dir_all(dir).ok();
         }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn analysis_errors_name_no_absolute_path_and_unreadable_files_are_not_404() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = crate::test_fixture::fixture_set_dir("analysis-errors");
+        let broken = dir.join("run-02/events.jsonl");
+        std::fs::set_permissions(&broken, std::fs::Permissions::from_mode(0o000)).unwrap();
+        if std::fs::read(&broken).is_ok() {
+            std::fs::remove_dir_all(&dir).ok();
+            return; // permissions are not enforced for this user
+        }
+        let app = App::new(dir.clone());
+        // The set still loads: the unreadable run is reported, not fatal.
+        let all = json_of(&app.handle("GET", "/api/analysis"));
+        assert_eq!(all["runs"].as_array().unwrap().len(), 1);
+        let skipped = all["skipped_runs"].as_array().unwrap();
+        assert_eq!(skipped.len(), 1);
+        let text = skipped[0].as_str().unwrap();
+        assert!(text.contains("run-02"), "{text}");
+        assert!(!text.contains(&dir.display().to_string()), "{text}");
+        // Asking for that run alone is an I/O error (500), not a 404, and
+        // the body names the path relative to the root.
+        let response = app.handle("GET", "/api/analysis?path=run-02");
+        assert_eq!(response.status, 500);
+        let error = json_of(&response)["error"].as_str().unwrap().to_owned();
+        assert!(error.contains("run-02"), "{error}");
+        assert!(!error.contains(&dir.display().to_string()), "{error}");
+        // An empty served directory: 404 and no absolute path either.
+        let empty = temp_dir("empty-abs");
+        let response = App::new(empty.clone()).handle("GET", "/api/analysis");
+        assert_eq!(response.status, 404);
+        let error = json_of(&response)["error"].as_str().unwrap().to_owned();
+        assert!(!error.contains(&empty.display().to_string()), "{error}");
+        std::fs::set_permissions(&broken, std::fs::Permissions::from_mode(0o644)).unwrap();
+        std::fs::remove_dir_all(dir).ok();
+        std::fs::remove_dir_all(empty).ok();
+    }
+
+    #[test]
+    fn equal_labels_in_a_served_directory_get_their_parent_in_front() {
+        let dir = temp_dir("collide");
+        let source = crate::test_fixture::fixture_set_dir("analysis-collide");
+        let events = std::fs::read_to_string(source.join("run-01/events.jsonl")).unwrap();
+        std::fs::create_dir_all(dir.join("run")).unwrap();
+        std::fs::write(dir.join("run/events.jsonl"), &events).unwrap();
+        std::fs::write(dir.join("run.jsonl"), &events).unwrap();
+        let all = json_of(&App::new(dir.clone()).handle("GET", "/api/analysis"));
+        let labels: Vec<&str> = all["runs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| r["label"].as_str().unwrap())
+            .collect();
+        let parent = dir.file_name().unwrap().to_string_lossy().into_owned();
+        assert_eq!(
+            labels,
+            [format!("{parent}/run"), format!("{parent}/run (2)")]
+        );
+        std::fs::remove_dir_all(dir).ok();
+        std::fs::remove_dir_all(source).ok();
     }
 }

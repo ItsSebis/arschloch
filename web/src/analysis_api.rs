@@ -1,14 +1,20 @@
 //! `GET /api/analysis`: the run analysis (`sim::training::analyse`) of the
 //! runs under the dashboard's root, as JSON for the analysis page.
 //!
+//! The reply is `{"runs": [{label, analysis, series}], "skipped_runs":
+//! [text]}` (runs of a set directory that could not be read are listed, the
+//! others are analysed). Equal labels get their parent directory in front.
+//!
 //! `?path=` narrows it to a file or directory, but only inside the root:
 //! the path is resolved against the root, `..` and anything that resolves
-//! (after following symlinks) outside it is refused.
+//! (after following symlinks) outside it is refused. Run directories and
+//! event files of a set are canonicalised too and left out when they
+//! resolve outside the root, and error text never holds an absolute path.
 
 use std::path::{Component, Path, PathBuf};
 
 use serde_json::json;
-use sim::training::{analyse, load_runs, series};
+use sim::training::{analyse, load_runs_within, qualify_labels, series, AnalysisError, Loaded};
 
 use crate::routes::Response;
 
@@ -87,9 +93,13 @@ pub(crate) fn analysis(root: &Path, query: &str) -> Response {
             }
         }
     };
-    match load_runs(&target) {
-        Ok(runs) => {
-            let payload: Vec<serde_json::Value> = runs
+    match load_runs_within(&target, Some(root)) {
+        Ok(Loaded {
+            mut runs,
+            skipped_runs,
+        }) => {
+            qualify_labels(&mut runs, false);
+            let runs: Vec<serde_json::Value> = runs
                 .iter()
                 .map(|run| {
                     json!({
@@ -99,8 +109,12 @@ pub(crate) fn analysis(root: &Path, query: &str) -> Response {
                     })
                 })
                 .collect();
-            Response::json(200, &serde_json::Value::Array(payload))
+            Response::json(200, &json!({ "runs": runs, "skipped_runs": skipped_runs }))
         }
-        Err(error) => Response::error(404, &error.to_string()),
+        // Nothing to analyse there (yet): like a missing path.
+        Err(error @ AnalysisError::NoEvents(_)) => Response::error(404, &error.to_string()),
+        // A file that exists but cannot be read is a server-side problem. The
+        // loader's text names paths relative to the root only.
+        Err(error) => Response::error(500, &error.to_string()),
     }
 }

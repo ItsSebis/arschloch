@@ -121,19 +121,57 @@ fn a_set_dir_gives_one_report_per_run_and_a_comparison() {
     let result = analyse(&[&set, &single], &[]);
     assert!(result.status.success(), "{}", text(&result.stderr));
     let stdout = text(&result.stdout);
-    for expected in [
-        "== run-01 ==",
-        "== run-02 ==",
-        "== single ==",
-        "== comparison ==",
-        "curse gap",
-    ] {
+    // Several path arguments: every run shows its parent directory.
+    let base_name = base.file_name().unwrap().to_string_lossy().into_owned();
+    let labels = [
+        "set/run-01".to_owned(),
+        "set/run-02".to_owned(),
+        format!("{base_name}/single"),
+    ];
+    for label in &labels {
+        assert!(
+            stdout.contains(&format!("== {label} ==")),
+            "{label} in\n{stdout}"
+        );
+    }
+    for expected in ["== comparison ==", "curse gap", "stall gen"] {
         assert!(stdout.contains(expected), "{expected} missing in\n{stdout}");
     }
     let comparison = stdout.split("== comparison ==").nth(1).unwrap();
-    for label in ["run-01", "run-02", "single"] {
-        assert!(comparison.contains(label), "{label}");
+    for label in &labels {
+        assert!(comparison.contains(label.as_str()), "{label}");
     }
+    assert!(
+        stdout.contains("(last generation 5)"),
+        "stall generation names the last generation too:\n{stdout}"
+    );
+
+    // A single set path keeps the plain names, in the table and in --json.
+    let out_json = base.join("set.json");
+    let result = analyse(&[&set], &["--json", out_json.to_str().unwrap()]);
+    assert!(result.status.success(), "{}", text(&result.stderr));
+    let labels: Vec<String> = json(&out_json)
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|i| i["label"].as_str().unwrap().to_owned())
+        .collect();
+    assert_eq!(labels, ["run-01", "run-02"]);
+    // Equal names from different sets are told apart, in --json too.
+    let other = base.join("other");
+    small_run(&other, &["--runs", "2"]);
+    let result = analyse(&[&set, &other], &["--json", out_json.to_str().unwrap()]);
+    assert!(result.status.success(), "{}", text(&result.stderr));
+    let labels: Vec<String> = json(&out_json)
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|i| i["label"].as_str().unwrap().to_owned())
+        .collect();
+    assert_eq!(
+        labels,
+        ["set/run-01", "set/run-02", "other/run-01", "other/run-02"]
+    );
     let _ = std::fs::remove_dir_all(&base);
 }
 
@@ -153,6 +191,11 @@ fn bad_paths_fail_with_a_clear_message_and_no_panic() {
         let stderr = text(&result.stderr);
         assert!(!result.status.success(), "{}", path.display());
         assert!(stderr.contains(path.to_str().unwrap()), "{stderr}");
+        assert_eq!(
+            stderr.matches(path.to_str().unwrap()).count(),
+            1,
+            "the path is named once: {stderr}"
+        );
         assert!(!stderr.contains("panicked"), "{stderr}");
         assert_ne!(result.status.code(), Some(101), "{stderr}");
     }
@@ -195,5 +238,25 @@ fn an_old_format_file_without_optional_fields_is_analysed_and_reports_skipped_li
     assert_eq!(analysis["skipped_lines"], 1);
     assert_eq!(analysis["generations"], 6);
     assert!(analysis["timings"].is_null() && analysis["racing"].is_null());
+    let _ = std::fs::remove_dir_all(&base);
+}
+
+#[test]
+fn a_failed_json_write_says_what_was_not_written() {
+    let base = temp("jsonfail");
+    let run = base.join("run");
+    small_run(&run, &[]);
+    // The target is a directory, so it cannot be written.
+    let result = analyse(&[&run], &["--json", base.to_str().unwrap()]);
+    assert!(!result.status.success());
+    let stderr = text(&result.stderr);
+    assert!(
+        stderr.contains("JSON could not be written") && stderr.contains(base.to_str().unwrap()),
+        "{stderr}"
+    );
+    assert!(
+        text(&result.stdout).contains("== run =="),
+        "the report still came first"
+    );
     let _ = std::fs::remove_dir_all(&base);
 }

@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use anyhow::Context;
 use clap::Parser;
 use serde::Serialize;
-use sim::training::{analyse, load_runs, RunAnalysis, RunData, Slope};
+use sim::training::{analyse, load_runs, qualify_labels, RunAnalysis, RunData, Slope};
 
 /// Analyse training runs.
 #[derive(Parser, Debug)]
@@ -20,6 +20,7 @@ use sim::training::{analyse, load_runs, RunAnalysis, RunData, Slope};
 pub struct AnalyseRunArgs {
     /// An `events.jsonl` file, a run directory, or a set directory (one run
     /// per subdirectory). Several paths compare several runs.
+    /// With several paths (or equal names) runs are shown as `parent/name`.
     #[arg(required = true)]
     pub paths: Vec<PathBuf>,
 
@@ -39,9 +40,14 @@ pub fn run(raw_args: impl Iterator<Item = String>) -> anyhow::Result<()> {
         AnalyseRunArgs::parse_from(std::iter::once("cli analyse-run".to_owned()).chain(raw_args));
     let mut runs: Vec<RunData> = Vec::new();
     for path in &args.paths {
-        let loaded = load_runs(path).map_err(|e| anyhow::anyhow!("{}: {e}", path.display()))?;
-        runs.extend(loaded);
+        // The error already names the path.
+        let loaded = load_runs(path)?;
+        for skipped in &loaded.skipped_runs {
+            eprintln!("warning: run left out, could not be read: {skipped}");
+        }
+        runs.extend(loaded.runs);
     }
+    qualify_labels(&mut runs, args.paths.len() > 1);
     let analyses = runs
         .iter()
         .map(|r| {
@@ -82,7 +88,12 @@ fn write_json(path: &Path, runs: &[RunData], analyses: &[RunAnalysis]) -> anyhow
         })
         .collect();
     let text = serde_json::to_string_pretty(&items)?;
-    std::fs::write(path, text).with_context(|| format!("cannot write {}", path.display()))
+    std::fs::write(path, text).with_context(|| {
+        format!(
+            "the analysis was printed above but the JSON could not be written to {}",
+            path.display()
+        )
+    })
 }
 
 fn score(s: Option<sim::training::analysis::ScoreSummary>) -> String {
@@ -104,6 +115,10 @@ fn slope_value(s: Option<Slope>) -> String {
     s.map_or_else(|| "-".to_owned(), |s| format!("{:+.3}", s.value))
 }
 
+fn mean_or_dash(value: Option<f64>) -> String {
+    value.map_or_else(|| "-".to_owned(), |v| format!("{v:.3}"))
+}
+
 fn code_name(code: sim::training::analysis::VerdictCode) -> String {
     serde_json::to_value(code)
         .ok()
@@ -114,8 +129,8 @@ fn code_name(code: sim::training::analysis::VerdictCode) -> String {
 fn gap(a: &RunAnalysis) -> String {
     a.curse.reeval_minus_heldout.map_or_else(
         || "-".to_owned(),
-        |g| match g.in_heldout_se {
-            Some(se) => format!("{:+.3} ({se:+.1} SE)", g.value),
+        |g| match g.in_combined_se {
+            Some(se) => format!("{:+.3} ({se:+.1} combined SE)", g.value),
             None => format!("{:+.3}", g.value),
         },
     )
@@ -167,8 +182,16 @@ fn facts(a: &RunAnalysis) -> Vec<(&'static str, String)> {
         (
             "stall generation",
             format!(
-                "{} (smoothed peak {:.3})",
-                a.stall_generation, a.peak_smoothed
+                "{} (last generation {}), smoothed peak {:.3} at generation {}{}",
+                a.stall_generation,
+                a.last_generation,
+                a.peak_smoothed,
+                a.peak_generation,
+                if a.stall_fallback {
+                    ", final smoothed value below the peak band"
+                } else {
+                    ""
+                }
             ),
         ),
         (
@@ -260,15 +283,23 @@ fn render_run(label: &str, a: &RunAnalysis) -> String {
                     o.name.clone(),
                     o.class
                         .map_or_else(|| "-".to_owned(), |c| format!("{c:?}").to_lowercase()),
-                    format!("{:.3}", o.first_third_mean),
-                    format!("{:.3}", o.last_third_mean),
-                    slope(o.slope),
+                    mean_or_dash(o.first_third_mean),
+                    mean_or_dash(o.last_third_mean),
+                    slope(o.last_third_slope),
+                    slope(o.overall_slope),
                 ]
             })
             .collect();
-        out.push_str("\nPer opponent (champion score):\n");
+        out.push_str("\nPer opponent (champion score; class from the last third):\n");
         out.push_str(&table(
-            &["opponent", "class", "first third", "last third", "/100 gen"],
+            &[
+                "opponent",
+                "class",
+                "first third",
+                "last third",
+                "last third /100 gen",
+                "whole run /100 gen",
+            ],
             &rows,
         ));
     }
@@ -307,7 +338,7 @@ fn render_comparison(rows: &[(&str, &RunAnalysis)]) -> String {
             "run",
             "gens",
             "best gen",
-            "stall",
+            "stall gen",
             "final re-eval",
             "last-third /100",
             "curse gap",
