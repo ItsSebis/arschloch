@@ -2,6 +2,7 @@
 //! the JSON results file, and print a human-readable summary. See
 //! docs/ARCHITECTURE.md, "cli".
 
+mod analyse_run;
 mod args;
 mod batch;
 mod evaluate;
@@ -26,6 +27,7 @@ fn main() -> anyhow::Result<()> {
     // simulation run.
     match std::env::args().nth(1).as_deref() {
         Some("train") => return train::run(std::env::args().skip(2)),
+        Some("analyse-run") => return analyse_run::run(std::env::args().skip(2)),
         Some("watch") => return watch::run(std::env::args().skip(2)),
         Some("evaluate") => return evaluate::run(std::env::args().skip(2)),
         Some("stats-doc") => return stats_doc::run(std::env::args().skip(2)),
