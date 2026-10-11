@@ -20,12 +20,16 @@ export function fmtScore(score, digits = 3) {
   return score ? `${fmt(score.mean, digits, true)} ± ${fmt(score.std_error, digits)}` : "–";
 }
 
-/** Colour class of a verdict code: `good`, `warn` or `info`. */
+/**
+ * Colour class of a verdict code: `good`, `warn` or `info`. A converged
+ * population is not good news (it means little variety is left), so it is
+ * neutral, like a run that is still improving.
+ */
 export function verdictTone(code) {
   switch (code) {
     case "still_improving":
-      return "info";
     case "converged":
+      return "info";
     case "no_clear_limit":
       return "good";
     default:
@@ -51,13 +55,15 @@ export function opponentColour(index) {
 }
 
 /**
- * Where the stall marker goes: the generation number at the analysis' stall
- * index (clamped into the series), or null for an empty series.
+ * Where the stall marker goes: `analysis.stall_generation` is a generation
+ * NUMBER (the run need not start at 0 or be gap free), `analysis.stall_index`
+ * its position in the series. Returns `{ index, generation }`, or null for an
+ * empty series.
  */
 export function stallMarker(series, analysis) {
   const n = series.generation.length;
   if (n === 0) return null;
-  const index = Math.min(Math.max(0, analysis.stall_generation), n - 1);
+  const index = Math.min(Math.max(0, analysis.stall_index), n - 1);
   return { index, generation: series.generation[index] };
 }
 
@@ -71,14 +77,18 @@ export function keyRows(a) {
   const gap = a.curse.reeval_minus_heldout;
   return [
     ["Generations", String(a.generations), a.skipped_lines > 0 ? `${a.skipped_lines} unreadable line(s) skipped` : ""],
-    ["Stall generation", `${a.stall_generation} of ${Math.max(0, a.generations - 1)}`, "smoothed curve stays within one noise unit of its peak from here"],
-    ["Peak (smoothed)", fmt(a.peak_smoothed, 3, true), ""],
+    [
+      "Stall generation",
+      `${a.stall_generation} (last generation ${a.last_generation})`,
+      a.stall_fallback ? "the run ended below its smoothed peak band" : "smoothed curve stays within one noise unit of its peak from here",
+    ],
+    ["Peak (smoothed)", fmt(a.peak_smoothed, 3, true), `at generation ${a.peak_generation}; final smoothed ${fmt(a.final_smoothed, 3, true)}`],
     ["Final re-evaluation", fmtScore(a.final_reeval), ""],
     ["Final held-out", fmtScore(a.final_heldout), ""],
     ["Noise (single re-evaluation se)", fmt(a.noise.single_se, 4), a.noise.change_sd === null ? "" : `generation-to-generation sd ${fmt(a.noise.change_sd, 4)}`],
     ["Trend, whole run (per 100 gens)", fmtSlope(a.trend.overall), ""],
     ["Trend, last third (per 100 gens)", fmtSlope(a.trend.last_third), ""],
-    ["Curse: re-evaluation minus held-out", gap ? fmt(gap.value, 3, true) : "n/a", gap && gap.in_heldout_se !== null ? `${fmt(gap.in_heldout_se, 1, true)} held-out se` : ""],
+    ["Curse: re-evaluation minus held-out", gap ? fmt(gap.value, 3, true) : "n/a", gap && gap.in_combined_se !== null ? `${fmt(gap.in_combined_se, 1, true)} combined se` : ""],
     ["Curse: training minus re-evaluation", fmt(a.curse.train_minus_reeval, 3, true), "mean over generations"],
   ];
 }
@@ -95,6 +105,60 @@ export function comparisonRows(runs) {
   }));
 }
 
+/** Opponent rows of the table: `[name, first, last, lastSlope, wholeSlope, class]` as strings. */
+export function opponentRows(a) {
+  return a.opponents.map((o) => [o.name, fmt(o.first_third_mean, 3, true), fmt(o.last_third_mean, 3, true), fmtSlope(o.last_third_slope), fmtSlope(o.overall_slope), o.class ?? "n/a"]);
+}
+
+// ---- HTML strings (escaped here, so the page only assigns them) ----------
+
+export function swatchesHtml(items) {
+  return items.map((i) => `<span class="item"><span class="swatch" style="background:${esc(i.color)}"></span>${esc(i.name)}</span>`).join(" ");
+}
+
+export function verdictHtml(run) {
+  const items = run.analysis.verdict
+    .map((v) => `<li class="verdict ${verdictTone(v.code)}"><code>${esc(v.code)}</code> ${esc(v.message)}</li>`)
+    .join("");
+  return `<ul class="verdicts">${items}</ul>`;
+}
+
+export function keyNumbersHtml(run) {
+  const rows = keyRows(run.analysis)
+    .map(([k, v, note]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td><td class="muted">${esc(note)}</td></tr>`)
+    .join("");
+  return `<table class="data">${rows}</table>`;
+}
+
+export function opponentsTableHtml(run) {
+  const rows = opponentRows(run.analysis);
+  if (rows.length === 0) return "";
+  const body = rows
+    .map(([name, first, last, lastSlope, wholeSlope, cls]) => `<tr><th>${esc(name)}</th><td>${esc(first)}</td><td>${esc(last)}</td><td>${esc(lastSlope)}</td><td>${esc(wholeSlope)}</td><td style="color:${trendColour(cls)}">${esc(cls)}</td></tr>`)
+    .join("");
+  return `<table class="data"><tr><th>opponent</th><th>first third</th><th>last third</th><th>last-third slope / 100 gens</th><th>whole-run slope / 100 gens</th><th>trend (last third)</th></tr>${body}</table>`;
+}
+
+export function compareHtml(runs) {
+  const rows = comparisonRows(runs)
+    .map(
+      (r, i) =>
+        `<tr class="pick" data-index="${i}"><th>${esc(r.label)}</th><td>${r.generations}</td><td>${r.stall}</td><td>${fmt(r.finalReeval, 3, true)}</td><td>${fmt(r.lastThird, 3, true)}</td><td>${r.codes.map((c) => `<code>${esc(c)}</code>`).join(" ")}</td></tr>`,
+    )
+    .join("");
+  return `<table class="data"><tr><th>run</th><th>generations</th><th>stall generation</th><th>final re-eval</th><th>last-third trend</th><th>verdict</th></tr>${rows}</table>`;
+}
+
+export function pickerHtml(runs) {
+  return runs.map((r, i) => `<option value="${i}">${esc(r.label)}</option>`).join("");
+}
+
+/** The note about runs of a set that could not be read, or an empty string. */
+export function skippedHtml(skipped) {
+  if (!skipped || skipped.length === 0) return "";
+  return `<p class="muted">${skipped.length} run(s) could not be read and were left out: ${skipped.map(esc).join("; ")}</p>`;
+}
+
 /**
  * Chart specs for one run. Each is `{ xs, series: [{ name, color, values,
  * band?, dashed? }], vlines: [{ x, label }], ref? }`; `chartSvg` draws them.
@@ -102,6 +166,7 @@ export function comparisonRows(runs) {
 export function championSpec(run) {
   const { series, analysis } = run;
   const marker = stallMarker(series, analysis);
+  const heldout = series.heldout_mean ?? [];
   return {
     xs: series.generation,
     series: [
@@ -109,6 +174,11 @@ export function championSpec(run) {
       { name: "re-evaluation", color: "var(--s6)", values: series.reeval_mean },
       { name: "smoothed", color: "var(--s1)", values: series.smoothed },
       { name: "training fitness", color: "var(--s5)", values: series.train_fitness, dashed: true },
+      // Held-out score of the generations that set a new best: the gap to the
+      // re-evaluation curve at the same generation is the winner's curse.
+      ...(heldout.some((v) => v !== null && v !== undefined)
+        ? [{ name: "held-out (new best)", color: "var(--s3)", values: heldout, markers: true }]
+        : []),
     ],
     vlines: marker ? [{ x: marker.generation, label: `stall ${marker.generation}` }] : [],
   };
@@ -133,8 +203,11 @@ export function chartSvg(spec, height = 280) {
   if (xs.length === 0) return '<p class="muted">no data</p>';
   const values = [];
   for (const s of series) {
-    values.push(...s.values.filter((v) => v !== null && v !== undefined && Number.isFinite(v)));
-    if (s.band) values.push(...s.band.lo, ...s.band.hi);
+    for (const v of s.values) if (v !== null && v !== undefined && Number.isFinite(v)) values.push(v);
+    if (s.band) {
+      for (const v of s.band.lo) values.push(v);
+      for (const v of s.band.hi) values.push(v);
+    }
   }
   if (spec.ref !== undefined) values.push(spec.ref);
   const range = extent(values);
@@ -161,7 +234,9 @@ export function chartSvg(spec, height = 280) {
       .map((x, i) => [x, s.values[i]])
       .filter(([, v]) => v !== null && v !== undefined && Number.isFinite(v))
       .map(([x, v]) => [sx(x), sy(v)]);
-    if (pts.length > 0) {
+    if (s.markers) {
+      for (const [px, py] of pts) parts.push(`<circle class="marker" cx="${px}" cy="${py}" r="4" fill="${s.color}" stroke="var(--bg, #fff)" stroke-width="1"/>`);
+    } else if (pts.length > 0) {
       parts.push(`<path d="${linePath(pts)}" fill="none" stroke="${s.color}" stroke-width="1.8" ${s.dashed ? 'stroke-dasharray="5 4"' : ""}/>`);
     }
   }
