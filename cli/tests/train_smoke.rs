@@ -933,8 +933,14 @@ fn the_default_feature_set_trains_exactly_as_before_the_option_existed() {
             decisions_hash(&out),
             timeless_events_hash(&out)
         );
-        assert_eq!(decisions_hash(&out), decisions, "{name} decisions");
-        assert_eq!(timeless_events_hash(&out), events, "{name} events");
+        // The sampled decision scores and the event floats are printed from
+        // values the platform's libm computes (exp/tanh), which differ in the
+        // last digit between Linux, macOS and Windows; the genome files above
+        // are what must match everywhere.
+        if cfg!(target_os = "linux") {
+            assert_eq!(decisions_hash(&out), decisions, "{name} decisions");
+            assert_eq!(timeless_events_hash(&out), events, "{name} events");
+        }
         let config = std::fs::read_to_string(out.join("config.json")).unwrap();
         for option in ["features", "fitness", "racing", "player_counts", "decks"] {
             assert!(!config.contains(option), "{option}: {config}");
