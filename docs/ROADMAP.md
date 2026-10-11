@@ -269,7 +269,18 @@ retention, and training scores a player by its mean finishing role
 - Show the same numbers in the dashboards (training dashboard cards, the play
   page record) once they exist in the output.
 
-## Phase 13 — NEAT: better play and wider training
+## Phase 13 — NEAT: better play and wider training (done)
+
+**Status:** built and measured (`docs/baselines/phase-13/README.md`). Result:
+`--features hidden` (hidden-hand inputs) is significantly stronger than the
+20 original inputs head-to-head against the neat-v2 champion (+0.048, Welch
+t = 3.68, 10 seeds each); the fitness variants (`risk`, `tanh`) and racing
+show no measurable gain and stay opt-in; one model for all tables
+(`--features all`, sizes 3-6, both decks) matches the specialists except at 3
+players. No default changed (`--features` is still `base`); making `hidden`
+the default waits for a confirmation run with fresh seeds. **Follow-up:** the
+casino repo's TypeScript NEAT bot only implements feature set v1, so `hidden`
+and `all` genomes need its feature port extended first.
 
 From `docs/Notes.md`. These change what the evolved players are rewarded for
 and what they can see, so every item needs the Phase 10 discipline: a spec
@@ -330,7 +341,7 @@ results can be reproduced.
   not measurably stronger than v1. `PassCeilings` hand reading is unchanged: a pass
   still proves the seat held no beater, and a later play in a later trick still
   refutes a dishonest pass.
-- Not done (Phase 13): neat inputs for "who is still in this trick", which the new
+- Done in Phase 13 (`--features trick`): neat inputs for "who is still in this trick", which the new
   rule makes meaningful.
 
 ## Phase 15 — Rule change: the exchange gives your highest cards (done)

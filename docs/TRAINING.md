@@ -201,6 +201,8 @@ treat the option as a way to run it, not as a recommended setting.
 
 ## Feature sets (`--features`)
 
+**Measured recommendation (Phase 13, `docs/baselines/phase-13/README.md`):** `--features hidden` beat `base` head-to-head against the neat-v2 champion (+0.048, significant over 10 seeds each); `trick` alone could not be told apart from `base`. Keep `base` when a genome must run in the casino bot (it only knows set v1). Evolution is noisy: train several seeds and pick the winner by a head-to-head on fresh seeds, not by its training score.
+
 A network's inputs are the features of one candidate move. The full list
 (`FEATURE_NAMES_V2` in `sim/src/strategies/neat_player/feature_set.rs`; `FEATURE_SET_VERSION` stays 1 and a genome file's recorded feature names, which must be a prefix of that list, tell the sets apart) is the 20
 features of set v1 (`base`, unchanged: same names, order and formulas) followed
