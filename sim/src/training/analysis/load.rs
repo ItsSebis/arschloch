@@ -88,10 +88,14 @@ fn name_of(path: &Path) -> String {
     )
 }
 
+fn is_jsonl_file(path: &Path) -> bool {
+    path.is_file() && path.extension().is_some_and(|e| e == "jsonl")
+}
+
 /// Loads the runs at `path`: an events file (one run, labelled by its stem,
 /// or by its directory when it is called `events.jsonl`), a run directory
 /// (holds `events.jsonl`), or a set directory (one run per subdirectory
-/// that holds `events.jsonl`, sorted by name; subdirectories whose run has
+/// that holds `events.jsonl`, or per loose `*.jsonl` file, sorted by name; subdirectories whose run has
 /// no generation event yet are left out).
 ///
 /// # Errors
@@ -130,15 +134,23 @@ pub fn load_runs(path: &Path) -> Result<Vec<RunData>, AnalysisError> {
             Ok(vec![run])
         };
     }
+    // A set directory (run subdirectories) or a folder of loose `*.jsonl` event files.
     let mut children: Vec<PathBuf> = fs::read_dir(path)
         .map_err(|e| io_error(path, &e))?
         .filter_map(|entry| entry.ok().map(|e| e.path()))
-        .filter(|p| p.join("events.jsonl").is_file())
+        .filter(|p| p.join("events.jsonl").is_file() || is_jsonl_file(p))
         .collect();
     children.sort();
     let mut runs = Vec::new();
     for child in children {
-        let run = read_run(&child.join("events.jsonl"), name_of(&child))?;
+        let run = if child.is_dir() {
+            read_run(&child.join("events.jsonl"), name_of(&child))?
+        } else {
+            let stem = child
+                .file_stem()
+                .map_or_else(String::new, |s| s.to_string_lossy().into_owned());
+            read_run(&child, stem)?
+        };
         if !run.generations.is_empty() {
             runs.push(run);
         }

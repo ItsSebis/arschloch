@@ -563,8 +563,8 @@ fn a_file_a_run_dir_and_a_set_dir_load_with_labels() {
     let labels: Vec<&str> = set.iter().map(|r| r.label.as_str()).collect();
     assert_eq!(
         labels,
-        vec!["run-a", "run-b"],
-        "sorted, empty runs left out"
+        vec!["loose", "run-a", "run-b"],
+        "sorted, loose .jsonl files included, empty runs left out"
     );
 
     let one = load_runs(&root.join("run-a")).unwrap();
