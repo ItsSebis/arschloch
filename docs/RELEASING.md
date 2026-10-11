@@ -10,7 +10,7 @@ How the binaries on a GitHub release are produced.
     `RUSTFLAGS="-C target-feature=+crt-static" cargo xwin build --release
     --target x86_64-pc-windows-msvc -p cli`.
   - Each archive holds the `cli` binary, `README.md`, `docs/TRAINING.md`,
-    `docs/RULES.md` and the baseline champion (`champion.json`), plus a
+    `docs/RULES.md`, `docs/PLAYING.md` and the baseline champion (`champion.json`, from `docs/baselines/neat-v2`), plus a
     `.sha256` file.
 - **macOS** (Apple silicon and Intel) is built by
   `.github/workflows/release.yml` when a release is published (or by hand with

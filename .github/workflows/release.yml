@@ -43,8 +43,8 @@ jobs:
             mkdir -p "$name/docs"
             cp "target/${triple}/release/cli" "$name/cli"
             cp README.md "$name/"
-            cp docs/TRAINING.md docs/RULES.md "$name/docs/"
-            cp docs/baselines/neat-v1/champion.json "$name/champion.json"
+            cp docs/TRAINING.md docs/RULES.md docs/PLAYING.md "$name/docs/"
+            cp docs/baselines/neat-v2/champion.json "$name/champion.json"
             tar -czf "${name}.tar.gz" "$name"
             shasum -a 256 "${name}.tar.gz" > "${name}.tar.gz.sha256"
             gh release upload "$TAG" "${name}.tar.gz" "${name}.tar.gz.sha256" --clobber
