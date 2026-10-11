@@ -68,6 +68,8 @@ mod tests {
             unseen_cards: Vec::new(),
             own_pass_ceilings: crate::hand_reading::PassCeilings::default(),
             current_combo: None,
+            combo_holder: None,
+            table: crate::strategy::TableInfo::default(),
         }
     }
 

@@ -18,6 +18,7 @@ fn opponent(seat: u8, hand_size: usize, active: bool, pass_ceilings: PassCeiling
         seat,
         hand_size,
         active,
+        in_trick: false,
         pass_ceilings,
     }
 }
@@ -60,6 +61,8 @@ fn context<'a>(s: &'a Scenario, table: Option<&'a Combo>) -> TurnContext<'a> {
         unseen_cards: s.unseen.clone(),
         own_pass_ceilings: PassCeilings::default(),
         current_combo: table,
+        combo_holder: None,
+        table: crate::strategy::TableInfo::default(),
     }
 }
 
@@ -230,7 +233,7 @@ fn strength_follows_the_house_card_order() {
     approx(strength(card(Rank::Ace, Suit::Clubs)), 1.0, "strongest");
 }
 
-fn bits(features: &[f64; FEATURE_COUNT]) -> Vec<u64> {
+fn bits(features: &[f64]) -> Vec<u64> {
     features.iter().map(|v| v.to_bits()).collect()
 }
 
@@ -267,7 +270,7 @@ fn the_fast_summary_matches_the_reference_on_random_states() {
         let reference = ReferenceTurnSummary::new(&context, state.rule);
         for candidate in &round.legal_moves() {
             assert_eq!(
-                bits(&fast.features(candidate)),
+                bits(&fast.features(candidate)[..FEATURE_COUNT]),
                 bits(&reference.features(candidate)),
                 "{candidate:?} in {context_hand:?}",
                 context_hand = context.hand
@@ -339,6 +342,7 @@ fn the_fast_summary_matches_the_reference_on_unphysical_contexts() {
                     seat,
                     hand_size: rng.random_range(0..8),
                     active: rng.random_bool(0.7),
+                    in_trick: false,
                     pass_ceilings: read_pass_ceilings(
                         1,
                         &[],
@@ -356,6 +360,8 @@ fn the_fast_summary_matches_the_reference_on_unphysical_contexts() {
             unseen_cards: unseen,
             own_pass_ceilings: PassCeilings::default(),
             current_combo: rng.random_bool(0.5).then_some(&table),
+            combo_holder: None,
+            table: crate::strategy::TableInfo::default(),
         };
         for rule in [DuplicateRule::FirstDealtWins, DuplicateRule::LastDealtWins] {
             let fast = TurnSummary::new(&context, rule);
@@ -367,7 +373,7 @@ fn the_fast_summary_matches_the_reference_on_unphysical_contexts() {
                 .collect();
             for candidate in [Move::Pass, Move::Play(Combo::new(cards).unwrap())] {
                 assert_eq!(
-                    bits(&fast.features(&candidate)),
+                    bits(&fast.features(&candidate)[..FEATURE_COUNT]),
                     bits(&reference.features(&candidate)),
                     "{candidate:?}, hand {hand:?}"
                 );

@@ -9,11 +9,14 @@ use serde::{Deserialize, Serialize};
 
 use super::config::TrainConfig;
 use super::evaluate::Score;
+#[cfg(test)]
+use super::fitness::{FitnessKind, Moments};
 
 pub const SCHEMA_VERSION: u32 = 1;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
+#[allow(clippy::large_enum_variant)] // `RunEnd` is written once per run
 pub enum Event {
     RunStart(Box<RunStart>),
     Generation(Box<GenerationEvent>),
@@ -42,17 +45,98 @@ pub struct ScoreStat {
     pub matches: usize,
     /// Finishing places, best first, over every round played.
     pub placements: Vec<u64>,
+    /// Standard deviation of the per-round role score. Written only when
+    /// the run's fitness is not the plain mean (a default run's events are
+    /// byte for byte what they were before the fitness variants existed).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub spread: Option<f64>,
+    /// The configured fitness of this evaluation; written only with a
+    /// non-mean fitness (otherwise it is `mean`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fitness: Option<f64>,
+    /// One column set per setting; written only when more than one
+    /// setting (table size, deck) is trained on.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub by_setting: Option<Vec<SettingStat>>,
+}
+
+impl ScoreStat {
+    /// The number runs are ranked on: the configured fitness, which for a
+    /// score written by a mean run (or an older run) is its `mean`.
+    #[must_use]
+    pub fn fitness_value(&self) -> f64 {
+        self.fitness.unwrap_or(self.mean)
+    }
+}
+
+/// One setting's columns of a multi-setting evaluation.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SettingStat {
+    /// Such as `4p-single`.
+    pub label: String,
+    pub matches: usize,
+    pub mean: f64,
+    /// Standard deviation of the per-round role score in this setting.
+    pub spread: f64,
+    pub fitness: f64,
+    /// Finishing places at this table size, best first.
+    pub placements: Vec<u64>,
 }
 
 impl From<Score> for ScoreStat {
     fn from(score: Score) -> Self {
+        let report_fitness = !score.kind.is_mean();
         Self {
             mean: score.mean,
             std_error: score.std_error,
             matches: score.matches,
             placements: score.placements,
+            spread: report_fitness.then_some(score.spread),
+            fitness: report_fitness.then_some(score.fitness),
+            by_setting: (!score.by_setting.is_empty()).then(|| {
+                score
+                    .by_setting
+                    .into_iter()
+                    .map(|s| SettingStat {
+                        label: s.label,
+                        matches: s.matches,
+                        mean: s.mean,
+                        spread: s.spread,
+                        fitness: s.fitness,
+                        placements: s.placements,
+                    })
+                    .collect()
+            }),
         }
     }
+}
+
+/// What racing did in one generation (present only with racing on): how
+/// many genomes were re-evaluated on extra matches and how far their
+/// fitness moved, which shows the winner's curse being corrected (the
+/// shift is typically negative: the genomes that looked best were lucky).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RacingStats {
+    pub raced: usize,
+    /// Extra matches each raced genome played.
+    pub extra_matches: usize,
+    /// Mean fitness of the raced genomes before and after pooling.
+    pub mean_before: f64,
+    pub mean_after: f64,
+    /// `mean_after - mean_before`.
+    pub mean_shift: f64,
+    /// Rounds of expansion after the first race of the top `raced` genomes
+    /// (0 = no un-raced genome outranked a raced one). Absent in events
+    /// written before the race expanded.
+    #[serde(default)]
+    pub expansion_rounds: u32,
+    /// How many genomes were raced in the end (`raced` plus the expansion).
+    #[serde(default)]
+    pub raced_final: usize,
+    /// Whether the cap on the raced set stopped the expansion while an
+    /// un-raced genome still outranked a raced one.
+    #[serde(default)]
+    pub cap_hit: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -180,6 +264,9 @@ pub struct GenerationEvent {
     pub species: Vec<SpeciesStats>,
     pub compatibility_threshold: f64,
     pub complexity: Complexity,
+    /// Racing's effect this generation; absent when racing is off.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub racing: Option<RacingStats>,
     /// Seconds per stage; absent in events written before it existed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timings: Option<StageTimings>,
@@ -208,6 +295,9 @@ mod tests {
             std_error: 0.02,
             matches: 10,
             placements: vec![5, 3, 1, 1],
+            spread: None,
+            fitness: None,
+            by_setting: None,
         }
     }
 
@@ -233,6 +323,11 @@ mod tests {
             std_error: 0.1,
             matches: 7,
             placements: vec![1, 2, 3, 4],
+            spread: 0.5,
+            fitness: -0.25,
+            kind: FitnessKind::Mean,
+            moments: Moments::default(),
+            by_setting: Vec::new(),
         };
         let stat = ScoreStat::from(score.clone());
         assert_eq!(
@@ -240,5 +335,42 @@ mod tests {
             (score.mean, score.std_error, score.matches)
         );
         assert_eq!(stat.placements, score.placements);
+        // A mean run's stat carries nothing new, so its events keep their bytes.
+        let line = serde_json::to_string(&stat).unwrap();
+        assert!(
+            !line.contains("spread") && !line.contains("fitness") && !line.contains("setting"),
+            "{line}"
+        );
+        assert!((stat.fitness_value() + 0.25).abs() < 1e-15);
+    }
+
+    #[test]
+    fn a_non_mean_or_multi_setting_score_reports_spread_fitness_and_settings() {
+        let score = Score {
+            mean: 0.2,
+            std_error: 0.1,
+            matches: 7,
+            placements: vec![1, 2, 3, 4],
+            spread: 0.6,
+            fitness: -0.1,
+            kind: FitnessKind::Risk { lambda: 0.5 },
+            moments: Moments::default(),
+            by_setting: vec![super::super::evaluate::SettingScore {
+                label: "4p-single".into(),
+                matches: 7,
+                mean: 0.2,
+                spread: 0.6,
+                fitness: -0.1,
+                placements: vec![1, 2, 3, 4],
+            }],
+        };
+        let stat = ScoreStat::from(score);
+        assert_eq!(stat.spread, Some(0.6));
+        assert_eq!(stat.fitness, Some(-0.1));
+        assert!((stat.fitness_value() + 0.1).abs() < 1e-15);
+        assert_eq!(stat.by_setting.as_ref().unwrap()[0].label, "4p-single");
+        let again: ScoreStat =
+            serde_json::from_str(&serde_json::to_string(&stat).unwrap()).unwrap();
+        assert_eq!(again, stat);
     }
 }

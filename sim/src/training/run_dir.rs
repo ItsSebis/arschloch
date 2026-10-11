@@ -334,6 +334,9 @@ mod tests {
             std_error: 0.0,
             matches: 1,
             placements: vec![1],
+            spread: None,
+            fitness: None,
+            by_setting: None,
         };
         Event::Generation(Box::new(super::super::events::GenerationEvent {
             generation,
@@ -372,6 +375,7 @@ mod tests {
                 mean_enabled_connections: 0.0,
                 innovation_count: 0,
             },
+            racing: None,
             timings: None,
         }))
     }

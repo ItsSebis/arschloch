@@ -52,6 +52,12 @@ fn config(generations: u32) -> TrainConfig {
         hall_of_fame_size: 0,
         hall_of_fame_interval: 5,
         skill_weight: 0.0,
+        features: sim::FeatureSet::Base,
+        fitness: sim::training::FitnessKind::Mean,
+        racing_top: 0.0,
+        racing_matches: 0,
+        player_counts: Vec::new(),
+        decks: Vec::new(),
     }
 }
 
@@ -816,6 +822,7 @@ fn the_default_skill_weight_reproduces_the_fitness_from_before_it_existed() {
 fn weighted(generations: u32, weight: f64) -> TrainConfig {
     TrainConfig {
         skill_weight: weight,
+        features: sim::FeatureSet::Base,
         ..config(generations)
     }
 }
@@ -981,6 +988,7 @@ fn the_whole_training_loop_is_identical_on_1_4_and_8_threads() {
         hall_of_fame_size: 2,
         hall_of_fame_interval: 1,
         skill_weight: 0.5,
+        features: sim::FeatureSet::Base,
         ..config(4)
     };
     let run_with = |threads: usize| {
@@ -1057,4 +1065,287 @@ fn progress_is_monotone_and_ends_at_the_whole_population_on_any_pool() {
     check(None);
     check(Some(1));
     check(Some(4));
+}
+
+// ---- Phase 13 training options: fitness variants, racing, several settings.
+
+fn small(generations: u32) -> TrainConfig {
+    TrainConfig {
+        neat: NeatConfig {
+            population_size: 20,
+            ..NeatConfig::default()
+        },
+        champion_candidates: 3,
+        ..config(generations)
+    }
+}
+
+/// Everything a run leaves that must not depend on how it was run.
+type Outcome = (serde_json::Value, String, Vec<serde_json::Value>);
+
+fn run_outcome(config: TrainConfig, threads: usize, name: &str) -> Outcome {
+    let run = dir(name);
+    let pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(threads)
+        .build()
+        .unwrap();
+    pool.install(|| {
+        Trainer::new(config, opponents(), &run)
+            .unwrap()
+            .run(&mut Recorder::default())
+            .unwrap();
+    });
+    let outcome = (
+        checkpoint_population(&run),
+        fs::read_to_string(run.join("best.json")).unwrap(),
+        timeless_events(&run),
+    );
+    fs::remove_dir_all(&run).unwrap();
+    outcome
+}
+
+/// Each option runs, resumes exactly and gives the same result on 1 and 4 threads.
+fn check_option_end_to_end(name: &str, make: impl Fn(u32) -> TrainConfig) {
+    let straight = run_outcome(make(3), 1, &format!("{name}-1"));
+    assert_eq!(
+        straight,
+        run_outcome(make(3), 4, &format!("{name}-4")),
+        "{name}: 4 threads"
+    );
+    // Resume: two generations, then up to three.
+    let stopped = dir(&format!("{name}-resume"));
+    Trainer::new(make(2), opponents(), &stopped)
+        .unwrap()
+        .run(&mut Recorder::default())
+        .unwrap();
+    Trainer::resume(&stopped, opponents(), Some(3))
+        .unwrap()
+        .run(&mut Recorder::default())
+        .unwrap();
+    assert_eq!(
+        (
+            checkpoint_population(&stopped),
+            fs::read_to_string(stopped.join("best.json")).unwrap()
+        ),
+        (straight.0.clone(), straight.1.clone()),
+        "{name}: resume"
+    );
+    let resumed: Vec<serde_json::Value> = timeless_events(&stopped);
+    assert_eq!(resumed, straight.2, "{name}: resumed events");
+    // The config file records the option (as it was started).
+    let text = fs::read_to_string(stopped.join("config.json")).unwrap();
+    let again: TrainConfig = serde_json::from_str(&text).unwrap();
+    assert_eq!(again, make(2), "{name}");
+    fs::remove_dir_all(&stopped).unwrap();
+}
+
+#[test]
+fn a_risk_fitness_run_reports_spread_resumes_and_is_thread_independent() {
+    let make = |generations| TrainConfig {
+        fitness: sim::training::FitnessKind::Risk { lambda: 0.5 },
+        ..small(generations)
+    };
+    check_option_end_to_end("risk", make);
+    let run = dir("risk-events");
+    Trainer::new(make(3), opponents(), &run)
+        .unwrap()
+        .run(&mut Recorder::default())
+        .unwrap();
+    let mut best = f64::NEG_INFINITY;
+    for event in generation_events(&run) {
+        let reeval = &event.champion.reeval;
+        let (spread, fitness) = (reeval.spread.unwrap(), reeval.fitness.unwrap());
+        assert!(spread > 0.0 && spread <= 1.0 + 1e-12, "{spread}");
+        // Risk: the mean minus lambda spreads (the stat's mean is the match-mean average).
+        assert!((fitness - (reeval.mean - 0.5 * spread)).abs() < 1e-9);
+        assert!(event.champion.heldout.is_none() || event.champion.is_new_best);
+        // The new-best flag follows the configured fitness, not the mean.
+        assert_eq!(
+            event.champion.is_new_best,
+            fitness > best,
+            "{}",
+            event.generation
+        );
+        best = best.max(fitness);
+        assert!(event.opponents.iter().all(|o| o.score.spread.is_some()));
+    }
+    let best_json = fs::read_to_string(run.join("config.json")).unwrap();
+    assert!(best_json.contains("risk"), "{best_json}");
+    fs::remove_dir_all(&run).unwrap();
+}
+
+#[test]
+fn a_tanh_fitness_run_completes_resumes_and_is_thread_independent() {
+    check_option_end_to_end("tanh", |generations| TrainConfig {
+        fitness: sim::training::FitnessKind::Tanh { kappa: 4.0 },
+        ..small(generations)
+    });
+}
+
+#[test]
+#[allow(clippy::float_cmp)] // different runs: any difference will do
+fn a_raced_run_reports_the_shift_costs_its_matches_resumes_and_is_thread_independent() {
+    let make = |generations| TrainConfig {
+        racing_top: 0.25,
+        racing_matches: 6,
+        ..small(generations)
+    };
+    check_option_end_to_end("racing", make);
+    check_option_end_to_end("racing-risk", |generations| TrainConfig {
+        fitness: sim::training::FitnessKind::Risk { lambda: 0.3 },
+        ..make(generations)
+    });
+    let raced = dir("racing-events");
+    Trainer::new(make(2), opponents(), &raced)
+        .unwrap()
+        .run(&mut Recorder::default())
+        .unwrap();
+    let plain = dir("racing-plain");
+    Trainer::new(small(2), opponents(), &plain)
+        .unwrap()
+        .run(&mut Recorder::default())
+        .unwrap();
+    let (raced_events, plain_events) = (generation_events(&raced), generation_events(&plain));
+    for event in &raced_events {
+        let racing = event.racing.as_ref().expect("racing is reported");
+        assert_eq!((racing.raced, racing.extra_matches), (5, 6));
+        // The race may expand past the top five, at most to twice that.
+        assert!((5..=10).contains(&racing.raced_final));
+        assert!(racing.expansion_rounds > 0 || racing.raced_final == 5);
+        assert!((racing.mean_after - racing.mean_before - racing.mean_shift).abs() < 1e-12);
+        // Mean fitness: the stats carry no spread (events keep their old shape).
+        assert!(event.champion.reeval.spread.is_none());
+    }
+    assert!(plain_events.iter().all(|e| e.racing.is_none()));
+    // Generation 0 starts from the same population and its champion is a new
+    // best either way, so the cost difference is exactly the extra rounds
+    // (rounds per match 4, every raced genome, 6 extra matches).
+    let first_racing = raced_events[0].racing.as_ref().unwrap();
+    assert_eq!(
+        raced_events[0].rounds_evaluated,
+        plain_events[0].rounds_evaluated + 4 * first_racing.raced_final as u64 * 6
+    );
+    // The raced genomes' fitness was pulled together with new information, so
+    // the generation's fitness statistics differ from the unraced run's.
+    assert_ne!(raced_events[0].fitness.best, plain_events[0].fitness.best);
+    fs::remove_dir_all(&raced).unwrap();
+    fs::remove_dir_all(&plain).unwrap();
+}
+
+#[test]
+#[allow(clippy::cast_precision_loss)]
+fn a_multi_setting_run_trains_on_every_setting_and_reports_per_setting_columns() {
+    let make = |generations| TrainConfig {
+        player_counts: vec![3, 5],
+        decks: vec![DeckChoice::Single, DeckChoice::Double],
+        matches_per_genome: 8,
+        reeval_matches: 12,
+        features: sim::FeatureSet::All,
+        ..small(generations)
+    };
+    check_option_end_to_end("multi", make);
+    let run = dir("multi-events");
+    Trainer::new(make(2), opponents(), &run)
+        .unwrap()
+        .run(&mut Recorder::default())
+        .unwrap();
+    for event in generation_events(&run) {
+        let reeval = &event.champion.reeval;
+        let columns = reeval.by_setting.as_ref().expect("per-setting columns");
+        let labels: Vec<&str> = columns.iter().map(|c| c.label.as_str()).collect();
+        assert_eq!(labels, ["3p-single", "3p-double", "5p-single", "5p-double"]);
+        // 12 matches cycle over 4 settings: 3 each.
+        assert!(columns.iter().all(|c| c.matches == 3));
+        assert_eq!(
+            columns.iter().map(|c| c.matches).sum::<usize>(),
+            reeval.matches
+        );
+        for (column, players) in columns.iter().zip([3, 3, 5, 5]) {
+            assert_eq!(column.placements.len(), players);
+            assert_eq!(column.placements.iter().sum::<u64>(), 3 * 4);
+        }
+        let weighted: f64 = columns
+            .iter()
+            .map(|c| c.mean * c.matches as f64)
+            .sum::<f64>()
+            / reeval.matches as f64;
+        assert!((weighted - reeval.mean).abs() < 1e-9);
+        assert!(event.opponents.iter().all(|o| o.score.by_setting.is_some()));
+    }
+    fs::remove_dir_all(&run).unwrap();
+
+    // A single setting writes no columns and no list fields.
+    let one = dir("multi-one");
+    Trainer::new(small(1), opponents(), &one)
+        .unwrap()
+        .run(&mut Recorder::default())
+        .unwrap();
+    let events_text = fs::read_to_string(one.join("events.jsonl")).unwrap();
+    for key in ["by_setting", "spread", "racing", "player_counts", "decks"] {
+        assert!(!events_text.contains(key), "{key}");
+    }
+    fs::remove_dir_all(&one).unwrap();
+}
+
+#[test]
+fn skill_weight_cannot_be_combined_with_the_new_options() {
+    for bad in [
+        TrainConfig {
+            fitness: sim::training::FitnessKind::Tanh { kappa: 2.0 },
+            ..weighted(2, 0.5)
+        },
+        TrainConfig {
+            racing_top: 0.5,
+            racing_matches: 3,
+            ..weighted(2, 0.5)
+        },
+        TrainConfig {
+            player_counts: vec![3, 4],
+            ..weighted(2, 0.5)
+        },
+    ] {
+        let run = dir("skill-conflict");
+        let error = Trainer::new(bad, opponents(), &run).err().unwrap();
+        assert!(matches!(error, TrainError::Config(_)), "{error}");
+        assert!(!run.exists(), "nothing is written for a refused setup");
+    }
+}
+
+#[test]
+fn an_old_checkpoint_without_the_new_fields_resumes_as_a_default_run() {
+    let run = dir("old-checkpoint");
+    Trainer::new(small(2), opponents(), &run)
+        .unwrap()
+        .run(&mut Recorder::default())
+        .unwrap();
+    // The files of a default run never mention the new options, which is
+    // exactly what a run written before they existed looks like.
+    for file in ["config.json", "checkpoint.json", "events.jsonl"] {
+        let text = fs::read_to_string(run.join(file)).unwrap();
+        for key in [
+            "racing",
+            "player_counts",
+            "\"decks\"",
+            "by_setting",
+            "spread",
+        ] {
+            assert!(!text.contains(key), "{file}: {key}");
+        }
+    }
+    let config_file: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(run.join("config.json")).unwrap()).unwrap();
+    assert!(config_file.get("fitness").is_none(), "{config_file}");
+    let straight = timeless_events(&run);
+    let resumed = dir("old-checkpoint-resume");
+    Trainer::new(small(1), opponents(), &resumed)
+        .unwrap()
+        .run(&mut Recorder::default())
+        .unwrap();
+    Trainer::resume(&resumed, opponents(), Some(2))
+        .unwrap()
+        .run(&mut Recorder::default())
+        .unwrap();
+    assert_eq!(timeless_events(&resumed), straight);
+    fs::remove_dir_all(&run).unwrap();
+    fs::remove_dir_all(&resumed).unwrap();
 }

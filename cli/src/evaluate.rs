@@ -57,8 +57,30 @@ pub struct EvaluateArgs {
     #[arg(long, default_value_t = 4, value_parser = clap::value_parser!(u8).range(3..=6))]
     pub player_count: u8,
 
+    /// Evaluate at several table sizes, a comma list such as `3,4,5,6`
+    /// (mutually exclusive with --player-count). With --decks every
+    /// combination is a setting, table size first; each setting gets its own
+    /// results block, from the same seeds.
+    #[arg(
+        long,
+        value_delimiter = ',',
+        value_parser = clap::value_parser!(u8).range(3..=6),
+        conflicts_with = "player_count"
+    )]
+    pub player_counts: Vec<u8>,
+
     #[arg(long, value_enum, default_value_t = DeckVariantArg::Single)]
     pub deck_variant: DeckVariantArg,
+
+    /// Evaluate on several decks, a comma list of `single`, `double`
+    /// (mutually exclusive with --deck-variant; see --player-counts).
+    #[arg(
+        long,
+        value_delimiter = ',',
+        value_enum,
+        conflicts_with = "deck_variant"
+    )]
+    pub decks: Vec<DeckVariantArg>,
 
     #[arg(long, value_enum, default_value_t = DuplicateRuleArg::FirstDealtWins)]
     pub duplicate_rule: DuplicateRuleArg,
@@ -109,6 +131,9 @@ pub struct Cell {
     pub std_error: f64,
     pub matches: usize,
     pub placements: Vec<u64>,
+    /// Standard deviation of the per-round role score (consistency; the
+    /// standard error above is of the match means).
+    pub spread: f64,
     /// Average finishing place, 1 = best. The role score is linear in the
     /// place, so this is exactly the mean score restated.
     pub avg_rank: f64,
@@ -127,6 +152,7 @@ impl Cell {
             matches: score.matches,
             avg_rank: 1.0 + (1.0 - score.mean) * half_span,
             avg_rank_std_error: score.std_error * half_span,
+            spread: score.spread,
             placements: score.placements,
         }
     }
@@ -137,6 +163,14 @@ pub struct GenomeResult {
     pub genome: String,
     /// One cell per opponent, then a last `mixed` cell.
     pub cells: Vec<Cell>,
+}
+
+/// One table size with one deck.
+struct Setting {
+    label: String,
+    player_count: u8,
+    deck: DeckVariantArg,
+    table: TableSpec,
 }
 
 /// The label of the all-opponents-mixed row.
@@ -232,6 +266,92 @@ fn build_opponents(specs: &[String]) -> anyhow::Result<Vec<(String, Arc<dyn sim:
     Ok(built)
 }
 
+/// The settings: every table size with every deck, table size first.
+fn settings_of(args: &EvaluateArgs) -> anyhow::Result<Vec<Setting>> {
+    let counts: Vec<u8> = if args.player_counts.is_empty() {
+        vec![args.player_count]
+    } else {
+        args.player_counts.clone()
+    };
+    let decks: Vec<DeckVariantArg> = if args.decks.is_empty() {
+        vec![args.deck_variant]
+    } else {
+        args.decks.clone()
+    };
+    for (i, count) in counts.iter().enumerate() {
+        anyhow::ensure!(
+            !counts[..i].contains(count),
+            "--player-counts lists {count} twice"
+        );
+    }
+    for (i, deck) in decks.iter().enumerate() {
+        anyhow::ensure!(!decks[..i].contains(deck), "--decks lists {deck:?} twice");
+    }
+    let settings: Vec<Setting> = counts
+        .iter()
+        .flat_map(|&player_count| decks.iter().map(move |&deck| (player_count, deck)))
+        .map(|(player_count, deck)| {
+            let table = TableSpec {
+                player_count,
+                deck_variant: deck.into(),
+                duplicate_rule: args.duplicate_rule.into(),
+                rounds: args.rounds,
+                pass_rule: args.pass_rule,
+                exchange_rule: args.exchange_rule,
+            };
+            Setting {
+                label: table.label(),
+                player_count,
+                deck,
+                table,
+            }
+        })
+        .collect();
+    Ok(settings)
+}
+
+/// The results as JSON (the first setting's under `results`, all of them
+/// under `settings` when there are several).
+fn write_json(
+    args: &EvaluateArgs,
+    path: &std::path::Path,
+    settings: &[Setting],
+    all_results: &[Vec<GenomeResult>],
+) -> anyhow::Result<()> {
+    let mut json = serde_json::json!({
+        "player_count": settings[0].player_count,
+        "deck_variant": format!("{:?}", settings[0].deck),
+        "duplicate_rule": format!("{:?}", args.duplicate_rule),
+        "pass_rule": args.pass_rule.to_string(),
+        "exchange_rule": args.exchange_rule.to_string(),
+        "rounds": args.rounds,
+        "matches": args.matches,
+        "seed": args.seed,
+        "results": all_results[0],
+        "statistics_catalog": sim::stats_catalog::catalog(),
+    });
+    // With several settings `results` stays the first setting's (so
+    // readers of the single-setting format keep working) and every
+    // setting's results are added.
+    if settings.len() > 1 {
+        json["settings"] = settings
+            .iter()
+            .zip(all_results)
+            .map(|(setting, results)| {
+                serde_json::json!({
+                    "label": setting.label,
+                    "player_count": setting.player_count,
+                    "deck_variant": format!("{:?}", setting.deck),
+                    "results": results,
+                })
+            })
+            .collect();
+    }
+    let text = serde_json::to_string_pretty(&json)?;
+    std::fs::write(path, text).with_context(|| format!("cannot write {}", path.display()))?;
+    Ok(())
+}
+
 pub fn run(raw_args: impl Iterator<Item = String>) -> anyhow::Result<()> {
     let args = EvaluateArgs::parse_from(std::iter::once("cli evaluate".to_owned()).chain(raw_args));
     if args.threads > 0 {
@@ -259,63 +379,63 @@ pub fn run(raw_args: impl Iterator<Item = String>) -> anyhow::Result<()> {
         })
         .collect::<anyhow::Result<_>>()?;
 
-    let table = TableSpec {
-        player_count: args.player_count,
-        deck_variant: args.deck_variant.into(),
-        duplicate_rule: args.duplicate_rule.into(),
-        rounds: args.rounds,
-        pass_rule: args.pass_rule,
-        exchange_rule: args.exchange_rule,
-    };
+    let settings = settings_of(&args)?;
     // A seed stream that training (generation streams, fixed and held-out
-    // sets) never uses.
+    // sets) never uses; every setting plays the same seeds.
     let seeds: Vec<u64> = (0..args.matches as u64)
         .map(|i| match_seed(args.seed, u64::MAX - 3, i))
         .collect();
     let pool: Vec<Arc<dyn sim::Strategy>> = opponents.iter().map(|(_, s)| s.clone()).collect();
 
-    let results: Vec<GenomeResult> = candidates
-        .iter()
-        .map(|(path, candidate)| {
-            let mut cells: Vec<Cell> = opponents
-                .par_iter()
-                .map(|(name, strategy)| {
-                    Cell::new(
-                        name,
-                        evaluate(candidate, &table, Opponents::Only(strategy), &seeds),
-                    )
-                })
-                .collect();
-            cells.push(Cell::new(
-                MIXED,
-                evaluate(candidate, &table, Opponents::Mixed(&pool), &seeds),
-            ));
-            GenomeResult {
-                genome: path.clone(),
-                cells,
-            }
-        })
-        .collect();
-
-    println!(
-        "{} players, {:?} deck, {:?}, pass rule {}, exchange rule {}, {} matches x {} rounds per cell, seed {}",
-        args.player_count,
-        args.deck_variant,
-        args.duplicate_rule,
-        args.pass_rule,
-        args.exchange_rule,
-        args.matches,
-        args.rounds,
-        args.seed
-    );
-    println!("score: +1 always President .. -1 always last; 0 is even\n");
     let labels = column_labels(&args.genome);
-    print!("{}", render_table(&labels, &results));
-    println!(
-        "\naverage place: 1 = best .. {} = last, ± standard error\n",
-        args.player_count
-    );
-    print!("{}", render_rank_table(&labels, &results));
+    let mut all_results: Vec<Vec<GenomeResult>> = Vec::new();
+    for setting in &settings {
+        let table = &setting.table;
+        let results: Vec<GenomeResult> = candidates
+            .iter()
+            .map(|(path, candidate)| {
+                let mut cells: Vec<Cell> = opponents
+                    .par_iter()
+                    .map(|(name, strategy)| {
+                        Cell::new(
+                            name,
+                            evaluate(candidate, table, Opponents::Only(strategy), &seeds),
+                        )
+                    })
+                    .collect();
+                cells.push(Cell::new(
+                    MIXED,
+                    evaluate(candidate, table, Opponents::Mixed(&pool), &seeds),
+                ));
+                GenomeResult {
+                    genome: path.clone(),
+                    cells,
+                }
+            })
+            .collect();
+        if settings.len() > 1 {
+            println!("\n=== setting {} ===", setting.label);
+        }
+        println!(
+            "{} players, {:?} deck, {:?}, pass rule {}, exchange rule {}, {} matches x {} rounds per cell, seed {}",
+            setting.player_count,
+            setting.deck,
+            args.duplicate_rule,
+            args.pass_rule,
+            args.exchange_rule,
+            args.matches,
+            args.rounds,
+            args.seed
+        );
+        println!("score: +1 always President .. -1 always last; 0 is even\n");
+        print!("{}", render_table(&labels, &results));
+        println!(
+            "\naverage place: 1 = best .. {} = last, ± standard error\n",
+            setting.player_count
+        );
+        print!("{}", render_rank_table(&labels, &results));
+        all_results.push(results);
+    }
     if args.explain {
         println!(
             "\n{}",
@@ -323,19 +443,7 @@ pub fn run(raw_args: impl Iterator<Item = String>) -> anyhow::Result<()> {
         );
     }
     if let Some(path) = &args.json {
-        let text = serde_json::to_string_pretty(&serde_json::json!({
-            "player_count": args.player_count,
-            "deck_variant": format!("{:?}", args.deck_variant),
-            "duplicate_rule": format!("{:?}", args.duplicate_rule),
-            "pass_rule": args.pass_rule.to_string(),
-            "exchange_rule": args.exchange_rule.to_string(),
-            "rounds": args.rounds,
-            "matches": args.matches,
-            "seed": args.seed,
-            "results": results,
-            "statistics_catalog": sim::stats_catalog::catalog(),
-        }))?;
-        std::fs::write(path, text).with_context(|| format!("cannot write {}", path.display()))?;
+        write_json(&args, path, &settings, &all_results)?;
     }
     Ok(())
 }
@@ -351,6 +459,7 @@ mod tests {
             std_error: 0.021,
             matches: 100,
             placements: vec![1, 2, 3, 4],
+            spread: 0.5,
             avg_rank: 2.5,
             avg_rank_std_error: 0.03,
         }
@@ -394,6 +503,11 @@ mod tests {
             std_error: 0.1,
             matches: 10,
             placements: vec![1, 1, 1, 1],
+            spread: 0.5,
+            fitness: mean,
+            kind: sim::training::FitnessKind::Mean,
+            moments: sim::training::Moments::default(),
+            by_setting: Vec::new(),
         };
         let best = Cell::new("x", score(1.0));
         let even = Cell::new("x", score(0.0));

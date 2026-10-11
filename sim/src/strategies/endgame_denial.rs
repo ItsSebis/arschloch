@@ -92,11 +92,14 @@ mod tests {
                 seat: 1,
                 hand_size,
                 active,
+                in_trick: false,
                 pass_ceilings: crate::hand_reading::PassCeilings::default(),
             }],
             unseen_cards: vec![],
             own_pass_ceilings: crate::hand_reading::PassCeilings::default(),
             current_combo: None,
+            combo_holder: None,
+            table: crate::strategy::TableInfo::default(),
         }
     }
 

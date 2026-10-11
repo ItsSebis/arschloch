@@ -115,11 +115,14 @@ mod tests {
                 seat: 1,
                 hand_size: opponent_hand_size,
                 active: true,
+                in_trick: false,
                 pass_ceilings: opponent_ceilings,
             }],
             unseen_cards: unseen,
             own_pass_ceilings: PassCeilings::default(),
             current_combo: None,
+            combo_holder: None,
+            table: crate::strategy::TableInfo::default(),
         }
     }
 

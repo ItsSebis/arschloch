@@ -128,11 +128,14 @@ mod tests {
                 seat: 1,
                 hand_size: 10,
                 active: true,
+                in_trick: false,
                 pass_ceilings: PassCeilings::default(),
             }],
             unseen_cards: vec![],
             own_pass_ceilings,
             current_combo: Some(combo),
+            combo_holder: None,
+            table: crate::strategy::TableInfo::default(),
         }
     }
 
@@ -145,6 +148,7 @@ mod tests {
             seat: 1,
             hand_size: 2,
             active: true,
+            in_trick: false,
             pass_ceilings: PassCeilings::default(),
         }];
         let legal = vec![Move::Pass, play(vec![card(Rank::King, Suit::Clubs)])];

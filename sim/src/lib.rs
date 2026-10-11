@@ -34,8 +34,9 @@ pub use match_runner::{
 };
 pub use statistics::{aggregate, RoleRetention, Statistics};
 pub use strategies::{
-    Adaptive, AdaptiveConfig, CardCounter, DenialMode, EndgameDenial, GenomeFile, GenomeFileError,
-    GreedyHighest, HoldBackPairs, LowestLegal, NeatStrategy, RandomLegal, ScoredCandidate,
-    TurnSummary, FEATURE_COUNT, FEATURE_NAMES, FEATURE_SET_VERSION,
+    Adaptive, AdaptiveConfig, CardCounter, DenialMode, EndgameDenial, FeatureGroups, FeatureSet,
+    GenomeFile, GenomeFileError, GreedyHighest, HoldBackPairs, LowestLegal, NeatStrategy,
+    RandomLegal, ScoredCandidate, TurnSummary, FEATURE_COUNT, FEATURE_COUNT_V2, FEATURE_GROUPS,
+    FEATURE_NAMES, FEATURE_NAMES_V2, FEATURE_SET_VERSION,
 };
-pub use strategy::{ContextNeeds, OpponentHand, Strategy, TurnContext};
+pub use strategy::{ContextNeeds, OpponentHand, Strategy, TableInfo, TurnContext};

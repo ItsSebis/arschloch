@@ -153,11 +153,14 @@ mod tests {
                 seat: 1,
                 hand_size,
                 active: true,
+                in_trick: false,
                 pass_ceilings,
             }],
             unseen_cards: unseen,
             own_pass_ceilings: PassCeilings::default(),
             current_combo: None,
+            combo_holder: None,
+            table: crate::strategy::TableInfo::default(),
         }
     }
 
@@ -306,12 +309,14 @@ mod tests {
                     seat: 1,
                     hand_size: 2,
                     active: true,
+                    in_trick: false,
                     pass_ceilings: threat_ceilings,
                 },
                 OpponentHand {
                     seat: 2,
                     hand_size: 6,
                     active: true,
+                    in_trick: false,
                     pass_ceilings: PassCeilings::default(),
                 },
             ],
@@ -321,6 +326,8 @@ mod tests {
             ],
             own_pass_ceilings: PassCeilings::default(),
             current_combo: None,
+            combo_holder: None,
+            table: crate::strategy::TableInfo::default(),
         };
         let legal = vec![
             Move::Pass,

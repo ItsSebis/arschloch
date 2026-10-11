@@ -11,7 +11,8 @@ use std::path::Path;
 use neat::Genome;
 use serde::{Deserialize, Serialize};
 
-use super::features::{FEATURE_COUNT, FEATURE_NAMES, FEATURE_SET_VERSION};
+use super::feature_set::{FeatureSet, FEATURE_NAMES_V2};
+use super::features::FEATURE_SET_VERSION;
 
 /// Bumped when the file layout (not the feature set) changes.
 pub const FORMAT_VERSION: u32 = 1;
@@ -48,17 +49,24 @@ impl fmt::Display for GenomeFileError {
 impl std::error::Error for GenomeFileError {}
 
 impl GenomeFile {
-    /// Wraps `genome` for saving.
+    /// Wraps `genome` for saving, recording the names of the feature set
+    /// its input count identifies.
     ///
     /// # Errors
     ///
-    /// Returns `GenomeFileError::Mismatch` if the genome does not take
-    /// exactly `FEATURE_COUNT` inputs.
+    /// Returns `GenomeFileError::Mismatch` if the genome's input count is
+    /// not that of a `FeatureSet`.
     pub fn new(genome: Genome) -> Result<Self, GenomeFileError> {
+        let inputs = genome.num_inputs();
+        let features = FeatureSet::from_input_count(inputs).ok_or_else(|| {
+            GenomeFileError::Mismatch(format!(
+                "genome takes {inputs} inputs, which is no feature set of this build"
+            ))
+        })?;
         let file = Self {
             format_version: FORMAT_VERSION,
             feature_set_version: FEATURE_SET_VERSION,
-            feature_names: FEATURE_NAMES.iter().map(|&n| n.to_owned()).collect(),
+            feature_names: features.names().iter().map(|&n| n.to_owned()).collect(),
             genome,
         };
         file.check_fits_this_build()?;
@@ -79,15 +87,21 @@ impl GenomeFile {
                 self.feature_set_version
             )));
         }
-        if self.feature_names != FEATURE_NAMES {
+        let Some(features) = FeatureSet::from_names(&self.feature_names) else {
             return Err(GenomeFileError::Mismatch(format!(
-                "trained on features {:?}, this build uses {FEATURE_NAMES:?}",
-                self.feature_names
+                "trained on features {:?}, which is not a prefix of this build's {FEATURE_NAMES_V2:?} \
+                 ending at a group boundary ({}, {}, {} or {} features)",
+                self.feature_names,
+                FeatureSet::Base.len(),
+                FeatureSet::Trick.len(),
+                FeatureSet::Hidden.len(),
+                FeatureSet::All.len(),
             )));
-        }
-        if self.genome.num_inputs() != FEATURE_COUNT {
+        };
+        if self.genome.num_inputs() != features.len() {
             return Err(GenomeFileError::Mismatch(format!(
-                "genome takes {} inputs, this build has {FEATURE_COUNT} features",
+                "the file lists {} features but its genome takes {} inputs",
+                features.len(),
                 self.genome.num_inputs()
             )));
         }
@@ -135,7 +149,7 @@ mod tests {
     use rand::SeedableRng;
 
     use super::*;
-    use crate::strategies::neat_player::features::FEATURE_SET_VERSION;
+    use crate::strategies::neat_player::features::{FEATURE_COUNT, FEATURE_SET_VERSION};
 
     fn sample_genome() -> Genome {
         let mut tracker = InnovationTracker::new(u32::try_from(FEATURE_COUNT).unwrap() + 2);
@@ -189,6 +203,73 @@ mod tests {
             reason.contains("something_else") && reason.contains("is_pass"),
             "{reason}"
         );
+    }
+
+    fn genome_with(inputs: usize) -> Genome {
+        let mut tracker = InnovationTracker::new(u32::try_from(inputs).unwrap() + 2);
+        Genome::minimal(
+            inputs,
+            &mut tracker,
+            &NeatConfig::default(),
+            &mut rand::rngs::StdRng::seed_from_u64(1),
+        )
+    }
+
+    #[test]
+    fn every_feature_set_round_trips_and_records_exactly_its_names() {
+        for set in FeatureSet::ALL_SETS {
+            let file = GenomeFile::new(genome_with(set.len())).unwrap();
+            assert_eq!(file.feature_names, set.names());
+            assert_eq!(file.feature_set_version, FEATURE_SET_VERSION);
+            let loaded = GenomeFile::from_json(&serde_json::to_string(&file).unwrap()).unwrap();
+            assert_eq!(loaded, file);
+        }
+        // A v1 file is exactly what it always was.
+        let v1 = GenomeFile::new(genome_with(FEATURE_COUNT)).unwrap();
+        assert_eq!(v1.feature_names.len(), FEATURE_COUNT);
+        assert_eq!(v1.feature_names[19], "opponents_locked_out");
+    }
+
+    #[test]
+    fn names_out_of_order_or_beyond_the_known_list_are_refused() {
+        let mut file = GenomeFile::new(genome_with(FeatureSet::Trick.len())).unwrap();
+        file.feature_names.swap(20, 21);
+        assert!(matches!(
+            GenomeFile::from_json(&serde_json::to_string(&file).unwrap()),
+            Err(GenomeFileError::Mismatch(_))
+        ));
+        let mut longer = GenomeFile::new(genome_with(FeatureSet::All.len())).unwrap();
+        longer.feature_names.push("brand_new".into());
+        longer.genome = genome_with(FeatureSet::All.len() + 1);
+        let error = GenomeFile::from_json(&serde_json::to_string(&longer).unwrap()).unwrap_err();
+        assert!(matches!(error, GenomeFileError::Mismatch(_)), "{error}");
+        // A prefix that stops inside a group is not a feature set.
+        let mut cut = GenomeFile::new(genome_with(FEATURE_COUNT)).unwrap();
+        cut.feature_names = FEATURE_NAMES_V2[..22]
+            .iter()
+            .map(|n| (*n).to_owned())
+            .collect();
+        cut.genome = genome_with(22);
+        assert!(matches!(
+            GenomeFile::from_json(&serde_json::to_string(&cut).unwrap()),
+            Err(GenomeFileError::Mismatch(_))
+        ));
+    }
+
+    #[test]
+    fn names_and_input_count_must_agree() {
+        // 20 names but a genome of 22 inputs, and the other way round.
+        let mut file = GenomeFile::new(genome_with(FEATURE_COUNT)).unwrap();
+        file.genome = genome_with(22);
+        let error = GenomeFile::from_json(&serde_json::to_string(&file).unwrap()).unwrap_err();
+        let GenomeFileError::Mismatch(reason) = &error else {
+            panic!("expected Mismatch, got {error}");
+        };
+        assert!(reason.contains("20") && reason.contains("22"), "{reason}");
+        let mut file = GenomeFile::new(genome_with(FeatureSet::Trick.len())).unwrap();
+        file.genome = genome_with(FEATURE_COUNT);
+        assert!(GenomeFile::from_json(&serde_json::to_string(&file).unwrap()).is_err());
+        assert!(GenomeFile::new(genome_with(22)).is_err());
     }
 
     #[test]

@@ -237,8 +237,14 @@ caller-supplied scratch buffer), `InnovationTracker`, `NeatConfig` and
 `sim` depends on `neat` for `NeatStrategy`
 (`sim/src/strategies/neat_player/`): per turn it builds 20 features
 per legal move (including pass), scores each with the compiled network
-and plays the highest. `GenomeFile` stores a genome with the feature
-names it was trained on.
+and plays the highest. Feature set v1 is the first 20 of a longer list
+(`FEATURE_NAMES_V2`: v1, then the `trick`, `hidden` and `table` groups); a
+network reads a nested prefix (`FeatureSet`: 20, 25, 28 or 31 inputs) and
+`NeatStrategy::needs` asks the match loop for exactly the `TurnContext`
+parts that prefix reads (`ContextNeeds::TRICK` for `OpponentHand::in_trick` and
+`combo_holder`, `TABLE` for `TurnContext::table`). `GenomeFile` stores a genome
+with the feature names it was trained on and accepts any such prefix; see
+`docs/TRAINING.md`, "Feature sets".
 
 `cli evaluate` (Phase 10e) scores genomes against any opponents with
 `sim::training::evaluate`. `sim::training` (Phase 10c) holds fitness evaluation (`evaluate`,
@@ -247,6 +253,13 @@ common random numbers), the run's files (`RunDir`: atomic checkpoints,
 the resumable generational loop (`Trainer`, reporting through the
 `TrainObserver` trait). `cli train` prints a row per generation from
 those events; the dashboard (10d) will read the same files.
+
+Phase 13 additions in `sim::training`: `fitness` (`FitnessKind`: mean, risk, tanh, and `Moments`,
+the per-round sums an evaluation keeps so fitness can be computed and pooled), `evaluate_with`
+(several `TableSpec`s cycled by match index, a fitness kind, and a start index so a second batch
+of matches continues the cycle), `TrainConfig::tables()` (the settings: table sizes x decks,
+table size major) and racing (`Trainer::race`, the odd seed streams `2 * generation + 1`). All
+default to off and leave a default run byte for byte as before; see `docs/TRAINING.md`.
 
 ### `web` (Phase 10d; extended in Phase 11)
 

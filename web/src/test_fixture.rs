@@ -44,6 +44,12 @@ pub fn fixture_run_dir() -> PathBuf {
             hall_of_fame_size: 0,
             hall_of_fame_interval: 5,
             skill_weight: 0.0,
+            features: sim::FeatureSet::Base,
+            fitness: sim::training::FitnessKind::Mean,
+            racing_top: 0.0,
+            racing_matches: 0,
+            player_counts: Vec::new(),
+            decks: Vec::new(),
         };
         let opponents = vec![
             Opponent {
