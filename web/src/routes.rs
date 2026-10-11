@@ -4,6 +4,8 @@
 //! - `GET /`, `/app.js`, `/lib.js`, `/style.css`: the embedded page;
 //! - `GET /api/state`: run settings, progress and whether it finished;
 //! - `GET /api/events?since=N`: generation events after generation `N`;
+//! - `GET /analysis.html`, `/analysis.js`, `/analysis_lib.js`, `GET /api/analysis[?path=]`:
+//!   the run analysis page and its data;
 //! - `GET /api/genome/N|best`: a champion genome file;
 //! - `GET /api/decisions/N`: the recorded decisions of a new-best champion.
 
@@ -30,7 +32,7 @@ impl Response {
         }
     }
 
-    fn error(status: u16, message: &str) -> Self {
+    pub(crate) fn error(status: u16, message: &str) -> Self {
         Self::json(status, &json!({ "error": message }))
     }
 
@@ -57,7 +59,7 @@ fn parse_generation(segment: &str) -> Option<u32> {
     segment.parse().ok()
 }
 
-fn query_value<'a>(query: &'a str, key: &str) -> Option<&'a str> {
+pub(crate) fn query_value<'a>(query: &'a str, key: &str) -> Option<&'a str> {
     query
         .split('&')
         .filter_map(|pair| pair.split_once('='))
@@ -116,6 +118,19 @@ impl App {
                 "text/css; charset=utf-8",
                 include_str!("../assets/style.css"),
             ),
+            "/analysis.html" => Response::asset(
+                "text/html; charset=utf-8",
+                include_str!("../assets/analysis.html"),
+            ),
+            "/analysis.js" => Response::asset(
+                "text/javascript; charset=utf-8",
+                include_str!("../assets/analysis.js"),
+            ),
+            "/analysis_lib.js" => Response::asset(
+                "text/javascript; charset=utf-8",
+                include_str!("../assets/analysis_lib.js"),
+            ),
+            "/api/analysis" => crate::analysis_api::analysis(&self.root, query),
             "/api/state" => self.state(),
             "/api/events" => self.events(query),
             "/api/statistics-catalog" => Response::json(
@@ -226,6 +241,9 @@ mod tests {
             ("/app.js", "text/javascript", "fetch"),
             ("/lib.js", "text/javascript", "export"),
             ("/style.css", "text/css", "--"),
+            ("/analysis.html", "text/html", "/analysis.js"),
+            ("/analysis.js", "text/javascript", "/api/analysis"),
+            ("/analysis_lib.js", "text/javascript", "export"),
         ] {
             let response = app.handle("GET", path);
             assert_eq!(response.status, 200, "{path}");
@@ -408,5 +426,145 @@ mod tests {
         );
         assert_eq!(app.handle("GET", "/api/genome/best").status, 404);
         std::fs::remove_dir_all(empty).ok();
+    }
+
+    fn temp_dir(name: &str) -> PathBuf {
+        let dir =
+            std::env::temp_dir().join(format!("arschloch-web-an-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn analysis_of_a_run_directory_has_label_analysis_and_series() {
+        let response = app().handle("GET", "/api/analysis");
+        assert_eq!(response.status, 200);
+        assert!(response.content_type.starts_with("application/json"));
+        let body = json_of(&response);
+        let runs = body.as_array().expect("an array");
+        assert_eq!(runs.len(), 1);
+        let run = &runs[0];
+        assert!(run["label"].as_str().is_some_and(|l| !l.is_empty()));
+        assert_eq!(run["analysis"]["generations"], 3);
+        assert!(run["analysis"]["verdict"].as_array().is_some());
+        assert!(run["analysis"]["noise"]["single_se"].is_number());
+        assert_eq!(run["series"]["generation"], json!([0, 1, 2]));
+        assert_eq!(run["series"]["smoothed"].as_array().unwrap().len(), 3);
+        assert_eq!(run["series"]["opponents"][0]["name"], "LowestLegal");
+        assert_eq!(
+            run["series"]["opponents"][0]["means"]
+                .as_array()
+                .unwrap()
+                .len(),
+            3
+        );
+    }
+
+    #[test]
+    fn analysis_of_a_set_lists_each_run_and_path_selects_one() {
+        let dir = crate::test_fixture::fixture_set_dir("analysis");
+        let app = App::new(dir.clone());
+        let all = json_of(&app.handle("GET", "/api/analysis"));
+        let labels: Vec<&str> = all
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| r["label"].as_str().unwrap())
+            .collect();
+        assert_eq!(labels, ["run-01", "run-02"]);
+        let one = json_of(&app.handle("GET", "/api/analysis?path=run-01"));
+        assert_eq!(one.as_array().unwrap().len(), 1);
+        assert_eq!(one[0]["analysis"]["generations"], 3);
+        let file = json_of(&app.handle("GET", "/api/analysis?path=run-02%2Fevents.jsonl"));
+        assert_eq!(file[0]["analysis"]["generations"], 1);
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn analysis_paths_never_leave_the_served_root() {
+        let dir = crate::test_fixture::fixture_set_dir("analysis-hostile");
+        let outside = temp_dir("outside");
+        std::fs::write(
+            outside.join("events.jsonl"),
+            std::fs::read_to_string(dir.join("run-01/events.jsonl")).unwrap(),
+        )
+        .unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&outside, dir.join("escape")).unwrap();
+        let app = App::new(dir.clone());
+        let outside_text = outside.display().to_string();
+        let mut hostile = vec![
+            "..".to_string(),
+            "../".to_string(),
+            "run-01/../..".to_string(),
+            "%2e%2e%2f".to_string(),
+            "..%2f..%2fetc".to_string(),
+            outside_text,
+            String::new(),
+        ];
+        if cfg!(unix) {
+            hostile.push("escape".to_string());
+            hostile.push("escape/events.jsonl".to_string());
+        }
+        for path in hostile {
+            let response = app.handle("GET", &format!("/api/analysis?path={path}"));
+            assert_eq!(response.status, 400, "{path:?}");
+            assert!(json_of(&response)["error"].is_string(), "{path:?}");
+        }
+        // Rooted paths are absolute on Unix only: wherever they point, never a 200.
+        for path in ["/etc", "/etc/passwd"] {
+            let status = app
+                .handle("GET", &format!("/api/analysis?path={path}"))
+                .status;
+            assert!(matches!(status, 400 | 404), "{path}: {status}");
+        }
+        // An absolute path that does point inside the root is fine.
+        let inside = dir.join("run-01").display().to_string();
+        assert_eq!(
+            app.handle("GET", &format!("/api/analysis?path={inside}"))
+                .status,
+            200
+        );
+        std::fs::remove_dir_all(dir).ok();
+        std::fs::remove_dir_all(outside).ok();
+    }
+
+    #[test]
+    fn analysis_reports_missing_empty_and_corrupt_runs_without_panicking() {
+        let app = app();
+        let missing = app.handle("GET", "/api/analysis?path=nope");
+        assert_eq!(missing.status, 404);
+        assert!(json_of(&missing)["error"]
+            .as_str()
+            .unwrap()
+            .contains("no such"));
+        assert_eq!(app.handle("GET", "/api/analysis?path=%zz").status, 400);
+
+        let empty = temp_dir("empty");
+        let response = App::new(empty.clone()).handle("GET", "/api/analysis");
+        assert_eq!(response.status, 404);
+        assert!(json_of(&response)["error"]
+            .as_str()
+            .unwrap()
+            .contains("no generation events"));
+
+        let corrupt = temp_dir("corrupt");
+        std::fs::write(corrupt.join("events.jsonl"), "not json\n{\"truncated\":\n").unwrap();
+        let response = App::new(corrupt.clone()).handle("GET", "/api/analysis");
+        assert_eq!(response.status, 404);
+        assert!(json_of(&response)["error"].is_string());
+
+        let start_only = temp_dir("start-only");
+        std::fs::write(
+            start_only.join("events.jsonl"),
+            crate::test_fixture::sample_events()[0].clone() + "\n",
+        )
+        .unwrap();
+        let response = App::new(start_only.clone()).handle("GET", "/api/analysis");
+        assert_eq!(response.status, 404);
+        for dir in [empty, corrupt, start_only] {
+            std::fs::remove_dir_all(dir).ok();
+        }
     }
 }

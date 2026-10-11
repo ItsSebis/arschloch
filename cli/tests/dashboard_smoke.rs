@@ -271,3 +271,35 @@ fn train_serve_follows_a_set_through_its_runs() {
     drop(server);
     std::fs::remove_dir_all(&out).unwrap();
 }
+
+#[test]
+fn watch_serves_the_run_analysis_page_and_data() {
+    let out = run_dir("analysis");
+    let mut args = vec!["train", "--out", out.to_str().unwrap(), "--quiet"];
+    args.extend(SMALL);
+    assert!(Command::new(env!("CARGO_BIN_EXE_cli"))
+        .args(&args)
+        .status()
+        .unwrap()
+        .success());
+
+    let server = Server::spawn(&["watch", out.to_str().unwrap(), "--port", "0"]);
+    let address = server.address();
+    let page = get(&address, "/analysis.html");
+    assert!(page.starts_with("HTTP/1.1 200") && page.contains("<title>Run analysis</title>"));
+    assert!(
+        get(&address, "/").contains("/analysis.html"),
+        "linked from the dashboard"
+    );
+    assert!(get(&address, "/analysis.js").contains("/api/analysis"));
+
+    let runs = json(&get(&address, "/api/analysis"));
+    let runs = runs.as_array().unwrap();
+    assert_eq!(runs.len(), 1);
+    assert_eq!(runs[0]["analysis"]["generations"], 2);
+    assert_eq!(runs[0]["series"]["generation"].as_array().unwrap().len(), 2);
+    assert!(get(&address, "/api/analysis?path=..").starts_with("HTTP/1.1 400"));
+    assert!(get(&address, "/api/analysis?path=missing").starts_with("HTTP/1.1 404"));
+    drop(server);
+    std::fs::remove_dir_all(&out).unwrap();
+}

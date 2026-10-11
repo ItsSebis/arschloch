@@ -85,6 +85,7 @@ fn the_javascript_tests_pass() {
         .arg(tests.join("lib.test.mjs"))
         .arg(tests.join("replay.test.mjs"))
         .arg(tests.join("play-lib.test.mjs"))
+        .arg(tests.join("analysis.test.mjs"))
         .env("RUN_DIR", &run)
         .output()
         .expect("node runs");

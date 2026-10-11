@@ -4,6 +4,7 @@
 //! run's files, so a slow or closed browser cannot affect training.
 //! See docs/superpowers/specs/2026-10-08-neat-engine-design.md, 7a.
 
+mod analysis_api;
 mod event_index;
 mod play;
 mod records;
