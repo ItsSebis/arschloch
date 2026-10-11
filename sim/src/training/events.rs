@@ -126,6 +126,36 @@ pub struct Complexity {
     pub innovation_count: usize,
 }
 
+/// Wall-clock seconds spent in each stage of one generation (measured with
+/// `std::time::Instant`, so they differ from run to run and are not part
+/// of any determinism comparison, like `elapsed_secs`). The mixed,
+/// per-opponent and hall-of-fame re-evaluations run at the same time, so
+/// their times overlap; the other stages run one after the other.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
+pub struct StageTimings {
+    /// Every genome played its training matches.
+    pub training_evaluation: f64,
+    /// The champion candidates played the selection matches.
+    pub champion_selection: f64,
+    /// Speciation, crossover, mutation: `Population::advance`.
+    pub speciation_and_reproduction: f64,
+    /// The champion against the mixed fixed pool on the fixed matches.
+    pub reevaluation_mixed: f64,
+    /// The champion against each fixed opponent alone.
+    pub reevaluation_per_opponent: f64,
+    /// The champion against the hall of fame, plus updating the hall.
+    pub hall_of_fame: f64,
+    /// Held-out confirmation of a new best (0 otherwise).
+    pub confirmation: f64,
+    /// Recording the decision sample of a new best (0 otherwise).
+    pub decision_sample: f64,
+    /// Writing the champion, best and decision files. The event line and
+    /// the checkpoint are written after the event is built, so they are in
+    /// no stage (nor in `generation_secs`); the gap between two events'
+    /// `elapsed_secs` deltas and `generation_secs` is their cost.
+    pub checkpoint_and_files: f64,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GenerationEvent {
     pub generation: u32,
@@ -150,6 +180,9 @@ pub struct GenerationEvent {
     pub species: Vec<SpeciesStats>,
     pub compatibility_threshold: f64,
     pub complexity: Complexity,
+    /// Seconds per stage; absent in events written before it existed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timings: Option<StageTimings>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

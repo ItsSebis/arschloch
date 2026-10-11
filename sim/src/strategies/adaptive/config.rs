@@ -2,9 +2,8 @@
 //! a single configurable strategy whose base behavior is `LowestLegal`
 //! with five independently-toggleable modifiers layered on top:
 //! card-counting, endgame denial (optionally sharpened by pass-based
-//! hand-reading), deception (docs/ROADMAP.md, Phase 7), trick-lead
-//! tempo (docs/ROADMAP.md, Phase 8), and lead-order bullying
-//! (docs/ROADMAP.md, Phase 9). Each modifier can be switched on or
+//! hand-reading), deception, trick-lead
+//! tempo, and lead-order bullying (all in docs/ROADMAP.md). Each modifier can be switched on or
 //! off (and, for denial, chosen between two strengths) without writing
 //! a new strategy struct, so batch runs can isolate which modifier
 //! combination actually beats plain `LowestLegal`.

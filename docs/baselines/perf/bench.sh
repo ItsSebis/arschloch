@@ -45,6 +45,26 @@ for threads in "$THREADS" 0; do
   timed "mixed (1 neat + 3 classic)" table "$threads" "$N" lowest-legal endgame-denial adaptive:reading,tempo,bully
 done
 
+# Rows added in Phase 19 (the rows above are unchanged). Single thread, same
+# checksum scheme. The first block is the setup of the slowest real training
+# runs (5 players, double deck: 2 neat, 1 adaptive, 2 lowest-legal seats); it plays
+# MATCHES5 matches (default 1000: a 5-player double-deck match is several
+# times dearer than the 4-player ones above). The second block times the
+# heavier classic strategies on their own (4 players, MATCHES matches).
+MATCHES5=${MATCHES5:-1000}
+N2=${GENOME2:-docs/baselines/neat-v2/champion.json}
+echo "== phase 19 rows (threads: 1; 5 players double deck: $MATCHES5 matches)"
+table5() {
+  local args=()
+  for spec in "$@"; do args+=(--strategy "$spec"); done
+  "$CLI" --player-count 5 --deck-variant double --matches "$MATCHES5" --rounds 8 --seed 42 --pass-rule "${PASS_RULE:-free}" --exchange-rule "${EXCHANGE_RULE:-free}" --output "$TMP/result.json" \
+    --threads 1 "${args[@]}"
+}
+timed "5p double 2 neat+adapt+2 LL" table5 "neat:$N2" "neat:$N2" "adaptive:reading,deception=1,tempo,bully" lowest-legal lowest-legal
+timed "4x card-counter" table 1 card-counter card-counter card-counter card-counter
+timed "4x endgame-denial" table 1 endgame-denial endgame-denial endgame-denial endgame-denial
+timed "4x adaptive:reading,tempo,bully" table 1 adaptive:reading,tempo,bully adaptive:reading,tempo,bully adaptive:reading,tempo,bully adaptive:reading,tempo,bully
+
 echo "== training (pop 60, 4 generations, 40 matches, 6 rounds, seed 7)"
 rm -rf "$TMP/run"
 start=$(date +%s.%N)

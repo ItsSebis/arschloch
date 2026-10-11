@@ -1,4 +1,4 @@
-//! Trick-lead tempo (docs/ROADMAP.md, Phase 8).
+//! Trick-lead tempo.
 //!
 //! Finishing is a race to be the one who *leads* a trick while holding
 //! exactly one card: leading your last card finishes you unconditionally
@@ -21,7 +21,7 @@
 //! past it), instead of whatever the base strategy's own cheapest-legal
 //! instinct would pick.
 //!
-//! **Empirically validated** (docs/ROADMAP.md, Phase 8): `TEMPO_CLOSE =
+//! **Empirically validated** (see the tempo entry in docs/ROADMAP.md): `TEMPO_CLOSE =
 //! 2` is a sharp sweet spot, not an arbitrary round number. Across four
 //! independent seed bases and all four supported table sizes, `close=2`
 //! gave a consistent ~4-6% relative edge over plain `LowestLegal` in a

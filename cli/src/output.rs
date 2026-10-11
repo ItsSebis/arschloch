@@ -86,7 +86,7 @@ fn extended_output<'a>(
 }
 
 /// `matches` and `statistics` are the keys every version of the file has;
-/// `extended` and `statistics_catalog` are the additive Phase 12 keys.
+/// `extended` and `statistics_catalog` are the additive keys.
 #[derive(serde::Serialize)]
 struct RunOutput<'a> {
     matches: &'a [sim::MatchResult],

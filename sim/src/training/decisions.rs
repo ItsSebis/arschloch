@@ -124,7 +124,7 @@ impl Strategy for Recorder {
                 hand: hand.iter().map(card_label).collect(),
                 table: context
                     .current_combo
-                    .map(|combo| move_label(&Move::Play(combo.clone()))),
+                    .map(|combo| move_label(&Move::Play(*combo))),
                 opponent_hands: context
                     .opponents
                     .iter()

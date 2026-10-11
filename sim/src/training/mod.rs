@@ -14,7 +14,9 @@ pub mod trainer;
 pub use config::{DeckChoice, DuplicateChoice, TrainConfig};
 pub use decisions::{record_decisions, DecisionFile, DecisionRecord};
 pub use evaluate::{evaluate, match_seed, role_score, Opponents, Score, TableSpec};
-pub use events::{Event, GenerationEvent, RunEnd, RunStart, ScoreStat, SCHEMA_VERSION};
+pub use events::{
+    Event, GenerationEvent, RunEnd, RunStart, ScoreStat, StageTimings, SCHEMA_VERSION,
+};
 pub use run_dir::{load_config, HallMember, RunDir, TrainError};
 pub use set::{run_dir_name, set_eta, SetFile};
 pub use trainer::{Opponent, TrainObserver, Trainer};

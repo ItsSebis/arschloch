@@ -85,7 +85,7 @@ impl Card {
 
 /// Groups `hand` by rank, in ascending rank order. Each inner `Vec` is
 /// every card of one rank (a "reserve" a strategy might want to keep
-/// together rather than split up — see `docs/ROADMAP.md`, Phase 5).
+/// together rather than split up — see "Smart exchange" in `docs/ROADMAP.md`).
 #[must_use]
 pub fn rank_groups(hand: &[Card]) -> Vec<Vec<Card>> {
     let mut sorted = hand.to_vec();

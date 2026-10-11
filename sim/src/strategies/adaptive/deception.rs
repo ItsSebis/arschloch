@@ -260,7 +260,7 @@ mod tests {
     // 0.10.3's redesigned trait hierarchy (`Rng: TryRng<Error =
     // Infallible>`, quite different from the simpler `RngCore` of
     // older rand versions) isn't worth the complexity. The real,
-    // sufficient proof is Task 7's
+    // sufficient proof is the
     // `adaptive_none_matches_lowest_legal_exactly` equivalence test: a
     // single spurious draw here would advance the shared match-wide
     // `rng`'s state and desynchronize every later decision in that
