@@ -861,6 +861,7 @@ fn decisions_hash(dir: &Path) -> u64 {
 /// reproduce their files byte for byte, and their events (apart from the
 /// wall-clock fields) and decision samples too.
 #[test]
+#[allow(clippy::too_many_lines)] // the golden table is the bulk of it
 fn the_default_feature_set_trains_exactly_as_before_the_option_existed() {
     for (name, extra, hashes, decisions, events) in [
         (
@@ -957,8 +958,17 @@ fn the_default_feature_set_trains_exactly_as_before_the_option_existed() {
                 "{name}/{file} explicit"
             );
         }
-        assert_eq!(decisions_hash(&explicit), decisions, "{name} explicit");
-        assert_eq!(timeless_events_hash(&explicit), events, "{name} explicit");
+        // Same platform, same run: the explicit spelling must equal the default.
+        assert_eq!(
+            decisions_hash(&explicit),
+            decisions_hash(&out),
+            "{name} explicit"
+        );
+        assert_eq!(
+            timeless_events_hash(&explicit),
+            timeless_events_hash(&out),
+            "{name} explicit"
+        );
         std::fs::remove_dir_all(&out).unwrap();
         std::fs::remove_dir_all(&explicit).unwrap();
     }
