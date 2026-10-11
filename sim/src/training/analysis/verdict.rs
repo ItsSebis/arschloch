@@ -158,7 +158,7 @@ pub fn verdict_for(a: &RunAnalysis) -> Vec<Verdict> {
         out.push(verdict(
             VerdictCode::ModelLimited,
             format!(
-                "flat everywhere above the noise (last-third trend {}, no opponent rising): \
+                "no progress left in the last third that the noise does not explain (last-third trend {}, no opponent rising): \
                  new inputs (--features hidden) or a different fitness",
                 interval(last_third),
             ),

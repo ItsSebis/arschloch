@@ -88,7 +88,7 @@ Adaptive(reading,deception=1,tempo,bully)  flat   0.621        0.628       +0.00
 LowestLegal                                flat   0.458        0.467       -0.008 [-0.077, +0.061]  +0.005 [-0.007, +0.017]
 
 Verdict:
-  [model_limited] flat everywhere above the noise (last-third trend -0.0005 [-0.0111, +0.0100] per 100 generations, no opponent rising): new inputs (--features hidden) or a different fitness
+  [model_limited] no progress left in the last third that the noise does not explain (last-third trend -0.0005 [-0.0111, +0.0100] per 100 generations, no opponent rising): new inputs (--features hidden) or a different fitness
   [growth_without_gain] the network keeps growing without gain (mean hidden nodes 12.3 over the first 3 generations of the last third -> 15.7 over its last 3; last-third trend -0.0005 [-0.0111, +0.0100] per 100 generations): stagnation limit / complexity penalty
   [converged] the population has converged (65% of the genomes in the top fitness bin over the last third): raise mutation rates / species target
   [stop_early] after generation 58 the smoothed score stayed within one noise unit (0.024) of its peak 0.386: the last 241 generations (up to generation 299) added nothing visible; stop earlier
@@ -118,7 +118,7 @@ Neat(2-gen-0299)  flat     0.064        0.123       +0.047 [-0.419, +0.512]  +0.
 
 Verdict:
   [declining] the smoothed score peaked at generation 85 (0.062), now 0.015 (last-third trend +0.0278 [-0.3094, +0.3649] per 100 generations): the final champion is not the best one; use the best generation's genome / stop earlier
-  [model_limited] flat everywhere above the noise (last-third trend +0.0278 [-0.3094, +0.3649] per 100 generations, no opponent rising): new inputs (--features hidden) or a different fitness
+  [model_limited] no progress left in the last third that the noise does not explain (last-third trend +0.0278 [-0.3094, +0.3649] per 100 generations, no opponent rising): new inputs (--features hidden) or a different fitness
 ```
 
 **Reading.**
@@ -218,7 +218,7 @@ EndgameDenial                  falling  0.589        0.663       -0.051 [-0.082,
 Adaptive(reading,tempo,bully)  falling  0.503        0.572       -0.042 [-0.075, -0.008]  +0.086 [+0.040, +0.131]
 
 Verdict:
-  [model_limited] flat everywhere above the noise (last-third trend -0.0395 [-0.0820, +0.0030] per 100 generations, no opponent rising): new inputs (--features hidden) or a different fitness
+  [model_limited] no progress left in the last third that the noise does not explain (last-third trend -0.0395 [-0.0820, +0.0030] per 100 generations, no opponent rising): new inputs (--features hidden) or a different fitness
   [growth_without_gain] the network keeps growing without gain (mean hidden nodes 5.0 over the first 3 generations of the last third -> 10.3 over its last 3; last-third trend -0.0395 [-0.0820, +0.0030] per 100 generations): stagnation limit / complexity penalty
 ```
 

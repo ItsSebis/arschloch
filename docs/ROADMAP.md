@@ -377,7 +377,7 @@ own past champions, optionally mixed with fixed strategies.
   old tricks; the hall of fame and the anchors are the standard guard. The first
   run is an experiment compared against `neat-v2`, not a new default.
 - Evidence so far (from the stagnation analysis of the long runs, see Phase 17):
-  the stall seen in the long runs looks noise- and information-limited rather
+  the stall seen in the long runs looked noise- and information-limited by hand analysis (the Phase 17 tool is more cautious: `docs/baselines/phase-17/README.md`) rather
   than opponent-limited, so this phase ranks below Phase 13's new inputs.
 
 ## Phase 17 — Run analysis tool (CLI and web) (done)
@@ -548,7 +548,7 @@ per round or the 16 threads do not scale. Finding out which is the first task.
 ## Phase 20 — GPU simulation port (RTX 4070)
 
 Go/no-go, schedule and design for running the simulation on the GPU. Motivation
-(from the stagnation analysis, Phase 17): the long runs are noise-limited, and a
+(from the stagnation analysis, Phase 17): the long runs look noise-limited by hand analysis (the Phase 17 tool's verdicts on the same runs are mixed, see `docs/baselines/phase-17/README.md`), and a
 10-30x faster simulator would allow many more matches per genome (standard error
 down 3-5x) and bigger populations in the same wall time. The measured facts in
 `docs/baselines/perf/README.md` still hold: the network is only a few percent of
