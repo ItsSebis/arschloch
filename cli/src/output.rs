@@ -312,7 +312,11 @@ mod tests {
         let value = real_run_json();
 
         let mut checked = 0;
-        for stat in sim::stats_catalog::catalog() {
+        // Run-analysis entries point into `cli analyse-run --json`, not results.json.
+        for stat in sim::stats_catalog::catalog()
+            .iter()
+            .filter(|s| s.scope != sim::stats_catalog::Scope::RunAnalysis)
+        {
             for path in stat.json_path.split("; ") {
                 assert!(
                     resolves(&value, path),
@@ -325,6 +329,62 @@ mod tests {
         assert!(checked >= 15, "only {checked} paths checked");
         let catalog = value["statistics_catalog"].as_array().unwrap();
         assert_eq!(catalog.len(), sim::stats_catalog::catalog().len());
+    }
+
+    /// Every run-analysis entry must be where the catalogue says, in one
+    /// element of the `--json` array of `cli analyse-run`, for a real run
+    /// trained here with racing on (so that every optional block exists).
+    /// Structure only: no numbers are compared.
+    #[test]
+    fn every_run_analysis_json_path_resolves_in_a_real_analysis() {
+        let dir =
+            std::env::temp_dir().join(format!("arschloch-catalog-analysis-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let args = [
+            "--out",
+            dir.to_str().unwrap(),
+            "--population",
+            "12",
+            "--matches-per-genome",
+            "4",
+            "--reeval-matches",
+            "6",
+            "--rounds",
+            "3",
+            "--generations",
+            "12",
+            "--racing-top",
+            "0.5",
+            "--racing-matches",
+            "2",
+            "--quiet",
+        ];
+        crate::train::run(args.iter().map(|a| (*a).to_owned())).unwrap();
+        let runs = sim::training::load_runs(&dir).unwrap();
+        assert_eq!(runs.len(), 1);
+        let analysis = sim::training::analyse(&runs[0]);
+        let element = serde_json::json!({
+            "label": runs[0].label,
+            "analysis": serde_json::to_value(&analysis).unwrap(),
+        });
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let mut checked = 0;
+        for stat in sim::stats_catalog::catalog()
+            .iter()
+            .filter(|s| s.scope == sim::stats_catalog::Scope::RunAnalysis)
+        {
+            assert!(stat.json_path.starts_with("analysis."), "{}", stat.id);
+            for path in stat.json_path.split("; ") {
+                assert!(
+                    resolves(&element, path),
+                    "{}: `{path}` not in the analysis JSON",
+                    stat.id
+                );
+                checked += 1;
+            }
+        }
+        assert!(checked >= 25, "only {checked} paths checked");
     }
 
     /// Expands `{a,b}` leaf groups of a catalogue path into plain paths.

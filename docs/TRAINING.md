@@ -425,6 +425,68 @@ target/release/cli train --out runs/first --resume --generations 200
 is read from the checkpoint. A resumed run ends exactly where an uninterrupted
 one would have.
 
+## Analysing a run
+
+A run stops getting better at some point, and the training score alone does not
+say why. `cli analyse-run` reads the `events.jsonl` a run wrote and says where
+it stopped improving and what probably limits it. It works on finished runs,
+stopped runs and the runs of a set, and changes nothing.
+
+```bash
+# one run directory (or its events.jsonl)
+target/release/cli analyse-run runs/first
+# a set directory: one report per run, then a comparison table
+target/release/cli analyse-run runs/set
+# a folder of loose .jsonl files, or several paths, compared side by side
+target/release/cli analyse-run old-runs/ runs/first runs/b/events.jsonl
+# the numbers for other tools: a JSON array of {label, analysis}
+target/release/cli analyse-run runs/set --json analysis.json
+```
+
+Runs are labelled by directory or file name. An old run without a `run_end`
+line (stopped) is analysed from its generations; best generation and the
+held-out numbers are then missing. In the browser, `cli watch DIR` (or
+`--serve` on `cli train`) also serves **`/analysis.html`**: pick a run of the
+served directory (a set directory lists its runs) and see the verdict, the key
+numbers, the champion's curve with the stall point and noise band, and the
+per-opponent lines, with runs compared side by side. It shows the same numbers
+as the CLI. Every number is explained in `docs/STATISTICS.md` (section "Run
+analysis"), with its formula and caveats.
+
+The main numbers (all on the champion's re-evaluation score, the champion
+replayed on one fixed set of matches every generation): the **stall
+generation** (the first generation from which the 10-generation smoothed curve
+stays within one standard error of its peak), the **trend** per 100
+generations with a 95% interval, overall and over the last third of the run,
+the **noise** (the error of one evaluation and how much the curve jumps from
+generation to generation) and the **winner's-curse gap** (how much better the
+best generation looked on the matches it was chosen on than on fresh ones; it
+is a selection effect, a positive gap means part of the lead was luck).
+
+**The verdicts.** Rules are independent, several can fire; each message quotes
+the numbers behind it.
+
+| verdict | when | what to do |
+| --- | --- | --- |
+| `still_improving` | the stall is in the last 5% of the run, or the last-third trend is above 0 | train longer (`--resume`, or `--from` for a new run) |
+| `noise_limited` | last-third trend flat, and the curve jumps by 2 single-evaluation errors or more, or the curse gap is 1 held-out error or more | more `--matches-per-genome`, the duplicate-deal skill fitness, several seeds, choose the winner on fresh matches (see the measured recommendation under Feature sets) |
+| `pool_limited` | last-third trend flat, some opponents' trends rising and others flat | harder or additional opponents; opponents already beaten by a wide margin teach nothing |
+| `model_limited` | flat everywhere, no opponent rising, not noise limited | new inputs (`--features hidden`) or a different fitness |
+| `growth_without_gain` | the network grew in the last third while the trend is flat | stagnation limit or complexity penalty, or a shorter run |
+| `converged` | half or more of the genomes in the top fitness bin over the last third | raise the mutation rates or the species target |
+| `stop_early` | not still improving and the stall is in the first 60% of the run | stop earlier next time |
+| `no_clear_limit` | nothing fired | read the numbers yourself |
+
+These are heuristics with fixed thresholds, not statistical tests, and the
+intervals treat consecutive generations as independent, which they are not, so
+they come out too narrow. A run just inside a threshold gets a different
+verdict for a small reason; a short run (under 100 generations) has intervals
+wide enough that almost everything is "flat". Read the trend and the curves
+together with the verdict. Real-data check on the long runs and on the
+ten-seed Phase 13 sets: `docs/baselines/phase-17/README.md`; for the
+long run in it, the best generation is 30 of 300 and the winner's curse is
++2.7 standard errors: the run is noise-limited, not short of generations.
+
 ## Comparing models and strategies
 
 `cli evaluate` scores genomes against opponents on the same games for every
