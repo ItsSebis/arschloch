@@ -8,6 +8,7 @@ mod analysis_api;
 mod event_index;
 mod play;
 mod records;
+mod results;
 mod routes;
 mod server;
 #[cfg(test)]
@@ -16,5 +17,6 @@ mod test_fixture;
 pub use event_index::EventIndex;
 pub use play::{CatalogEntry, OpponentKind, PlayApp};
 pub use records::{Record, RecordStore};
+pub use results::ResultsApp;
 pub use routes::{App, Response};
 pub use server::{Dashboard, Handler, HttpRequest, Server};

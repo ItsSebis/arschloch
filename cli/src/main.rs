@@ -16,6 +16,7 @@ mod summary;
 mod train;
 mod train_args;
 mod train_output;
+mod view;
 mod watch;
 
 use std::sync::Arc;
@@ -31,6 +32,7 @@ fn main() -> anyhow::Result<()> {
         Some("train") => return train::run(std::env::args().skip(2)),
         Some("analyse-run") => return analyse_run::run(std::env::args().skip(2)),
         Some("watch") => return watch::run(std::env::args().skip(2)),
+        Some("view") => return view::run(std::env::args().skip(2)),
         Some("evaluate") => return evaluate::run(std::env::args().skip(2)),
         Some("stats-doc") => return stats_doc::run(std::env::args().skip(2)),
         Some("play") => return play::run(std::env::args().skip(2)),

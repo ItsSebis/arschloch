@@ -31,19 +31,17 @@ grows beyond that should be split.
 | 19 | CPU performance and simplification | done |
 | 21 | Endgame solver and determinized search | done (phase B open) |
 | 22 | Desktop GUI to configure and run simulations | done |
-| 11b | Web views for simulation results | planned |
+| 11b | Web views for simulation results | done |
 | 18 | Training advisor: pick the opponents and settings for you | planned |
 | 16 | Self-play and co-evolutionary training | idea |
 | 20 | GPU simulation port (RTX 4070) | planned, not started |
 
 **Order of the open work, and why:**
 
-1. **Phase 11b, web views for simulation results:** the chart-heavy overview of results.
-   The GUI can then open it for a finished run.
-2. **Phase 18, the training advisor:** consumes the Phase 17 analysis; its form is a web
+1. **Phase 18, the training advisor:** consumes the Phase 17 analysis; its form is a web
    page.
-3. **Phase 16, self-play:** research; the Phase 17 analysis is how to judge it.
-4. **Phase 20, the GPU port:** the largest and least certain; it only pays off for long
+2. **Phase 16, self-play:** research; the Phase 17 analysis is how to judge it.
+3. **Phase 20, the GPU port:** the largest and least certain; it only pays off for long
    training runs.
 
 # Done
@@ -573,24 +571,16 @@ shows the output), a solver position editor and a training form (reachable throu
 It is not in the workspace's `default-members` because it pulls in a windowing stack (about 300 more crates in
 `Cargo.lock`); CI's `--workspace` runs include it.
 
+## Phase 11b — Web views for simulation results (done)
+
+**Status:** built. `cli view results.json` (`web::ResultsApp`, `web/assets/results*.{html,js}`) serves a page for the
+results file of a batch: the strategies best first with average place, mean score and strength rating (each with its
+standard error) and the share of rounds in every place as a stacked bar, the luck-adjusted score of a duplicate-deal
+run, and the explanation of every number from the statistics catalogue stored in the file. Reload the page after a new
+run. It reads the existing output only; the logic is a pure library tested in Node, the handler in Rust. The GUI
+(Phase 22) starts it for the last simulation. Not built: the luck/skill estimate view and comparing two result files.
+
 # Planned, in recommended order
-
-## Phase 11b — Web views for simulation results (planned)
-
-**Status:** not started. Split out of Phase 11, which is done apart from this.
-
-The part of the web interface that is chart- and layout-heavy and therefore stays in
-the browser (the graphical interface of Phase 22 only configures and runs, then hands
-over to these pages):
-
-- A page for the results of a simulation batch (`results.json`, or a running batch) as
-  an overview: role outcomes by strategy, variance and luck indicators, the Phase 12
-  skill score with its standard errors, strategy comparison charts, with every number
-  explained from the statistics catalogue (`docs/STATISTICS.md`); evolved players shown
-  next to the hand-written strategies.
-- Opened from the command line (`cli watch`-style: `cli view results.json`), from the
-  graphical interface (Phase 22) and linked from the run analysis page.
-- Reads `sim`'s existing output types; no simulation logic of its own.
 
 ## Phase 18 — Training advisor: pick the opponents and settings for you (planned)
 

@@ -75,3 +75,9 @@ table.data th { font-weight: 600; }
 table.data tr.pick { cursor: pointer; }
 table.data tr.pick:hover { background: var(--grid); }
 [hidden] { display: none !important; }
+
+/* simulation results page */
+.places { display: flex; height: 14px; min-width: 160px; border-radius: 3px; overflow: hidden; background: var(--grid); }
+.seg { display: block; height: 100%; }
+details { margin: 4px 0; }
+summary { cursor: pointer; }

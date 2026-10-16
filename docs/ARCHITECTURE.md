@@ -235,6 +235,10 @@ original summary unchanged; `extended_summary` renders the sections
 appended after it. `cli evaluate` also reports the average place per cell
 and has `--explain`; `cli stats-doc` prints `docs/STATISTICS.md`.
 
+`web` also serves `cli view FILE` (Phase 11b): `ResultsApp` hands out one results file (re-read on every request) and
+the page `results.html` / `results_lib.js` (pure, tested in Node) / `results.js` (DOM only), with the shared `lib.js` and
+`style.css`.
+
 ### `gui` (Phase 22)
 
 A native desktop window (egui) that builds the arguments of a `cli` run from a form, runs the `cli` program as a child

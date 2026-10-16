@@ -74,7 +74,9 @@ duplicate-card rule, thread count, and cross-compiling a Windows `.exe`).
 ### The desktop window
 
 `cargo run --release -p gui` opens a small window to configure and run simulations and to read an activity log; play,
-dashboards and the run analysis stay in the browser and are started from it. See `docs/GUI.md`.
+dashboards and the run analysis stay in the browser and are started from it. `cli view results.json` shows the results
+of a simulation as tables and bars in the browser (strategies best first, places as stacked bars, the luck-adjusted
+score when there is one, an explanation of every number). See `docs/GUI.md`.
 
 ### The stdout summary
 

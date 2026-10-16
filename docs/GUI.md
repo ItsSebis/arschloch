@@ -21,7 +21,8 @@ needs a running X11 or Wayland session; there is nothing else to install.
   form as JSON.
 - **Any command:** type any `cli` command (`train ...`, `evaluate ...`, `solve file.txt`, `solver-gap ...`); output is
   streamed to the log.
-- **In the browser:** starts `cli play` (play against the models) or `cli watch RUNFOLDER` (training dashboard and the
+- **In the browser:** starts `cli play` (play against the models), `cli view FILE` (the charts and tables of the
+  simulation's results file, `cli view` also works on its own) or `cli watch RUNFOLDER` (training dashboard and the
   run analysis page) and opens the address they print.
 
 ## The activity log
@@ -33,7 +34,7 @@ Every line is also appended to `arschloch-gui.log` in the folder the window was 
 ## Limits
 
 One job at a time; no file pickers (paths are typed); the results of a simulation are read in the log and in the JSON
-file, charts of results are planned as Phase 11b (browser). The window is not part of the release archives yet.
+file, and the browser page `cli view` shows them as tables and bars. The window is not part of the release archives yet.
 
 ## For developers
 

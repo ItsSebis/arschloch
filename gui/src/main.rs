@@ -234,6 +234,15 @@ impl App {
         {
             self.start(&["play".to_owned()], true);
         }
+        if ui
+            .add_enabled(
+                idle,
+                egui::Button::new("View the results of the last simulation"),
+            )
+            .clicked()
+        {
+            self.start(&["view".to_owned(), self.form.output.clone()], true);
+        }
         ui.horizontal(|ui| {
             ui.label("Run folder");
             ui.text_edit_singleline(&mut self.watch_dir);
