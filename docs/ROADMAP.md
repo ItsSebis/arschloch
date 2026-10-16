@@ -203,8 +203,8 @@ sitting; a phase that grows beyond that should be split.
 **Status:** the interactive part is built: `cli play` (Phase 11, "play against the
 models"; see `docs/PLAYING.md`) with a pure `sim::session` game session, a POST-capable
 local HTTP layer, model advice and personal records. Still open: the
-simulation-statistics overview views below, the run-analysis page (Phase 17)
-and the training-advisor form (Phase 18).
+simulation-statistics overview views below and the training-advisor form
+(Phase 18). The run-analysis page (Phase 17) is built: `/analysis.html`.
 
 - Extends the `web` crate that Phase 10d starts with the NEAT training
   dashboard (HTTP server, embedded single-page app, JSON API), rather
@@ -377,10 +377,23 @@ own past champions, optionally mixed with fixed strategies.
   old tricks; the hall of fame and the anchors are the standard guard. The first
   run is an experiment compared against `neat-v2`, not a new default.
 - Evidence so far (from the stagnation analysis of the long runs, see Phase 17):
-  the stall seen in the long runs looks noise- and information-limited rather
+  the stall seen in the long runs looked noise- and information-limited by hand analysis (the Phase 17 tool is more cautious: `docs/baselines/phase-17/README.md`) rather
   than opponent-limited, so this phase ranks below Phase 13's new inputs.
 
-## Phase 17 — Run analysis tool (CLI and web)
+## Phase 17 — Run analysis tool (CLI and web) (done)
+
+**Status:** built (design: `docs/superpowers/specs/2026-10-11-phase-17-run-analysis-design.md`).
+`cli analyse-run` (several paths, set dirs, folders of loose `.jsonl`, `--json`)
+and the web page `/analysis.html` (served by `cli watch` and `train --serve`)
+report stall generation, trends, noise, winner's-curse gaps, per-opponent
+trends, growth, convergence, species, racing and timings, and a verdict with
+suggestions; the logic is `sim::training::analysis`, shared by both. Every number is in
+the statistics catalogue (`Scope::RunAnalysis`, `docs/STATISTICS.md`); usage and
+how to read each verdict in `docs/TRAINING.md` ("Analysing a run"); the
+real-data check (the four `runs/PC` runs and the ten-seed Phase 13 sets) in
+`docs/baselines/phase-17/README.md`. The verdicts are heuristics with fixed
+thresholds; Phase 18 consumes the same analysis. The text below is the
+original plan.
 
 Born from the first stagnation analysis of the long runs in `runs/PC` (done by
 hand with a throwaway script). Turn that into a tool so every run can answer
@@ -412,7 +425,6 @@ hand with a throwaway script). Turn that into a tool so every run can answer
   `events.jsonl` files, see the curves with the stall point, noise band,
   winner's-curse markers and per-opponent lines, the verdict text, and compare
   runs side by side. It reads the same JSON as the CLI; no new simulation.
-  Listed under Phase 11's still-open web items.
 
 ## Phase 18 — Training advisor: pick the opponents and settings for you
 
@@ -536,7 +548,7 @@ per round or the 16 threads do not scale. Finding out which is the first task.
 ## Phase 20 — GPU simulation port (RTX 4070)
 
 Go/no-go, schedule and design for running the simulation on the GPU. Motivation
-(from the stagnation analysis, Phase 17): the long runs are noise-limited, and a
+(from the stagnation analysis, Phase 17): the long runs look noise-limited by hand analysis (the Phase 17 tool's verdicts on the same runs are mixed, see `docs/baselines/phase-17/README.md`), and a
 10-30x faster simulator would allow many more matches per genome (standard error
 down 3-5x) and bigger populations in the same wall time. The measured facts in
 `docs/baselines/perf/README.md` still hold: the network is only a few percent of
