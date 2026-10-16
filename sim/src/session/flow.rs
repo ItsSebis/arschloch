@@ -3,19 +3,15 @@
 
 use super::{
     assign_roles, deal, exchange_counts_for_player_count, exchange_with_rule, lowest_card_holder,
-    roles_for_player_count, standard_deck, turn_context_for, views, Card, ExchangePair,
+    roles_for_player_count, shuffled_numbered_deck, turn_context_for, views, Card, ExchangePair,
     ExchangeRule, GameEvent, Move, PassTracker, PendingExchange, Phase, Role, Round, SeatId,
-    Session, SliceRandom,
+    Session,
 };
 
 impl Session {
     pub(super) fn start_round(&mut self) {
         let config = self.config.clone();
-        let mut deck = standard_deck(config.deck_variant);
-        deck.shuffle(&mut self.rng);
-        for (index, card) in deck.iter_mut().enumerate() {
-            card.deal_index = u8::try_from(index).expect("deck sizes (52/104) fit in u8");
-        }
+        let deck = shuffled_numbered_deck(config.deck_variant, &mut self.rng);
         let hands = deal(deck, config.player_count)
             .expect("standard_deck always yields enough cards for a supported player count");
         if let (Some(roles), Some(arschloch)) =

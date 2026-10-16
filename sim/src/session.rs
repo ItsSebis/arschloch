@@ -17,14 +17,14 @@ use std::sync::Arc;
 
 use engine::{
     assign_roles, deal, exchange_counts_for_player_count, exchange_with_rule, lowest_card_holder,
-    roles_for_player_count, standard_deck, Card, Combo, DeckVariant, DuplicateRule, ExchangeRule,
-    Move, PassRule, Role, Round, SeatId,
+    roles_for_player_count, Card, Combo, DeckVariant, DuplicateRule, ExchangeRule, Move, PassRule,
+    Role, Round, SeatId,
 };
 use rand::seq::SliceRandom;
 use rand::SeedableRng;
 
 use crate::hand_reading::PassTracker;
-use crate::match_runner::turn_context_for;
+use crate::match_runner::{shuffled_numbered_deck, turn_context_for};
 use crate::strategies::NeatStrategy;
 use crate::strategy::Strategy;
 use crate::training::role_score;
