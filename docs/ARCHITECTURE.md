@@ -61,6 +61,9 @@ knows how to validate and apply a move it's given.
 caller proposes against the current state, and applies it if legal.
 `Round::legal_moves()` additionally enumerates every legal move from the
 current state (Phase 2), used by `sim`'s strategies to choose among.
+`Round::from_position` (Phase 21) rebuilds a round in the middle of a trick
+from what a seat can observe, for search; it is the only way to start a round
+other than a fresh deal.
 Decision-making itself still lives in `sim` — `engine` only reports what's
 legal, never which move to prefer.
 
@@ -194,6 +197,23 @@ legal, never which move to prefer.
   - `hand_features` (what the estimator regresses on, recorded with
     `RunOptions::record_deal_features`) and `linalg` (a small least-squares
     solver, no dependencies).
+
+#### `solver` (Phase 21)
+
+Exact endgame search, used by the `EndgameSolver` strategy, `cli solve` and
+`cli solver-gap`; the design is `docs/superpowers/specs/2026-10-16-endgame-solver-design.md`,
+the user view `docs/SOLVER.md`.
+
+- `observation`: what one seat knows (`Observation`, built from a
+  `TurnContext`) and the rebuilding of an `engine::Round` for one assumed
+  deal through `Round::from_position`. Only `PassRule::Final` is supported.
+- `deals`: every split of the unseen cards among the other seats that fits
+  the pass ceilings of `hand_reading`.
+- `search`: exact max^n over one deal (every seat takes its own best place;
+  clones `Round` per node, with a node budget).
+- `report`: `analyze` solves every consistent deal and averages per move
+  (`MoveReport`); `gap`: the disagreement benchmark; `config`: the options of
+  `endgame-solver[:OPTIONS]`; `notation`: card tokens (`9H`, `10S`, `AC`).
 
 ### `cli`
 
