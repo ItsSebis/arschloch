@@ -67,11 +67,12 @@ a low card: leading `KH` first wins the trick but gives the lead away at the wro
 [--budget N]` plays single rounds with the given strategies (one per seat, rotated each game) and, at every
 decision the solver can solve, compares the move taken with the solver's best. For each strategy it prints
 how many decisions were solved, how many differ, the places lost per decision, and the costliest decisions in words,
-for example `seat 2, hand [4D 9S], leading, 3 unseen: GreedyHighest plays 9S, solver prefers 4D (costs 0.50 places)`.
-Those are the lessons.
+for example `seat 2, hand [10S 4H 3C], leading, 5 unseen: Adaptive(counting,reading) plays 10S, solver prefers 3C (costs 2.00 places)`.
+Those are the lessons; `docs/baselines/solver/README.md` has the first results.
 
 ## Limits
 
-- Cost grows quickly with the number of unseen cards; `max-unseen` and `budget` bound it (see the measurements).
+- Cost grows quickly with the number of unseen cards; `max-unseen` and `budget` bound it. Measured defaults: 6 unseen cards, 2M nodes per decision (T=8 already takes minutes per 200 games). At T=6 the solver plays exactly about 11% of the decisions of a 4-player single-deck round.
+- It beats the strategy it falls back to clearly (+0.14 score head to head) but not the trained neat champion, whose strength lies in the part of the round the solver does not play; see the measurements.
 - The unseen cards are weighted equally; hand reading only removes impossible splits.
 - A later phase (the spec's phase B) will sample splits to search the early game as well.
