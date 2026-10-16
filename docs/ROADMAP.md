@@ -22,25 +22,36 @@ grows beyond that should be split.
 | 8 | Trick-lead tempo | done |
 | 9 | Lead-order bullying | done |
 | 10 | NEAT training | done |
+| 11 | Web interface: play against the models | done |
 | 12 | Richer scoring and statistics | done |
 | 13 | NEAT: better play and wider training | done |
 | 14 | Rule change: a pass ends your part in the trick | done |
 | 15 | Rule change: the exchange gives your highest cards | done |
+| 17 | Run analysis tool (CLI and web) | done |
 | 19 | CPU performance and simplification | done |
-| 11 | Web interface | in progress |
-| 17 | Run analysis tool (CLI and web) | built on its branch, not merged |
 | 21 | Endgame solver and determinized search | in progress |
-| 22 | Graphical interface for everything | planned |
+| 22 | Desktop GUI to configure and run simulations | planned |
+| 11b | Web views for simulation results | planned |
 | 18 | Training advisor: pick the opponents and settings for you | planned |
 | 16 | Self-play and co-evolutionary training | idea |
 | 20 | GPU simulation port (RTX 4070) | planned, not started |
 
-**Recommended order of the open work:** merge Phase 17 (already built) and fold the
-open web items of Phase 11 into Phase 22; then Phase 21 (the solver, in progress);
-then Phase 22 (the graphical interface, which exposes the solver, the run analysis and
-the training options in one place); then Phase 18 (its form lives in the interface);
-then Phase 16 (research; the Phase 17 analysis is how to judge it); last Phase 20 (the
-GPU port is the largest and least certain, and only pays off for long training runs).
+**Order of the open work, and why:**
+
+1. **Phase 21, the endgame solver** (in progress): the goal is the best strategy for real
+   games, and it produces the sharpest tool for learning from games (`cli solve`,
+   `cli solver-gap`). Nothing else depends on it.
+2. **Phase 22, the desktop GUI:** configuring and running simulations with the complete
+   option set, plus an activity log. It comes after the solver so that the new strategy
+   and the solve command are in it from the start. It deliberately does not duplicate
+   what the browser does well.
+3. **Phase 11b, web views for simulation results:** the chart-heavy overview of results.
+   After the GUI, which can then open it for a finished run.
+4. **Phase 18, the training advisor:** consumes the Phase 17 analysis; its form is a web
+   page.
+5. **Phase 16, self-play:** research; the Phase 17 analysis is how to judge it.
+6. **Phase 20, the GPU port:** the largest and least certain; it only pays off for long
+   training runs.
 
 # Done
 
@@ -238,6 +249,30 @@ GPU port is the largest and least certain, and only pays off for long training r
   CPU speedup of about 1.5x with measurements that rule out GPU offload of the
   network (see the GPU idea below).
 
+## Phase 11 — Web interface: play against the models (done)
+
+**Status:** built: `cli play` ("play against the models"; see `docs/PLAYING.md`) with
+a pure `sim::session` game session, a POST-capable local HTTP layer, model advice and
+personal records. The run-analysis page is Phase 17 (done). The simulation-statistics
+overview views, originally listed here, are now Phase 11b; the training-advisor form is
+part of Phase 18. Both stay in the browser (see Phase 22 for why).
+
+- Extends the `web` crate that Phase 10d starts with the NEAT training
+  dashboard (HTTP server, embedded single-page app, JSON API), rather
+  than building a second frontend.
+- Reads (or live-drives) `sim`'s existing output types — no changes to
+  `engine`/`sim`'s public shape were needed.
+- **Play against the models:** a user can sit at a table in the browser
+  and compete against one or several trained models (genome files from
+  `cli train`, for example `docs/baselines/neat-v1/champion.json`), and
+  optionally against hand-written strategies, at any table size 3-6. The
+  server holds the game state and asks a `NeatStrategy` for its move
+  through the same `Strategy` interface the simulator uses; the page shows
+  the human's hand, the table and the other seats' hand sizes, and offers
+  the legal moves. Results (roles per round) are kept so a human's record
+  against each model can be viewed and compared with the models' own
+  scores.
+
 ## Phase 12 — Richer scoring and statistics (done)
 
 **Status:** built (design: `docs/superpowers/specs/2026-10-09-phase-12-statistics-skill-score-design.md`).
@@ -371,6 +406,52 @@ only sees what was taken and received); old runs, configs and records read as
 cards, so every other strategy plays identical games under both rules and the
 retrained champion is byte-identical (`docs/baselines/current-rules`).
 
+## Phase 17 — Run analysis tool (CLI and web) (done)
+
+**Status:** built (design: `docs/superpowers/specs/2026-10-11-phase-17-run-analysis-design.md`;
+PR #10). `cli analyse-run` (several paths, set dirs, folders of loose `.jsonl`, `--json`)
+and the web page `/analysis.html` (served by `cli watch` and `train --serve`)
+report stall generation, trends, noise, winner's-curse gaps, per-opponent
+trends, growth, convergence, species, racing and timings, and a verdict with
+suggestions; the logic is `sim::training::analysis`, shared by both. Every number is in
+the statistics catalogue (`Scope::RunAnalysis`, `docs/STATISTICS.md`); usage and
+how to read each verdict in `docs/TRAINING.md` ("Analysing a run"); the
+real-data check (the four `runs/PC` runs and the ten-seed Phase 13 sets) in
+`docs/baselines/phase-17/README.md`. The verdicts are heuristics with fixed
+thresholds; Phase 18 consumes the same analysis. The text below is the
+original plan.
+
+Born from the first stagnation analysis of the long runs in `runs/PC` (done by
+hand with a throwaway script). Turn that into a tool so every run can answer
+"where did it stop improving, and why?" in one command.
+
+- **`cli analyse-run <events.jsonl | run dir> [more...]`**: accepts several
+  runs at once and labels them by file or directory name. Reports per run:
+  - the **stall generation** (smoothed champion re-evaluation within one
+    standard error of its peak) and the **trend** (slope per 100 generations
+    with a 95% interval, overall and for the last part of the run);
+  - the **noise level** (standard error of a single evaluation, standard
+    deviation of the generation-to-generation change of the champion's score);
+  - the **winner's-curse gap** (best generation's re-evaluation against its
+    held-out score, and training best against champion level), so a lucky "best
+    generation" is not mistaken for progress;
+  - **per-opponent trends** (flat everywhere = information/noise limited; flat
+    against some and rising against others = pool limited);
+  - **growth without gain** (hidden nodes and connections against score),
+    **population convergence** (share of genomes in the top fitness bin), species
+    counts and the compatibility threshold;
+  - a plain-language **verdict with suggestions** (more matches per genome or the
+    duplicate-deal fitness when noise dominates, new inputs when the model stalls
+    everywhere, harder opponents when only the pool is exhausted, stop early
+    when the slope is flat).
+  - `--json` output for other tools; the numbers are catalogued and explained
+    like the Phase 12 statistics (`docs/STATISTICS.md`).
+- **Web interface (the Phase 11 dashboard work):** the same analysis as a page
+  of the web interface: pick one or several run directories or imported
+  `events.jsonl` files, see the curves with the stall point, noise band,
+  winner's-curse markers and per-opponent lines, the verdict text, and compare
+  runs side by side. It reads the same JSON as the CLI; no new simulation.
+
 ## Phase 19 — CPU performance and simplification (done)
 
 **Status:** built and merged (PR #6, released in v0.5.0); measurements in
@@ -460,75 +541,6 @@ per round or the 16 threads do not scale. Finding out which is the first task.
 
 # In progress
 
-## Phase 11 — Web interface (in progress)
-
-**Status:** the interactive part is built: `cli play` (Phase 11, "play against the
-models"; see `docs/PLAYING.md`) with a pure `sim::session` game session, a POST-capable
-local HTTP layer, model advice and personal records. Still open: the
-simulation-statistics overview views below, the run-analysis page (Phase 17)
-and the training-advisor form (Phase 18). These open web items are folded into
-Phase 22 (graphical interface for everything), which is where they get built.
-
-- Extends the `web` crate that Phase 10d starts with the NEAT training
-  dashboard (HTTP server, embedded single-page app, JSON API), rather
-  than building a second frontend. Adds the simulation views: a small
-  web frontend to view running simulations and the Phase 4 statistics
-  as an overview — role outcomes by strategy, variance/luck indicators,
-  strategy comparison charts — and can show evolved players next to the
-  hand-written strategies.
-- Reads (or live-drives) `sim`'s existing output types — no changes to
-  `engine`/`sim`'s public shape should be needed going in.
-- **Play against the models:** a user can sit at a table in the browser
-  and compete against one or several trained models (genome files from
-  `cli train`, for example `docs/baselines/neat-v1/champion.json`), and
-  optionally against hand-written strategies, at any table size 3-6. The
-  server holds the game state and asks a `NeatStrategy` for its move
-  through the same `Strategy` interface the simulator uses; the page shows
-  the human's hand, the table and the other seats' hand sizes, and offers
-  the legal moves. Results (roles per round) are kept so a human's record
-  against each model can be viewed and compared with the models' own
-  scores.
-
-## Phase 17 — Run analysis tool (CLI and web) (built on its branch, not merged)
-
-**Status:** the CLI tool and the analysis page are built on branch
-`phase-17-run-analysis` (pushed, with its spec and a real-data baseline); not yet merged
-to `main`, so `cli analyse-run` is not in a release.
-
-Born from the first stagnation analysis of the long runs in `runs/PC` (done by
-hand with a throwaway script). Turn that into a tool so every run can answer
-"where did it stop improving, and why?" in one command.
-
-- **`cli analyse-run <events.jsonl | run dir> [more...]`**: accepts several
-  runs at once and labels them by file or directory name. Reports per run:
-  - the **stall generation** (smoothed champion re-evaluation within one
-    standard error of its peak) and the **trend** (slope per 100 generations
-    with a 95% interval, overall and for the last part of the run);
-  - the **noise level** (standard error of a single evaluation, standard
-    deviation of the generation-to-generation change of the champion's score);
-  - the **winner's-curse gap** (best generation's re-evaluation against its
-    held-out score, and training best against champion level), so a lucky "best
-    generation" is not mistaken for progress;
-  - **per-opponent trends** (flat everywhere = information/noise limited; flat
-    against some and rising against others = pool limited);
-  - **growth without gain** (hidden nodes and connections against score),
-    **population convergence** (share of genomes in the top fitness bin), species
-    counts and the compatibility threshold;
-  - a plain-language **verdict with suggestions** (more matches per genome or the
-    duplicate-deal fitness when noise dominates, new inputs when the model stalls
-    everywhere, harder opponents when only the pool is exhausted, stop early
-    when the slope is flat).
-  - `--json` output for other tools; the numbers are catalogued and explained
-    like the Phase 12 statistics (`docs/STATISTICS.md`).
-- **Web interface (the Phase 11 dashboard work):** the same analysis as a page
-  of the web interface: pick one or several run directories or imported
-  `events.jsonl` files, see the curves with the stall point, noise band,
-  winner's-curse markers and per-opponent lines, the verdict text, and compare
-  runs side by side. It reads the same JSON as the CLI; no new simulation.
-  Listed under Phase 11's still-open web items.
-
-# Planned, in recommended order
-
 ## Phase 21 — Endgame solver and determinized search (in progress)
 
 **Status:** design and implementation plan written, implementation about to start
@@ -552,37 +564,65 @@ expected finishing position (max^n, rational opponents).
 - Limits recorded in the spec: expected value over consistent deals, not a proof
   against a specific hidden hand; `PassRule::Final` only; no bluffing.
 
-## Phase 22 — Graphical interface for everything (planned)
+# Planned, in recommended order
 
-**Status:** not started; needs a short design first (see the open question).
+## Phase 22 — Desktop GUI to configure and run simulations (planned)
 
-A simple graphical front end that starts from the program itself and covers the
-full option set and every simulation capability, so nothing needs the command line.
-"Very simple" in looks, complete in function.
+**Status:** not started; needs a short design first.
 
-- **Starts from the program:** a `cli gui` command (and, in the release archives, a
-  double-clickable launcher) that starts the local server of the `web` crate and
-  opens the browser. Recommended over a native window: the `web` crate already has
-  the HTTP layer, the single-page app, the JSON API, `cli play` and the training
-  dashboard, it needs no new dependency and it works the same on the three platforms
-  the releases cover. Open question for the design: a native window (`egui`) if
-  "from the program directly" should mean no browser at all.
-- **Complete options:** the forms are generated from the same option definitions as
-  the CLI (one source of truth, so a new flag shows up in the GUI without extra
-  work): table (player count, deck, duplicate rule, pass rule, exchange rule), seat
-  strategies (the fixed ones, `adaptive` with its modifiers, `neat:` genome files,
-  `endgame-solver` with its options), matches, rounds, seed, threads, skill score,
-  extended statistics, useful-passes analysis.
-- **Complete simulation capabilities:** run a batch with live progress and cancel,
-  show the results (the summary table, the Phase 4/12 statistics with their
-  explanations, role outcomes, luck/skill score), save and reload results, compare
-  runs. Folds in the open web items of Phase 11 (simulation overview views).
-- **The other tools, in the same place:** play against the models (Phase 11, exists),
-  training with the live dashboard (Phase 10d, exists), the run analysis page
-  (Phase 17), the training advisor form (Phase 18) and the solver (Phase 21): a
-  position editor that runs `cli solve` and shows the ranked moves.
-- **Testing:** API tests that every form-to-options mapping produces exactly what the
-  CLI parser accepts, and a smoke test per screen.
+A simple native window, started from the program itself, for the things that are
+easier to click than to type: configuring simulations with the complete option set,
+running them, and reading what is going on. Anything chart-heavy or layout-heavy stays
+in the browser, where it is already good (the `web` crate: play against the models,
+the training dashboard, the run analysis page); the window only links there.
+
+- **In the window (kept easy):**
+  - *Configure a simulation:* every option of the plain `cli` run: table (player
+    count, deck, duplicate rule, pass rule, exchange rule), one strategy per seat
+    (the fixed strategies, `adaptive` with its modifiers, `neat:` genome files through a
+    file picker, `endgame-solver` with its options), matches, rounds, seed, threads,
+    skill score, extended statistics, useful-passes analysis, output file. Presets can
+    be saved and loaded. The form is generated from the same option definitions as
+    the CLI, so a new flag shows up without extra work and the window can show the
+    equivalent command line.
+  - *Run and watch:* start, progress, cancel.
+  - *Activity log:* a scrolling log of what the program is doing (runs started and
+    finished, warnings, errors, the lines the CLI would print), kept per session and
+    saved to a file.
+  - *Results as text:* the summary table of a finished run, load and save of
+    `results.json`.
+  - *Further easy items, if they stay easy:* start a training run from a form and tail
+    its progress line; the Phase 21 solver position editor with the ranked moves as a
+    table; the evaluate command.
+- **Stays in the browser (buttons in the window start the existing server and open the
+  page):** play against the models, the training dashboard, the run analysis page
+  (Phase 17), the simulation result views (Phase 11b), the training advisor form
+  (Phase 18).
+- **Design questions for the first step:** toolkit (recommendation: `egui`/`eframe`,
+  pure Rust, one dependency tree, the same on Linux, Windows and macOS, no web view);
+  where it lives (recommendation: its own workspace crate and binary behind its own
+  release asset, so the CLI build and CI stay light; `cli gui` only launches it); the
+  shared option definitions (extract the `clap` structs' metadata once, used by both).
+- **Testing:** every form-to-options mapping is checked against the CLI parser (the
+  window must produce exactly the options the CLI accepts); the window logic is kept
+  free of drawing code so it is unit-tested; a manual check per screen.
+
+## Phase 11b — Web views for simulation results (planned)
+
+**Status:** not started. Split out of Phase 11, which is done apart from this.
+
+The part of the web interface that is chart- and layout-heavy and therefore stays in
+the browser (the graphical interface of Phase 22 only configures and runs, then hands
+over to these pages):
+
+- A page for the results of a simulation batch (`results.json`, or a running batch) as
+  an overview: role outcomes by strategy, variance and luck indicators, the Phase 12
+  skill score with its standard errors, strategy comparison charts, with every number
+  explained from the statistics catalogue (`docs/STATISTICS.md`); evolved players shown
+  next to the hand-written strategies.
+- Opened from the command line (`cli watch`-style: `cli view results.json`), from the
+  graphical interface (Phase 22) and linked from the run analysis page.
+- Reads `sim`'s existing output types; no simulation logic of its own.
 
 ## Phase 18 — Training advisor: pick the opponents and settings for you (planned)
 
@@ -637,13 +677,13 @@ own past champions, optionally mixed with fixed strategies.
   old tricks; the hall of fame and the anchors are the standard guard. The first
   run is an experiment compared against `neat-v2`, not a new default.
 - Evidence so far (from the stagnation analysis of the long runs, see Phase 17):
-  the stall seen in the long runs looks noise- and information-limited rather
+  the stall seen in the long runs looked noise- and information-limited by hand analysis (the Phase 17 tool is more cautious: `docs/baselines/phase-17/README.md`) rather
   than opponent-limited, so this phase ranks below Phase 13's new inputs.
 
 ## Phase 20 — GPU simulation port (RTX 4070) (planned, not started)
 
 Go/no-go, schedule and design for running the simulation on the GPU. Motivation
-(from the stagnation analysis, Phase 17): the long runs are noise-limited, and a
+(from the stagnation analysis, Phase 17): the long runs look noise-limited by hand analysis (the Phase 17 tool's verdicts on the same runs are mixed, see `docs/baselines/phase-17/README.md`), and a
 10-30x faster simulator would allow many more matches per genome (standard error
 down 3-5x) and bigger populations in the same wall time. The measured facts in
 `docs/baselines/perf/README.md` still hold: the network is only a few percent of
