@@ -87,3 +87,17 @@ No changes to the rules, to NEAT training, or to existing strategies' behaviour.
 ## Verification summary
 
 Brute-force cross-checks of enumeration and search on tiny positions; legality delegated to the engine; determinism under the match runner; fallback paths tested; measured thresholds and a documented head-to-head and disagreement benchmark before the phase is called done; CI on three OSes; docs updated (`docs/ROADMAP.md` entry for this phase, `docs/ARCHITECTURE.md` section, `cli solve` usage in `docs/PLAYING.md` or a new short doc).
+
+## Revisions after reading the code for the plan (2026-10-16)
+
+These replace the matching statements above where they differ.
+
+- **Engine change after all, a pure addition.** `Round` can only be built from a fresh deal, but the solver starts from the middle of a trick. `Round::from_position` (and a crate-private `Trick::from_parts`) rebuild a `Final`-rule round from what a seat observes: hands, who is to move, the combo on the table and its holder, who has passed. No existing behaviour changes. Clone-based search then needs no separate make/unmake state: it clones `Round` per node (measured in the plan, replaced only if too slow).
+- **`PassRule::Final` only.** `Free` needs per-trick counters (`passes_since_last_play`, `required_passes`) that `TurnContext` does not carry, so under `Free` the solver always defers to the fallback. `Free` exists only to reproduce old results.
+- **Finishing order of seats already out is not observable**, and does not matter: the objective is linear (`role_score = 1 - 2 * place / (n - 1)`), so the seats already out only shift every remaining seat's place by the same constant. The solver counts seats already out and adds that offset.
+- **Duplicate cards are not interchangeable.** `Card::compare` orders identical rank+suit cards by `deal_index`, so every unseen card is distinct and the deal enumeration needs no multiplicity weights; each consistent deal counts once.
+- **Moves are the engine's canonical moves** (`legal_moves`: per rank and size, only the weakest and strongest sub-combo). The solver searches exactly those, so it can never choose a move the match runner would not offer.
+- **Tie-break:** the first best move in the engine's move order (deterministic), not "fewest cards given up".
+- **Opponent policies** (`OpponentModel::Policy`) see the round state only: hand, opponents' hand sizes and trick state, and the unseen set derived from the deal; no pass ceilings, and a fixed RNG seed per call, so only deterministic policies are meaningful.
+- **`cli solve` takes no pass ceilings in v1**, only the pass state of the current trick; the ceilings come from the strategy path (`TurnContext`).
+- **Measurement of `T` happens after the strategy exists** (plan Task 8), not in the first task; the default `max_unseen` starts at 6 until then.
