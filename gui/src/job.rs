@@ -33,12 +33,21 @@ impl Job {
     ///
     /// The program cannot be started.
     pub fn spawn(program: &Path, args: &[String]) -> io::Result<Self> {
-        let mut child = Command::new(program)
+        let mut command = Command::new(program);
+        command
             .args(args)
+            .env(crate::progress::ENV, "1")
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()?;
+            .stderr(Stdio::piped());
+        // The window has no console of its own in a release build; without this
+        // every job would open a console window.
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt as _;
+            command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+        }
+        let mut child = command.spawn()?;
         let (sender, lines) = channel();
         if let Some(stdout) = child.stdout.take() {
             pump(stdout, sender.clone());

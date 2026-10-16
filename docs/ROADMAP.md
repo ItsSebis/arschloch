@@ -36,8 +36,8 @@ grows beyond that should be split.
 
 **Open work, in working order** (details below the done phases):
 
-1. Pack the desktop window into the release archives (Phase 22)
-2. Desktop window: file pickers, progress, a solver editor, a training form (Phase 22)
+1. ~~Pack the desktop window into the release archives (Phase 22)~~ built; the Windows and macOS windows still have to be started once by hand
+2. ~~Desktop window: file pickers, progress, a solver editor, a training form (Phase 22)~~ built; a few pieces left, see the section
 3. Results page: the luck-adjusted estimate, comparing two files (Phase 11b)
 4. Training advisor, the rest: `train --auto`, scoring against genomes, early stop, a web form (Phase 18)
 5. Settle the `hidden` input set with fresh seeds and longer runs; the casino bot's port (Phase 13)
@@ -567,8 +567,33 @@ models, dashboards, run analysis, and the result charts of Phase 11b). Behaviour
 the window has no simulation code, and a test runs the real `cli` with the arguments the form builds.
 
 It is not in the workspace's `default-members` because it pulls in a windowing stack (about 300 more crates in
-`Cargo.lock`); CI's `--workspace` runs include it, and it is not in the release archives (`cargo run --release -p gui`).
-What it lacks (file pickers, progress, a solver editor, a training form, packaging) is open work.
+`Cargo.lock`); CI's `--workspace` runs include it.
+
+**Packaging (open-work item 1, built):** `arschloch-gui` sits next to `cli` in the release archives:
+`.github/workflows/release.yml` builds `-p cli -p gui` for both macOS targets and packs it with `docs/GUI.md`;
+`docs/RELEASING.md` has the Linux and the `cargo-xwin` Windows commands and the archive layout. Verified: the Linux
+release build and the window started from an extracted archive folder (it found the `cli` next to it); the Windows
+cross build (`cargo xwin build --release --target x86_64-pc-windows-msvc -p cli -p gui`) links and `arschloch-gui.exe`
+is a GUI-subsystem PE32+ (no console behind it; its `cli.exe` children start without a console window via
+`CREATE_NO_WINDOW`). **Not verified:** nobody has started the window on Windows or macOS (no machine, no Wine here), and
+the macOS workflow step is untested until a release runs it.
+
+**Window features (open-work item 2, built):** a built-in file picker (`gui/src/browse.rs`; a folder list with up,
+enter, an extension filter and a typed name for saving: `rfd` was rejected because its Linux backends need GTK system
+packages or a D-Bus portal stack, which cannot be checked on CI's three systems from here) on the output file, the
+preset, the genome (`neat:PATH`) of a seat, the run folder of `cli watch` and of the training; a **progress bar**
+(`cli train` prints `progress: FRACTION TEXT` lines on stderr when `ARSCHLOCH_PROGRESS` is set, which the window sets;
+the output is unchanged without it); a **Solver** tab (paint the cards of a position, the other seats' counts, the
+table holder and passes; the real `cli solve` runs on the generated position file and the ranked moves are shown as a
+table); a **Training** tab (the advisor form, its measurements, the recommended `cli train` command split into
+editable fields with unknown flags passed through, a Start button). The logic (listing, progress lines, position text,
+report and recommendation parsing) is unit-tested, and tests run the real `cli solve`, `train-advisor` and `train` on
+what the window builds; the window was started under the real Wayland session on Linux and its Solver and Training
+tabs screenshotted. No clicking was possible (no X server tool such as `xvfb` or `xdotool` installed), so button
+handling itself is untested.
+What is still open: a progress hook for a plain simulation (`sim::run_batch_with` is a single `par_iter`; its bar only
+says "running"), a solver editor for double-deck positions (needs a count per face), and clicking through the window on
+Windows and macOS.
 
 ## Phase 11b — Web views for simulation results (done)
 
@@ -597,18 +622,16 @@ GPU port last; items do not depend on each other unless said. Phase numbers in b
 
 ## 1. Pack the desktop window into the release archives (Phase 22)
 
-`arschloch-gui` next to `cli` in the Linux, Windows and macOS archives: the build step for it in
-`.github/workflows/release.yml` (macOS) and in `docs/RELEASING.md` (Linux and Windows by hand, cross-compiling the
-window with `cargo-xwin` is untested), the README of the archives, and a check of the window on a Mac and on Windows
-(it was only run on Linux). Small, but only worth doing together with a test of each platform's window.
+Built, see Phase 22 ("Packaging"). Left: start the Windows and the macOS window once from an extracted archive and run a
+few matches, the solver and the advisor (listed in `docs/RELEASING.md`); the macOS workflow step runs for the first
+time with the next release.
 
 ## 2. Desktop window, what it lacks (Phase 22)
 
-Each is independent and small: **file pickers** for the strategy files, the output file and the run folder (paths are
-typed today); **progress** (show a progress bar by reading the progress lines of the running command instead of only
-the log); a **solver position editor** (click a hand and a table, run `cli solve`, show the ranked moves; today
-`cli solve` takes a text file); a **training form** that fills in the advisor's recommendation (item 4). Heavy,
-chart-like views stay in the browser.
+Built, see Phase 22 ("Window features"). Left, each small: a progress hook for a plain simulation (an atomic counter
+in `sim::run_batch_with`, shown through `progress:` lines; must not change the seat rotation index or any output),
+a double-deck position editor (a count per face instead of a per-card paint), and a native file dialog if a CI
+check ever shows `rfd` builds on all three systems without extra packages (the built-in picker works everywhere).
 
 ## 3. Results page, what it lacks (Phase 11b)
 

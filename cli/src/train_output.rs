@@ -227,6 +227,35 @@ pub fn render_set_summary(ends: &[(String, RunEnd)], total_secs: f64) -> String 
     text
 }
 
+/// With this environment variable set, `cli train` prints `progress: FRACTION TEXT` lines on
+/// stderr (the desktop window's progress bar reads them; the output is unchanged without it).
+pub const PROGRESS_ENV: &str = "ARSCHLOCH_PROGRESS";
+/// A progress line is printed when the fraction grew by at least this much.
+const PROGRESS_STEP: f64 = 0.005;
+
+/// How far the run is: finished generations plus the share of this one's genomes evaluated.
+fn progress_fraction(generation: u32, done: usize, total: usize, generations: u32) -> f64 {
+    if generations == 0 || total == 0 {
+        return 0.0;
+    }
+    #[allow(clippy::cast_precision_loss)]
+    let within = done as f64 / total as f64;
+    ((f64::from(generation) + within) / f64::from(generations)).clamp(0.0, 1.0)
+}
+
+fn progress_line(
+    fraction: f64,
+    generation: u32,
+    done: usize,
+    total: usize,
+    generations: u32,
+) -> String {
+    format!(
+        "progress: {fraction:.4} generation {}/{generations}, genomes {done}/{total}",
+        generation + 1
+    )
+}
+
 #[allow(clippy::struct_excessive_bools)] // independent display switches
 pub struct TerminalObserver {
     set: Option<SetContext>,
@@ -234,6 +263,9 @@ pub struct TerminalObserver {
     out: PathBuf,
     live_progress: bool,
     progress_visible: bool,
+    /// `ARSCHLOCH_PROGRESS` is set: print machine-readable `progress:` lines (the desktop window's bar).
+    progress_lines: bool,
+    last_progress: f64,
     opponent_count: usize,
     show_hall: bool,
     total_generations: u32,
@@ -250,6 +282,8 @@ impl TerminalObserver {
             out,
             live_progress: std::io::stderr().is_terminal(),
             progress_visible: false,
+            progress_lines: std::env::var_os(PROGRESS_ENV).is_some(),
+            last_progress: -1.0,
             opponent_count: 0,
             show_hall: false,
             total_generations: 0,
@@ -302,6 +336,16 @@ impl TrainObserver for TerminalObserver {
     }
 
     fn on_eval_progress(&mut self, generation: u32, done: usize, total: usize) {
+        if self.progress_lines {
+            let fraction = progress_fraction(generation, done, total, self.total_generations);
+            if fraction - self.last_progress >= PROGRESS_STEP || done == total {
+                self.last_progress = fraction;
+                eprintln!(
+                    "{}",
+                    progress_line(fraction, generation, done, total, self.total_generations)
+                );
+            }
+        }
         if self.quiet || !self.live_progress {
             return;
         }
@@ -536,6 +580,41 @@ mod tests {
         assert!(text.contains("o1=LowestLegal  o2=Adaptive(x)"), "{text}");
         assert!(text.contains("resumed from generation 12"), "{text}");
         assert!(text.contains("4 players"), "{text}");
+    }
+
+    #[test]
+    fn progress_counts_finished_generations_and_the_share_of_this_one() {
+        assert!((progress_fraction(0, 0, 50, 10) - 0.0).abs() < 1e-12);
+        assert!((progress_fraction(4, 25, 50, 10) - 0.45).abs() < 1e-12);
+        assert!((progress_fraction(9, 50, 50, 10) - 1.0).abs() < 1e-12);
+        assert!(
+            progress_fraction(0, 5, 0, 10).abs() < 1e-12,
+            "no genomes: no progress, no NaN"
+        );
+        assert!(
+            progress_fraction(0, 5, 10, 0).abs() < 1e-12,
+            "unknown total: no NaN"
+        );
+        assert!(
+            (progress_fraction(30, 1, 1, 10) - 1.0).abs() < 1e-12,
+            "never above 1"
+        );
+    }
+
+    #[test]
+    fn a_progress_line_is_the_documented_format() {
+        let line = progress_line(0.4512, 4, 25, 50, 10);
+        assert_eq!(line, "progress: 0.4512 generation 5/10, genomes 25/50");
+    }
+
+    /// The line the window reads must be what the trainer prints: this is the
+    /// contract `gui/src/progress.rs` parses (`progress: FRACTION TEXT`).
+    #[test]
+    fn the_line_starts_the_way_the_window_expects() {
+        let line = progress_line(1.0, 9, 50, 50, 10);
+        let rest = line.strip_prefix("progress: ").unwrap();
+        let number = rest.split(' ').next().unwrap();
+        assert!(number.parse::<f64>().is_ok(), "{line}");
     }
 
     fn sim_config() -> sim::training::TrainConfig {

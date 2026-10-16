@@ -321,7 +321,8 @@ cargo install cargo-xwin
 cargo xwin build --release --target x86_64-pc-windows-msvc -p cli
 ```
 
-The `.exe` lands at `target/x86_64-pc-windows-msvc/release/cli.exe`.
+The `.exe` lands at `target/x86_64-pc-windows-msvc/release/cli.exe`. The desktop window cross-compiles the same way
+(`-p cli -p gui`, giving `arschloch-gui.exe`; see `docs/RELEASING.md`).
 
 The first `cargo xwin build` downloads and caches the Windows SDK and CRT
 headers (a few hundred MB, under `~/.cache/cargo-xwin`); later builds

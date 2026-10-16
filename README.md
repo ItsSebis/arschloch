@@ -78,7 +78,9 @@ settings with the reason for each, ending in a command to run. See `docs/TRAININ
 
 ### The desktop window
 
-`cargo run --release -p gui` opens a small window to configure and run simulations and to read an activity log; play,
+`cargo run --release -p gui` (in the release archives: `arschloch-gui`, next to `cli`) opens a small window to
+configure and run simulations, to analyse a position with the solver (click the cards), to ask the training advisor for
+settings and start the training, and to read an activity log with a progress bar and file pickers; play,
 dashboards and the run analysis stay in the browser and are started from it. `cli view results.json` shows the results
 of a simulation as tables and bars in the browser (strategies best first, places as stacked bars, the luck-adjusted
 score when there is one, an explanation of every number). See `docs/GUI.md`.
