@@ -18,31 +18,66 @@ pub type Places = [u8; 6];
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BudgetExceeded;
 
-/// Everything that decides how a deal continues.
+/// Memo entries kept per search: a position is about 150 bytes, so this
+/// bounds the memory of one decision to roughly 75 MB however large the
+/// node budget is.
+const MEMO_LIMIT: usize = 500_000;
+
+/// Everything that decides how a deal continues, without any heap data.
+/// Cards are identified by their `deal_index` (unique within a round), as
+/// bits of a `u128`.
 #[derive(Hash, PartialEq, Eq)]
 struct Position {
-    hands: Vec<Vec<Card>>,
-    on_table: Vec<Card>,
+    hands: [u128; 6],
+    on_table: u128,
     holder: Option<SeatId>,
     turn: SeatId,
-    passed: Vec<bool>,
+    passed: u8,
     /// Who went out, in order: the same hands can follow different orders.
-    finished: Vec<SeatId>,
+    finished: [Option<SeatId>; 6],
+}
+
+fn card_bits(cards: &[Card]) -> u128 {
+    cards.iter().fold(0, |mask, card| {
+        mask | 1u128
+            .checked_shl(u32::from(card.deal_index))
+            .expect("deal indices of a round's deck are below 128")
+    })
 }
 
 impl Position {
     fn of(round: &Round, turn: SeatId) -> Self {
-        let seats = || (0..round.player_count()).filter_map(|s| SeatId::try_from(s).ok());
-        Self {
-            hands: seats().map(|s| round.hand(s).to_vec()).collect(),
-            on_table: round
-                .current_combo()
-                .map_or_else(Vec::new, |combo| combo.cards().to_vec()),
+        let mut position = Self {
+            hands: [0; 6],
+            on_table: round.current_combo().map_or(0, |c| card_bits(c.cards())),
             holder: round.combo_holder(),
             turn,
-            passed: seats().map(|s| round.has_passed(s)).collect(),
-            finished: round.finishing_order().to_vec(),
+            passed: 0,
+            finished: [None; 6],
+        };
+        let mut cards = 0;
+        for (seat, hand) in (0..round.player_count()).filter_map(|s| {
+            SeatId::try_from(s)
+                .ok()
+                .map(|seat| (seat, round.hand(seat)))
+        }) {
+            position.hands[usize::from(seat)] = card_bits(hand);
+            position.passed |= u8::from(round.has_passed(seat)) << seat;
+            cards += hand.len();
         }
+        debug_assert_eq!(
+            position
+                .hands
+                .iter()
+                .map(|m| m.count_ones() as usize)
+                .sum::<usize>(),
+            cards,
+            "cards of one round need distinct deal indices"
+        );
+        for (slot, &seat) in position.finished.iter_mut().zip(round.finishing_order()) {
+            *slot = Some(seat);
+        }
+        position
     }
 }
 
@@ -50,6 +85,7 @@ pub struct Search {
     remaining: u64,
     used: u64,
     memo: HashMap<Position, Places>,
+    memo_limit: usize,
 }
 
 impl Search {
@@ -59,12 +95,26 @@ impl Search {
             remaining: node_budget,
             used: 0,
             memo: HashMap::new(),
+            memo_limit: MEMO_LIMIT,
         }
     }
 
     #[must_use]
     pub fn nodes_used(&self) -> u64 {
         self.used
+    }
+
+    /// At most this many positions are remembered (the default keeps the
+    /// memory of one search bounded).
+    #[must_use]
+    pub fn with_memo_limit(mut self, limit: usize) -> Self {
+        self.memo_limit = limit;
+        self
+    }
+
+    #[must_use]
+    pub fn memo_len(&self) -> usize {
+        self.memo.len()
     }
 
     /// The outcome of each legal move of the seat to move (engine order).
@@ -115,7 +165,9 @@ impl Search {
             }
         }
         let best = best.expect("a seat to move has at least one legal move");
-        self.memo.insert(position, best);
+        if self.memo.len() < self.memo_limit {
+            self.memo.insert(position, best);
+        }
         Ok(best)
     }
 }
@@ -292,6 +344,28 @@ mod tests {
         // The values are those of the plain search (reference agreement is
         // tested above on random positions); here: one entry per legal move.
         assert_eq!(memoised.len(), round.legal_moves().len());
+    }
+
+    #[test]
+    fn the_memo_is_bounded_and_does_not_change_the_values() {
+        use crate::test_support::for_each_state;
+        let mut checked = 0;
+        for_each_state(25, 1, |state, _| {
+            let round = state.round;
+            let cards: usize = (0..state.players).map(|s| round.hand_size(s)).sum();
+            if cards > 8 || round.pass_rule() != engine::PassRule::Final {
+                return;
+            }
+            let mut full = Search::new(5_000_000);
+            let mut tiny = Search::new(5_000_000).with_memo_limit(10);
+            assert_eq!(
+                full.root_values(round).unwrap(),
+                tiny.root_values(round).unwrap()
+            );
+            assert!(tiny.memo_len() <= 10);
+            checked += 1;
+        });
+        assert!(checked > 10, "only {checked} positions were small enough");
     }
 
     #[test]
