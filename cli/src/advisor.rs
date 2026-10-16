@@ -179,6 +179,13 @@ pub fn command_line(
     opponents: &[String],
     out: &str,
 ) -> String {
+    // A folder with spaces is quoted so the line can be pasted into a shell and
+    // split again by the desktop window.
+    let out = if out.contains(char::is_whitespace) {
+        format!("\"{out}\"")
+    } else {
+        out.to_owned()
+    };
     let mut line = format!(
         "cli train --out {out} --player-count {players} --deck-variant {deck} --population {} --generations {} \
          --matches-per-genome {} --rounds {}",
@@ -555,6 +562,25 @@ mod tests {
             "cli train --out runs/auto --player-count 4 --deck-variant single --population 80 --generations 120 \
              --matches-per-genome 150 --rounds 8 --hall-of-fame 5 --hall-interval 6 \
              --opponent lowest-legal --opponent adaptive:reading"
+        );
+    }
+
+    #[test]
+    fn a_run_folder_with_spaces_is_quoted() {
+        let plan = RunPlan {
+            population: 10,
+            generations: 2,
+            matches_per_genome: 4,
+            rounds: 1,
+            hall_of_fame: 0,
+            hall_interval: 0,
+            estimated_seconds: 1.0,
+            budget_seconds: 2.0,
+        };
+        let command = command_line(&plan, 4, "single", &[], "my runs/a b");
+        assert!(
+            command.starts_with("cli train --out \"my runs/a b\" --player-count 4 "),
+            "{command}"
         );
     }
 

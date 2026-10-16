@@ -243,15 +243,29 @@ fn progress_fraction(generation: u32, done: usize, total: usize, generations: u3
     ((f64::from(generation) + within) / f64::from(generations)).clamp(0.0, 1.0)
 }
 
+/// Where a run's fraction lands in a set of `total_runs` runs, `finished` of them done.
+fn set_fraction(finished: usize, total_runs: u32, run_fraction: f64) -> f64 {
+    if total_runs == 0 {
+        return run_fraction;
+    }
+    #[allow(clippy::cast_precision_loss)]
+    let before = finished as f64;
+    ((before + run_fraction) / f64::from(total_runs)).clamp(0.0, 1.0)
+}
+
+/// `position` is `(k, N)` when this is run `k` of a set of `N`: the text then says so
+/// (the fraction passed in is already the set's).
 fn progress_line(
     fraction: f64,
     generation: u32,
     done: usize,
     total: usize,
     generations: u32,
+    position: Option<(usize, u32)>,
 ) -> String {
+    let run = position.map_or_else(String::new, |(k, n)| format!("run {k}/{n} "));
     format!(
-        "progress: {fraction:.4} generation {}/{generations}, genomes {done}/{total}",
+        "progress: {fraction:.4} {run}generation {}/{generations}, genomes {done}/{total}",
         generation + 1
     )
 }
@@ -337,12 +351,26 @@ impl TrainObserver for TerminalObserver {
 
     fn on_eval_progress(&mut self, generation: u32, done: usize, total: usize) {
         if self.progress_lines {
-            let fraction = progress_fraction(generation, done, total, self.total_generations);
+            let mut fraction = progress_fraction(generation, done, total, self.total_generations);
+            let position = self
+                .set
+                .as_ref()
+                .map(|set| (set.finished_secs.len() + 1, set.total_runs));
+            if let Some(set) = &self.set {
+                fraction = set_fraction(set.finished_secs.len(), set.total_runs, fraction);
+            }
             if fraction - self.last_progress >= PROGRESS_STEP || done == total {
                 self.last_progress = fraction;
                 eprintln!(
                     "{}",
-                    progress_line(fraction, generation, done, total, self.total_generations)
+                    progress_line(
+                        fraction,
+                        generation,
+                        done,
+                        total,
+                        self.total_generations,
+                        position
+                    )
                 );
             }
         }
@@ -603,15 +631,43 @@ mod tests {
 
     #[test]
     fn a_progress_line_is_the_documented_format() {
-        let line = progress_line(0.4512, 4, 25, 50, 10);
+        let line = progress_line(0.4512, 4, 25, 50, 10, None);
         assert_eq!(line, "progress: 0.4512 generation 5/10, genomes 25/50");
+    }
+
+    #[test]
+    fn in_a_set_the_fraction_and_text_include_the_run_position() {
+        // Run 2 of 4, halfway through it: (1 + 0.5) / 4.
+        assert!((set_fraction(1, 4, 0.5) - 0.375).abs() < 1e-12);
+        assert!(set_fraction(0, 4, 0.0).abs() < 1e-12);
+        assert!(
+            (set_fraction(3, 4, 1.0) - 1.0).abs() < 1e-12,
+            "the last run ends at 1"
+        );
+        assert!(
+            (set_fraction(0, 0, 0.3) - 0.3).abs() < 1e-12,
+            "no set: unchanged"
+        );
+        let line = progress_line(0.375, 4, 25, 50, 10, Some((2, 4)));
+        assert_eq!(
+            line,
+            "progress: 0.3750 run 2/4 generation 5/10, genomes 25/50"
+        );
+        // The window reads the number right after the prefix, with or without the run.
+        let number = line
+            .strip_prefix("progress: ")
+            .unwrap()
+            .split(' ')
+            .next()
+            .unwrap();
+        assert!(number.parse::<f64>().is_ok());
     }
 
     /// The line the window reads must be what the trainer prints: this is the
     /// contract `gui/src/progress.rs` parses (`progress: FRACTION TEXT`).
     #[test]
     fn the_line_starts_the_way_the_window_expects() {
-        let line = progress_line(1.0, 9, 50, 50, 10);
+        let line = progress_line(1.0, 9, 50, 50, 10, None);
         let rest = line.strip_prefix("progress: ").unwrap();
         let number = rest.split(' ').next().unwrap();
         assert!(number.parse::<f64>().is_ok(), "{line}");

@@ -140,6 +140,7 @@ impl SolverForm {
 
     /// The seats that passed: the marked ones plus every seat with cards between
     /// the holder and us (they acted after the holder, so they passed or are out).
+    /// The holder never passed: `cli solve` rejects a `passed:` line naming it.
     pub fn passed_seats(&self) -> Vec<usize> {
         let Some(holder) = self.holder else {
             return Vec::new();
@@ -153,6 +154,7 @@ impl SolverForm {
         (0..n)
             .filter(|&s| {
                 s != usize::from(self.seat)
+                    && s != usize::from(holder)
                     && sizes[s] > 0
                     && (self.passed.get(s).copied().unwrap_or(false) || between.contains(&s))
             })
@@ -413,6 +415,10 @@ mod tests {
         );
         form.passed[1] = true;
         assert_eq!(form.passed_seats(), [1, 3]);
+        // A stale mark on the holder (marked, then made the holder) is never written.
+        form.passed[2] = true;
+        assert_eq!(form.passed_seats(), [1, 3]);
+        assert!(form.text().contains("passed: 1 3\n"), "{}", form.text());
     }
 
     #[test]
@@ -537,6 +543,21 @@ mod tests {
         assert!(out.status.success(), "{text}");
         let rows = parse_report(&text).unwrap().rows;
         assert!(rows.iter().any(|r| r.text == "pass"), "{text}");
+        // Even with the holder marked as passed, the editor's file is accepted ...
+        trick.passed[2] = true;
+        std::fs::write(&file, trick.text()).unwrap();
+        let out = std::process::Command::new(real_cli().unwrap())
+            .args(trick.args(&file.to_string_lossy()))
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "holder mark must not be written");
+        // ... and the command does reject the holder on `passed:` (why it must not be).
+        std::fs::write(&file, trick.text().replace("passed: 3\n", "passed: 2 3\n")).unwrap();
+        let out = std::process::Command::new(real_cli().unwrap())
+            .args(trick.args(&file.to_string_lossy()))
+            .output()
+            .unwrap();
+        assert!(!out.status.success(), "negative control: holder in passed");
         // A wrong count is reported by the command, and the editor says the same first.
         let mut bad = form.clone();
         bad.sizes[1] = 3;

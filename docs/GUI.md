@@ -63,13 +63,15 @@ One job at a time (closing the window stops it); the log file and the default
 `results.json` are written in the folder the window was started from (started from a file manager that may be a folder
 you cannot write to: start it from a terminal or give full paths); the results of a simulation are read in the log and in the JSON
 file, and the browser page `cli view` shows them as tables and bars. The window is in the release archives next to `cli` (it was only run on Linux; the Windows and macOS builds
-have not been started by anyone yet).
+have not been started by anyone yet). On Windows the window has no console behind it: a usage error of `cli` (a wrong flag) is only
+visible as the job's output in the Activity panel, and what the window itself prints (a panic) is not visible at all; start `cli` from a terminal to see those.
 
 ## For developers
 
 `form.rs` (the form and the arguments it builds, unit-tested; a test runs the real `cli` with them and checks that a
 wrong flag fails), `job.rs` (a child process with streamed output and cancel), `browse.rs` (the picker's folder
 listing), `progress.rs` (reads the `progress:` lines), `solver.rs` (the card grid, the position text, reading the
-ranked table of `cli solve`), `advisor.rs` (the advisor form and the recommended command split into fields), `main.rs`
-(drawing only). Tests of the last three run the real `cli` (`solve`, `train-advisor`, `train`), so the formats the
+ranked table of `cli solve`), `advisor.rs` (the advisor form and the recommended command split into fields), `widgets.rs` (drawing helpers: seat table, card
+grid, recommendation editor), `main.rs` (the app state, tabs, job polling and the hand-off of a finished job's output to the
+forms; about 800 lines, the tabs' drawing code is the bulk and was left in one file). Tests of the last three run the real `cli` (`solve`, `train-advisor`, `train`), so the formats the
 window reads cannot drift unnoticed; `testing.rs` finds the binary the same way the form test does.

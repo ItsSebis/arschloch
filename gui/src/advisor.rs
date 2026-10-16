@@ -113,6 +113,40 @@ pub fn find_command(output: &str) -> Option<&str> {
         .rfind(|l| l.starts_with("cli train "))
 }
 
+/// Splits a command line at spaces; a `"double quoted"` part (a folder with
+/// spaces, as the advisor prints it) stays one word.
+fn split_words(line: &str) -> Result<Vec<String>, String> {
+    let mut words = Vec::new();
+    let mut word = String::new();
+    let mut started = false;
+    let mut quoted = false;
+    for c in line.chars() {
+        match c {
+            '"' => {
+                quoted = !quoted;
+                started = true;
+            }
+            c if c.is_whitespace() && !quoted => {
+                if started {
+                    words.push(std::mem::take(&mut word));
+                    started = false;
+                }
+            }
+            c => {
+                word.push(c);
+                started = true;
+            }
+        }
+    }
+    if quoted {
+        return Err(format!("unbalanced quote in `{line}`"));
+    }
+    if started {
+        words.push(word);
+    }
+    Ok(words)
+}
+
 impl Recommendation {
     /// Splits a `cli train ...` command line.
     ///
@@ -120,7 +154,8 @@ impl Recommendation {
     ///
     /// The line is not a `cli train` command, or a number in it is not one.
     pub fn parse(command: &str) -> Result<Self, String> {
-        let mut words = command.split_whitespace();
+        let words = split_words(command)?;
+        let mut words = words.iter().map(String::as_str);
         if words.next() != Some("cli") || words.next() != Some("train") {
             return Err(format!("`{command}` is not a `cli train` command"));
         }
@@ -200,7 +235,10 @@ impl Recommendation {
         push("--rounds", self.rounds.to_string());
         if self.hall_of_fame > 0 {
             push("--hall-of-fame", self.hall_of_fame.to_string());
-            push("--hall-interval", self.hall_interval.to_string());
+            // `cli train` rejects `--hall-interval 0`: leave it to its default.
+            if self.hall_interval > 0 {
+                push("--hall-interval", self.hall_interval.to_string());
+            }
         }
         for opponent in &self.opponents {
             push("--opponent", opponent.clone());
@@ -301,6 +339,19 @@ mod tests {
     }
 
     #[test]
+    fn a_quoted_run_folder_with_spaces_stays_one_argument() {
+        let command = COMMAND.replace("--out runs/auto", "--out \"my runs/a b\"");
+        let rec = Recommendation::parse(&command).unwrap();
+        assert_eq!(rec.out, "my runs/a b");
+        assert!(rec.extra.is_empty(), "{:?}", rec.extra);
+        assert_eq!(rec.population, 80);
+        let args = rec.args();
+        let at = args.iter().position(|a| a == "--out").unwrap();
+        assert_eq!(args[at + 1], "my runs/a b");
+        assert!(Recommendation::parse("cli train --out \"oops").is_err());
+    }
+
+    #[test]
     fn flags_a_later_advisor_adds_are_passed_through() {
         let rec = Recommendation::parse(&format!(
             "{COMMAND} --fitness consistency --quiet --threads 4"
@@ -332,6 +383,15 @@ mod tests {
         );
         rec.population = 0;
         assert!(rec.problem().is_some());
+    }
+
+    #[test]
+    fn a_hall_without_an_interval_does_not_send_the_rejected_zero() {
+        let mut rec = Recommendation::parse(COMMAND).unwrap();
+        rec.hall_interval = 0;
+        let args = rec.args().join(" ");
+        assert!(args.contains("--hall-of-fame 5"), "{args}");
+        assert!(!args.contains("--hall-interval"), "{args}");
     }
 
     #[test]
