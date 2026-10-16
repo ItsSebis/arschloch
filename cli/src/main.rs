@@ -8,6 +8,7 @@ mod evaluate;
 mod extended_summary;
 mod output;
 mod play;
+mod solve;
 mod stats_doc;
 mod summary;
 mod train;
@@ -30,6 +31,7 @@ fn main() -> anyhow::Result<()> {
         Some("evaluate") => return evaluate::run(std::env::args().skip(2)),
         Some("stats-doc") => return stats_doc::run(std::env::args().skip(2)),
         Some("play") => return play::run(std::env::args().skip(2)),
+        Some("solve") => return solve::run(std::env::args().skip(2)),
         _ => {}
     }
     let args = args::Args::parse();
