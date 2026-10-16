@@ -2,6 +2,7 @@
 //! event stream, and the generational loop. See
 //! docs/superpowers/specs/2026-10-08-neat-engine-design.md, sections 6-8.
 
+pub mod analysis;
 pub mod config;
 pub mod decisions;
 pub mod evaluate;
@@ -12,6 +13,10 @@ pub mod set;
 pub mod skill_term;
 pub mod trainer;
 
+pub use analysis::{
+    analyse, load_runs, load_runs_within, qualify_labels, series, slope_with_interval,
+    AnalysisError, Loaded, RunAnalysis, RunData, RunSeries, Slope,
+};
 pub use config::{DeckChoice, DuplicateChoice, TrainConfig};
 pub use decisions::{record_decisions, DecisionFile, DecisionRecord};
 pub use evaluate::{

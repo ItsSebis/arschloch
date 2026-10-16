@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Run analysis</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header>
+    <h1>Run analysis</h1>
+    <nav><a href="/">Training dashboard</a></nav>
+    <label class="picker">Run <select id="run-picker"></select></label>
+    <span id="status" class="pill">loading…</span>
+  </header>
+  <main>
+    <div id="skipped"></div>
+    <section class="card" id="verdict-card">
+      <h2>Verdict</h2>
+      <div id="verdict"></div>
+    </section>
+
+    <section class="card" id="compare-card" hidden>
+      <h2>Runs compared</h2>
+      <div id="compare"></div>
+    </section>
+
+    <section class="card">
+      <h2>Key numbers</h2>
+      <div id="key-numbers"></div>
+    </section>
+
+    <section class="card">
+      <h2>Champion re-evaluation</h2>
+      <p class="muted">The champion replayed on one fixed set of matches each generation (grey), its smoothed curve (blue) with the single-evaluation noise band around it, and the selection fitness (dashed, inflated by selection). The vertical line is the stall generation; green dots are the held-out scores of the generations that set a new best (the gap to the grey line is the winner's curse).</p>
+      <div id="champion-chart" class="chart"></div>
+      <div id="champion-legend" class="readout"></div>
+    </section>
+
+    <section class="card">
+      <h2>Champion against each opponent</h2>
+      <p class="muted">Mean finishing-role score against one opponent alone; 0 is an even match.</p>
+      <div id="opponents-chart" class="chart"></div>
+      <div id="opponents-legend" class="readout"></div>
+      <div id="opponents-table"></div>
+    </section>
+  </main>
+  <script type="module" src="/analysis.js"></script>
+</body>
+</html>
