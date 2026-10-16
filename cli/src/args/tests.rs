@@ -424,3 +424,30 @@ fn try_parse_from_rejects_zero_matches_and_zero_rounds() {
     ];
     assert!(Args::try_parse_from(zero_rounds).is_err());
 }
+
+#[test]
+fn endgame_solver_specs_parse() {
+    assert_eq!(
+        "endgame-solver".parse::<StrategyArg>().unwrap(),
+        StrategyArg::Solver(sim::SolverSpec::default())
+    );
+    let arg = "endgame-solver:max-unseen=8,fallback=lowest-legal"
+        .parse::<StrategyArg>()
+        .unwrap();
+    match arg {
+        StrategyArg::Solver(spec) => {
+            assert_eq!(spec.solver.max_unseen, 8);
+            assert_eq!(spec.fallback, sim::StrategyName::LowestLegal);
+        }
+        other => panic!("expected a solver spec, got {other:?}"),
+    }
+    assert!("endgame-solver:depth=3".parse::<StrategyArg>().is_err());
+    assert_eq!(
+        "endgame-solver"
+            .parse::<StrategyArg>()
+            .unwrap()
+            .build()
+            .name(),
+        "EndgameSolver(adaptive,T=6)"
+    );
+}

@@ -2,6 +2,7 @@
 //! the JSON results file, and print a human-readable summary. See
 //! docs/ARCHITECTURE.md, "cli".
 
+mod advisor;
 mod analyse_run;
 mod args;
 mod batch;
@@ -9,11 +10,14 @@ mod evaluate;
 mod extended_summary;
 mod output;
 mod play;
+mod solve;
+mod solver_gap;
 mod stats_doc;
 mod summary;
 mod train;
 mod train_args;
 mod train_output;
+mod view;
 mod watch;
 
 use std::sync::Arc;
@@ -27,11 +31,15 @@ fn main() -> anyhow::Result<()> {
     // simulation run.
     match std::env::args().nth(1).as_deref() {
         Some("train") => return train::run(std::env::args().skip(2)),
+        Some("train-advisor") => return advisor::run(std::env::args().skip(2)),
         Some("analyse-run") => return analyse_run::run(std::env::args().skip(2)),
         Some("watch") => return watch::run(std::env::args().skip(2)),
+        Some("view") => return view::run(std::env::args().skip(2)),
         Some("evaluate") => return evaluate::run(std::env::args().skip(2)),
         Some("stats-doc") => return stats_doc::run(std::env::args().skip(2)),
         Some("play") => return play::run(std::env::args().skip(2)),
+        Some("solve") => return solve::run(std::env::args().skip(2)),
+        Some("solver-gap") => return solver_gap::run(std::env::args().skip(2)),
         _ => {}
     }
     let args = args::Args::parse();

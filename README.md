@@ -64,6 +64,24 @@ duplicate-card rule, thread count, and cross-compiling a Windows `.exe`).
   both validated to beat plain `lowest-legal` outright (not just trade
   placement for safety) in a clean head-to-head — bullying's edge is
   the larger of the two.
+- `endgame-solver` — plays exactly once few cards are unseen: it considers
+  every way the unseen cards could be split between the other players and
+  picks the move with the best expected finishing place, and defers to a
+  fallback strategy (`adaptive` by default) before that. Also `cli solve` to
+  analyse a written-down situation and `cli solver-gap` to see where other
+  strategies deviate; see `docs/SOLVER.md`.
+
+### Choosing training settings
+
+`cli train-advisor --time-budget 30m` probes this machine and the candidate opponents and prints recommended `cli train`
+settings with the reason for each, ending in a command to run. See `docs/TRAINING.md`.
+
+### The desktop window
+
+`cargo run --release -p gui` opens a small window to configure and run simulations and to read an activity log; play,
+dashboards and the run analysis stay in the browser and are started from it. `cli view results.json` shows the results
+of a simulation as tables and bars in the browser (strategies best first, places as stacked bars, the luck-adjusted
+score when there is one, an explanation of every number). See `docs/GUI.md`.
 
 ### The stdout summary
 

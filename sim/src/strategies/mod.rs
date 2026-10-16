@@ -1,6 +1,7 @@
 mod adaptive;
 mod card_counter;
 mod endgame_denial;
+mod endgame_solver;
 mod greedy_highest;
 mod hold_back_pairs;
 mod lowest_legal;
@@ -12,6 +13,7 @@ use engine::{Card, DuplicateRule, Move};
 pub use adaptive::{Adaptive, AdaptiveConfig, DenialMode};
 pub use card_counter::CardCounter;
 pub use endgame_denial::EndgameDenial;
+pub use endgame_solver::{EndgameSolver, SolverStats};
 pub use greedy_highest::GreedyHighest;
 pub use hold_back_pairs::HoldBackPairs;
 pub use lowest_legal::LowestLegal;

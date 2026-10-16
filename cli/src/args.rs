@@ -65,7 +65,10 @@ pub struct Args {
     /// list parsed by `sim::AdaptiveConfig`'s `FromStr` (e.g.
     /// `counting`, `reading,deception=0.2`, `none`), or
     /// `neat:PATH`, a trained genome file (see `sim::GenomeFile`),
-    /// reported in results as `Neat(<file name without extension>)`. For
+    /// reported in results as `Neat(<file name without extension>)`, or
+    /// `endgame-solver[:OPTIONS]`, exact play once few cards are unseen
+    /// (`max-unseen=N`, `budget=N`, `fallback=NAME`; see docs/SOLVER.md),
+    /// reported as `EndgameSolver(<fallback>,T=<max-unseen>)`. For
     /// example, a three-seat table: `--strategy lowest-legal --strategy
     /// adaptive:counting --strategy adaptive:reading,deception=0.2`.
     #[arg(long = "strategy", required = true, value_name = "SPEC")]
@@ -215,6 +218,7 @@ pub enum StrategyArg {
     Fixed(FixedStrategy),
     Adaptive(sim::AdaptiveConfig),
     Neat(NeatSpec),
+    Solver(sim::SolverSpec),
 }
 
 /// A `neat:PATH` spec. The genome file is loaded and checked while the
@@ -259,16 +263,22 @@ impl std::str::FromStr for StrategyArg {
                 strategy: Arc::new(strategy),
             }));
         }
+        if head == "endgame-solver" {
+            return match options {
+                None => Ok(Self::Solver(sim::SolverSpec::default())),
+                Some(o) => o.parse().map(Self::Solver),
+            };
+        }
         if options.is_some() {
             return Err(format!(
-                "strategy `{head}` takes no options (only `adaptive:` and `neat:` do)"
+                "strategy `{head}` takes no options (only `adaptive:`, `neat:` and `endgame-solver:` do)"
             ));
         }
         <FixedStrategy as clap::ValueEnum>::from_str(head, false)
             .map(Self::Fixed)
             .map_err(|_| {
                 format!(
-                    "unknown strategy `{head}`; expected one of: {}, adaptive[:OPTIONS], neat:PATH",
+                    "unknown strategy `{head}`; expected one of: {}, adaptive[:OPTIONS], neat:PATH, endgame-solver[:OPTIONS]",
                     fixed_strategy_names(),
                 )
             })
@@ -300,6 +310,7 @@ impl StrategyArg {
             Self::Fixed(FixedStrategy::EndgameDenial) => Arc::new(sim::EndgameDenial),
             Self::Adaptive(config) => Arc::new(sim::Adaptive::new(config)),
             Self::Neat(spec) => spec.strategy,
+            Self::Solver(spec) => Arc::new(sim::EndgameSolver::new(spec)),
         }
     }
 }

@@ -93,6 +93,97 @@ impl Round {
         })
     }
 
+    /// Rebuilds a round in progress under [`PassRule::Final`] from what a
+    /// seat can observe, for search: `hands` by seat (an empty hand is a seat
+    /// that is already out), `turn` the seat to move, `on_table` the holder
+    /// and combo of the trick's current play (`None`: `turn` leads a fresh
+    /// trick) and `passed` by seat (seats out of the trick).
+    ///
+    /// The play and pass histories start empty, the seats already out are
+    /// entered in the finishing order in seat order (their real order is not
+    /// observable and does not affect the places of the seats still playing),
+    /// and [`Round::current_trick_leader`] returns the holder (or `turn` on
+    /// a fresh trick). Returns `None` for an inconsistent position: not 3-6
+    /// seats, `passed` of the wrong length, fewer than two seats still in,
+    /// `turn` out of range, out, or having passed, a holder equal to `turn`
+    /// or having passed, a passed seat that is out, passes on a fresh trick,
+    /// or a seat between the holder and `turn` that neither passed nor is out
+    /// (it would have had to act).
+    #[must_use]
+    pub fn from_position(
+        hands: Vec<Vec<Card>>,
+        duplicate_rule: DuplicateRule,
+        turn: SeatId,
+        on_table: Option<(SeatId, Combo)>,
+        passed: &[bool],
+    ) -> Option<Self> {
+        let n = hands.len();
+        if !(3..=6).contains(&n) || passed.len() != n || usize::from(turn) >= n {
+            return None;
+        }
+        let turn_index = usize::from(turn);
+        if hands[turn_index].is_empty() || passed[turn_index] {
+            return None;
+        }
+        if hands.iter().filter(|hand| !hand.is_empty()).count() < 2 {
+            return None;
+        }
+        if passed
+            .iter()
+            .zip(&hands)
+            .any(|(&has_passed, hand)| has_passed && hand.is_empty())
+        {
+            return None;
+        }
+        let holder = if let Some((holder, _)) = on_table {
+            let holder_index = usize::from(holder);
+            if holder_index >= n || holder == turn || passed[holder_index] {
+                return None;
+            }
+            Some(holder)
+        } else {
+            if passed.iter().any(|&has_passed| has_passed) {
+                return None;
+            }
+            None
+        };
+        // Seats between the holder and the seat to move have already acted in
+        // this trick: each passed or went out.
+        if let Some(holder) = holder {
+            let skipped = (1..n)
+                .map(|offset| (usize::from(holder) + offset) % n)
+                .take_while(|&seat| seat != turn_index);
+            if skipped
+                .into_iter()
+                .any(|seat| !passed[seat] && !hands[seat].is_empty())
+            {
+                return None;
+            }
+        }
+        let mut passed_seats = [false; 6];
+        passed_seats[..n].copy_from_slice(passed);
+        let finishing_order = (0..n)
+            .filter(|&seat| hands[seat].is_empty())
+            .filter_map(|seat| SeatId::try_from(seat).ok())
+            .collect();
+        Some(Self {
+            hands,
+            duplicate_rule,
+            finishing_order,
+            current_combo: on_table.map(|(_, combo)| combo),
+            trick: Trick::from_parts(holder.unwrap_or(turn), turn, holder, passed_seats),
+            pass_rule: PassRule::Final,
+            play_history: Vec::new(),
+            pass_history: Vec::new(),
+        })
+    }
+
+    /// Seats at the table.
+    #[must_use]
+    pub fn player_count(&self) -> usize {
+        self.hands.len()
+    }
+
     /// Whether `seat` has passed in the current trick and is out of it
     /// until the trick ends (`PassRule::Final` only; always `false` under
     /// `Free`).
@@ -167,6 +258,13 @@ impl Round {
     #[must_use]
     pub fn current_combo(&self) -> Option<&Combo> {
         self.current_combo.as_ref()
+    }
+
+    /// The seat holding the combo on the table (the trick's current winner);
+    /// `None` when the active seat leads a fresh trick.
+    #[must_use]
+    pub fn combo_holder(&self) -> Option<SeatId> {
+        self.trick.winner()
     }
 
     /// The seat that led the trick currently in progress.

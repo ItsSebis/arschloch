@@ -1,0 +1,13 @@
+# An endgame to try with: cli solve docs/examples/solve-endgame.txt
+# Four players, single deck. We are seat 0 and lead a fresh trick with three
+# cards left; every other seat holds two cards. Six cards are unseen: the solver
+# considers every way they can be split between seats 1, 2 and 3.
+players: 4
+deck: single
+seat: 0
+hand: 5C 9D KH
+sizes: 3 2 2 2
+table: lead
+# Every card played so far this round (the combo on the table, if any, goes
+# under `table`, not here).
+played: 2D 2H 2S 2C 3H 3S 3C 4D 4S 4C 5D 5H 5S 6D 6H 6C 7D 7H 7S 8D 8H 8S 8C 9H 9S 9C 10H 10S 10C JD JS JC QD QH QS QC KD KS KC AD AH AS AC

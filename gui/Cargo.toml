@@ -1,0 +1,18 @@
+[package]
+name = "gui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "A small desktop window to configure and run simulations"
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "arschloch-gui"
+path = "src/main.rs"
+
+[dependencies]
+eframe = { version = "0.37", default-features = false, features = ["default_fonts", "glow", "x11", "wayland"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"

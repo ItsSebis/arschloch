@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Simulation results</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header>
+    <h1>Simulation results</h1>
+    <button id="reload" type="button">Reload</button>
+    <span id="status" class="pill">loading…</span>
+  </header>
+  <main>
+    <section class="card">
+      <h2>Strategies</h2>
+      <p class="muted" id="summary"></p>
+      <div id="strategies"></div>
+    </section>
+    <section class="card" id="skill-card" hidden>
+      <h2>Luck-adjusted score</h2>
+      <p class="muted">Every deal replayed with the strategies rotated through all seats, so the luck of the deal cancels. The skill score is the plain score without it.</p>
+      <div id="skill"></div>
+    </section>
+    <section class="card">
+      <h2>What the numbers mean</h2>
+      <div id="explain"></div>
+    </section>
+  </main>
+  <script type="module" src="/results.js"></script>
+</body>
+</html>

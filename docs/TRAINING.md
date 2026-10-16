@@ -109,6 +109,34 @@ thread count.
 
 ## Choosing settings
 
+`cli train-advisor` picks them for you. It plays a short probe on this machine (a reference player, `adaptive` by default,
+against each candidate opponent; `--probe-matches` per candidate), then prints settings with the reason for each and a
+`cli train` command line that carries them out:
+
+```
+cli train-advisor --time-budget 30m            # or --preset quick|thorough|overnight, --player-count, --deck-variant
+```
+
+- **Opponent pool:** candidates against which the reference player scores above +0.85 (it wins almost every game: too
+  weak to teach anything) or below -0.6 (it almost never wins: no signal) are dropped; the four hardest of the rest form the
+  pool. `--opponent SPEC` (repeatable) replaces the default candidate list (the battery of `cli evaluate`).
+- **Matches per genome:** from the measured spread of one match's score, enough matches for a standard error of about 0.02
+  in one fitness measurement (20 to 400, in tens).
+- **Population and generations:** from the measured rounds per second and the time budget (70% of it is planned, the rest
+  covers what the estimate leaves out); a tight budget shrinks the population first, then the matches, so that at least 20
+  generations fit. Long runs (60+ generations) get a hall of fame.
+
+The plan counts what the trainer plays per generation (every genome's matches plus the re-evaluations of the champion
+candidates, the champion and each pool opponent) and warns when 20 generations do not fit the budget. The speed is
+measured over all candidates, not only the chosen pool, and the noise target (a standard error of 0.02 on one
+fitness measurement) is stricter than selection between genomes on the same matches needs, so it errs on the side
+of more matches. The estimate uses the reference player's speed; a trained network is of similar cost but not identical, which is what the
+unplanned 30% is for. The advisor does not start the run: copy the printed command (or run it from the desktop window's
+"Any command" tab). Not built: scoring against a starting genome, a models folder or the hall of fame of earlier runs;
+`train --auto`; recommendations while a run is going; a web form.
+
+Details of every setting follow.
+
 | option | default | what it does / when to change it |
 |---|---|---|
 | `--player-count` | 4 | table size 3-6. Train the size you care about; a genome trained at 4 still beats every opponent at 3, 5 and 6 (see `docs/baselines/neat-v1`), but is not tuned for them |
