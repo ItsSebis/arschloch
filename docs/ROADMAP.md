@@ -1,10 +1,50 @@
 # Roadmap
 
-Each phase should leave the workspace building, tested, and documented
-before the next one starts. Phases are scoped to be reviewable in a single
-sitting; a phase that grows beyond that should be split.
+Phase numbers are stable names (specs, commits and code comments refer to them), not
+an order. The sections below are ordered by status: **done** first, then **in
+progress**, then **planned**, in the order they are recommended to be done. The table
+is the overview; the sections hold the details.
 
-## Phase 0 — Foundations
+Each phase should leave the workspace building, tested, and documented before the
+next one starts. Phases are scoped to be reviewable in a single sitting; a phase that
+grows beyond that should be split.
+
+| Phase | Title | Status |
+|---|---|---|
+| 0 | Foundations | done |
+| 1 | Round & game state machine | done |
+| 2 | Strategies & simulation runner | done |
+| 3 | CLI | done |
+| 4 | Deeper statistics | done |
+| 5 | Smart exchange | done |
+| 6 | Strategic context, card counting, and endgame denial | done |
+| 7 | Adaptive strategy | done |
+| 8 | Trick-lead tempo | done |
+| 9 | Lead-order bullying | done |
+| 10 | NEAT training | done |
+| 12 | Richer scoring and statistics | done |
+| 13 | NEAT: better play and wider training | done |
+| 14 | Rule change: a pass ends your part in the trick | done |
+| 15 | Rule change: the exchange gives your highest cards | done |
+| 19 | CPU performance and simplification | done |
+| 11 | Web interface | in progress |
+| 17 | Run analysis tool (CLI and web) | built on its branch, not merged |
+| 21 | Endgame solver and determinized search | in progress |
+| 22 | Graphical interface for everything | planned |
+| 18 | Training advisor: pick the opponents and settings for you | planned |
+| 16 | Self-play and co-evolutionary training | idea |
+| 20 | GPU simulation port (RTX 4070) | planned, not started |
+
+**Recommended order of the open work:** merge Phase 17 (already built) and fold the
+open web items of Phase 11 into Phase 22; then Phase 21 (the solver, in progress);
+then Phase 22 (the graphical interface, which exposes the solver, the run analysis and
+the training options in one place); then Phase 18 (its form lives in the interface);
+then Phase 16 (research; the Phase 17 analysis is how to judge it); last Phase 20 (the
+GPU port is the largest and least certain, and only pays off for long training runs).
+
+# Done
+
+## Phase 0 — Foundations (done)
 
 - Cargo workspace scaffold: `engine`, `sim`, `cli`, `web` (placeholder)
   crates, workspace-level lint/format config.
@@ -18,7 +58,7 @@ sitting; a phase that grows beyond that should be split.
 - Explicitly **not** in Phase 0: the trick-taking loop, round/game state
   machine, card exchange execution, strategies, simulation runner, CLI.
 
-## Phase 1 — Round & game state machine
+## Phase 1 — Round & game state machine (done)
 
 - `engine`: full trick loop (lead, follow/pass, trick resolution, hand
   exhaustion, finishing order), round-end role assignment, and the mandatory
@@ -27,7 +67,7 @@ sitting; a phase that grows beyond that should be split.
 - Scripted integration tests that play a full round move-by-move and
   assert final roles/hands match expectations.
 
-## Phase 2 — Strategies & simulation runner
+## Phase 2 — Strategies & simulation runner (done)
 
 - `sim`: `Strategy` trait, 2-3 baseline strategies (lowest-legal,
   random-legal, greedy-highest).
@@ -35,14 +75,14 @@ sitting; a phase that grows beyond that should be split.
   `serde_json` output.
 - Integration tests asserting statistical invariants over small batches.
 
-## Phase 3 — CLI
+## Phase 3 — CLI (done)
 
 - `cli` crate: `clap`-based configuration (player count, deck variant,
   duplicate rule, match count, seat strategies, thread count).
 - JSON results file + human-readable summary table on stdout.
 - End-to-end smoke tests.
 
-## Phase 4 — Deeper statistics
+## Phase 4 — Deeper statistics (done)
 
 - Role-sustainment tracking: does a strategy that becomes President tend
   to stay President across repeated matches with role carry-over, or is it
@@ -54,14 +94,14 @@ sitting; a phase that grows beyond that should be split.
   back a matching set rather than always playing greedily) to compare
   against always-play-if-possible baselines.
 
-## Phase 5 — Smart exchange
+## Phase 5 — Smart exchange (done)
 
 - Replace Phase 1's naive top/bottom-N tie-break with strategy-aware card
   selection for `choose_exchange_cards` — e.g. prefer to give away an
   isolated high card over one that's part of a pair/triple the strategy
   would rather keep, when multiple cards tie for "the Nth highest".
 
-## Phase 6 — Strategic context, card counting, and endgame denial
+## Phase 6 — Strategic context, card counting, and endgame denial (done)
 
 - `engine`: `Round` gains a play-history accessor (every combo played so
   far this round, tagged with the seat that played it) and a per-seat
@@ -80,7 +120,7 @@ sitting; a phase that grows beyond that should be split.
   Phase 4's existing statistics can show which technique — counting or
   denial — actually helps.
 
-## Phase 7 — Adaptive strategy
+## Phase 7 — Adaptive strategy (done)
 
 - `engine`: `Round` gains a pass-history accessor alongside Phase 6's
   play history (every pass this round, tagged with the seat, the combo
@@ -114,7 +154,7 @@ sitting; a phase that grows beyond that should be split.
   the six fixed strategies and independently-configured `Adaptive`
   instances (e.g. `adaptive:reading,deception=0.2`) in the same table.
 
-## Phase 8 — Trick-lead tempo
+## Phase 8 — Trick-lead tempo (done)
 
 - A fourth `Adaptive` modifier, `tempo`: finishing a round is a race to
   be the one who *leads* a trick while holding exactly one card
@@ -141,7 +181,7 @@ sitting; a phase that grows beyond that should be split.
 - `cli`: `adaptive:tempo` (combinable with every other modifier, e.g.
   `adaptive:reading,deception=0.2,tempo`).
 
-## Phase 9 — Lead-order bullying
+## Phase 9 — Lead-order bullying (done)
 
 - A fifth `Adaptive` modifier, `bully`: finishing a round on your very
   last card locks in your placement unconditionally, the same mechanic
@@ -178,7 +218,7 @@ sitting; a phase that grows beyond that should be split.
 - `cli`: `adaptive:bully` (combinable with every other modifier, e.g.
   `adaptive:tempo,bully`).
 
-## Phase 10 — NEAT training
+## Phase 10 — NEAT training (done)
 
 - Evolve feedforward neural-network players with NEAT and compare them
   against the hand-written strategies. Full design:
@@ -197,34 +237,6 @@ sitting; a phase that grows beyond that should be split.
   earlier run (`--from`), sets of runs with a set-wide ETA (`--runs`), and a
   CPU speedup of about 1.5x with measurements that rule out GPU offload of the
   network (see the GPU idea below).
-
-## Phase 11 — Web interface
-
-**Status:** the interactive part is built: `cli play` (Phase 11, "play against the
-models"; see `docs/PLAYING.md`) with a pure `sim::session` game session, a POST-capable
-local HTTP layer, model advice and personal records. Still open: the
-simulation-statistics overview views below, the run-analysis page (Phase 17)
-and the training-advisor form (Phase 18).
-
-- Extends the `web` crate that Phase 10d starts with the NEAT training
-  dashboard (HTTP server, embedded single-page app, JSON API), rather
-  than building a second frontend. Adds the simulation views: a small
-  web frontend to view running simulations and the Phase 4 statistics
-  as an overview — role outcomes by strategy, variance/luck indicators,
-  strategy comparison charts — and can show evolved players next to the
-  hand-written strategies.
-- Reads (or live-drives) `sim`'s existing output types — no changes to
-  `engine`/`sim`'s public shape should be needed going in.
-- **Play against the models:** a user can sit at a table in the browser
-  and compete against one or several trained models (genome files from
-  `cli train`, for example `docs/baselines/neat-v1/champion.json`), and
-  optionally against hand-written strategies, at any table size 3-6. The
-  server holds the game state and asks a `NeatStrategy` for its move
-  through the same `Strategy` interface the simulator uses; the page shows
-  the human's hand, the table and the other seats' hand sizes, and offers
-  the legal moves. Results (roles per round) are kept so a human's record
-  against each model can be viewed and compared with the models' own
-  scores.
 
 ## Phase 12 — Richer scoring and statistics (done)
 
@@ -359,97 +371,10 @@ only sees what was taken and received); old runs, configs and records read as
 cards, so every other strategy plays identical games under both rules and the
 retrained champion is byte-identical (`docs/baselines/current-rules`).
 
-## Phase 16 — Self-play and co-evolutionary training (idea)
+## Phase 19 — CPU performance and simplification (done)
 
-Raised while planning Phase 12; deliberately not built yet. Today genomes train
-against a fixed opponent pool, so the opposition never gets stronger than the
-pool. Idea: train populations against each other and a hall of fame of their
-own past champions, optionally mixed with fixed strategies.
-
-- Relative fitness from the Phase 12 statistics: duplicate-deal skill scores
-  (so card luck does not swamp a zero-sum comparison) and the opponent-adjusted
-  strength rating (a result against a stronger field counts for more).
-- A fixed **anchor benchmark**: every N generations the current best is also
-  scored against frozen baselines (`docs/baselines/neat-v2` champion and the
-  hand-written strategies), so progress is absolute even though self-play
-  fitness is only relative.
-- Known risks to design for: cycling (A beats B beats C beats A) and forgetting
-  old tricks; the hall of fame and the anchors are the standard guard. The first
-  run is an experiment compared against `neat-v2`, not a new default.
-- Evidence so far (from the stagnation analysis of the long runs, see Phase 17):
-  the stall seen in the long runs looks noise- and information-limited rather
-  than opponent-limited, so this phase ranks below Phase 13's new inputs.
-
-## Phase 17 — Run analysis tool (CLI and web)
-
-Born from the first stagnation analysis of the long runs in `runs/PC` (done by
-hand with a throwaway script). Turn that into a tool so every run can answer
-"where did it stop improving, and why?" in one command.
-
-- **`cli analyse-run <events.jsonl | run dir> [more...]`**: accepts several
-  runs at once and labels them by file or directory name. Reports per run:
-  - the **stall generation** (smoothed champion re-evaluation within one
-    standard error of its peak) and the **trend** (slope per 100 generations
-    with a 95% interval, overall and for the last part of the run);
-  - the **noise level** (standard error of a single evaluation, standard
-    deviation of the generation-to-generation change of the champion's score);
-  - the **winner's-curse gap** (best generation's re-evaluation against its
-    held-out score, and training best against champion level), so a lucky "best
-    generation" is not mistaken for progress;
-  - **per-opponent trends** (flat everywhere = information/noise limited; flat
-    against some and rising against others = pool limited);
-  - **growth without gain** (hidden nodes and connections against score),
-    **population convergence** (share of genomes in the top fitness bin), species
-    counts and the compatibility threshold;
-  - a plain-language **verdict with suggestions** (more matches per genome or the
-    duplicate-deal fitness when noise dominates, new inputs when the model stalls
-    everywhere, harder opponents when only the pool is exhausted, stop early
-    when the slope is flat).
-  - `--json` output for other tools; the numbers are catalogued and explained
-    like the Phase 12 statistics (`docs/STATISTICS.md`).
-- **Web interface (the Phase 11 dashboard work):** the same analysis as a page
-  of the web interface: pick one or several run directories or imported
-  `events.jsonl` files, see the curves with the stall point, noise band,
-  winner's-curse markers and per-opponent lines, the verdict text, and compare
-  runs side by side. It reads the same JSON as the CLI; no new simulation.
-  Listed under Phase 11's still-open web items.
-
-## Phase 18 — Training advisor: pick the opponents and settings for you
-
-Choosing the opponent pool and settings by hand (population, matches per
-genome, rounds, hall of fame, target species, opponents) is trial and error;
-the long runs show it matters (see Phase 17). A simple option that picks them.
-
-- **`cli train --auto`** (and a `cli train-advisor` that only prints the
-  recommendation): from the table (player count, deck, rules), an optional
-  starting genome or model folder, and a time budget (`--time-budget 30m`),
-  run a short probe and choose:
-  - the **opponent pool**: score the candidates (hand-written strategies, models
-    found in a models directory, the hall of fame of earlier runs) against the
-    starting genome, drop opponents that are too weak to teach anything (the
-    candidate already wins almost every game) or too strong to give signal, and
-    pick a mix with usable headroom; report the per-opponent score and standard
-    error behind each choice;
-  - **matches per genome** from the measured per-match variance, so the standard
-    error of a fitness measurement is small enough to see the improvements the
-    run is expected to make (using the duplicate-deal skill score where it
-    reduces the noise, Phase 12);
-  - population size and generations that fit the time budget on this machine
-    (measured rounds per second), rounds per match, hall-of-fame size and
-    interval, species target and threshold defaults;
-  - presets on top: `quick` (a few minutes, a sanity run), `thorough` and
-    `overnight`.
-- It prints the chosen settings and the reason for each in plain language, writes
-  them to the run's config, and they can all be overridden by flags. During the
-  run the Phase 17 analysis can stop it early or recommend a change once the
-  slope is flat.
-- **Web interface:** a "New training" form with the recommended values filled in
-  and the reasons next to them, plus the live recommendation panel; extends the
-  Phase 11 dashboard.
-- Depends on Phase 12 (statistics, skill score), Phase 13 (inputs and fitness
-  variants to choose between) and Phase 17 (the analysis).
-
-## Phase 19 — CPU performance and simplification
+**Status:** built and merged (PR #6, released in v0.5.0); measurements in
+`docs/baselines/perf/README.md`.
 
 The cheaper road to faster training, done before any GPU work (Phase 20), and
 useful on its own. Reference points measured on the owner's Ryzen 7800X3D (8
@@ -533,7 +458,189 @@ per round or the 16 threads do not scale. Finding out which is the first task.
   phase ends with a before/after table and the new rounds/s numbers for the two
   real training setups above.
 
-## Phase 20 — GPU simulation port (RTX 4070)
+# In progress
+
+## Phase 11 — Web interface (in progress)
+
+**Status:** the interactive part is built: `cli play` (Phase 11, "play against the
+models"; see `docs/PLAYING.md`) with a pure `sim::session` game session, a POST-capable
+local HTTP layer, model advice and personal records. Still open: the
+simulation-statistics overview views below, the run-analysis page (Phase 17)
+and the training-advisor form (Phase 18). These open web items are folded into
+Phase 22 (graphical interface for everything), which is where they get built.
+
+- Extends the `web` crate that Phase 10d starts with the NEAT training
+  dashboard (HTTP server, embedded single-page app, JSON API), rather
+  than building a second frontend. Adds the simulation views: a small
+  web frontend to view running simulations and the Phase 4 statistics
+  as an overview — role outcomes by strategy, variance/luck indicators,
+  strategy comparison charts — and can show evolved players next to the
+  hand-written strategies.
+- Reads (or live-drives) `sim`'s existing output types — no changes to
+  `engine`/`sim`'s public shape should be needed going in.
+- **Play against the models:** a user can sit at a table in the browser
+  and compete against one or several trained models (genome files from
+  `cli train`, for example `docs/baselines/neat-v1/champion.json`), and
+  optionally against hand-written strategies, at any table size 3-6. The
+  server holds the game state and asks a `NeatStrategy` for its move
+  through the same `Strategy` interface the simulator uses; the page shows
+  the human's hand, the table and the other seats' hand sizes, and offers
+  the legal moves. Results (roles per round) are kept so a human's record
+  against each model can be viewed and compared with the models' own
+  scores.
+
+## Phase 17 — Run analysis tool (CLI and web) (built on its branch, not merged)
+
+**Status:** the CLI tool and the analysis page are built on branch
+`phase-17-run-analysis` (pushed, with its spec and a real-data baseline); not yet merged
+to `main`, so `cli analyse-run` is not in a release.
+
+Born from the first stagnation analysis of the long runs in `runs/PC` (done by
+hand with a throwaway script). Turn that into a tool so every run can answer
+"where did it stop improving, and why?" in one command.
+
+- **`cli analyse-run <events.jsonl | run dir> [more...]`**: accepts several
+  runs at once and labels them by file or directory name. Reports per run:
+  - the **stall generation** (smoothed champion re-evaluation within one
+    standard error of its peak) and the **trend** (slope per 100 generations
+    with a 95% interval, overall and for the last part of the run);
+  - the **noise level** (standard error of a single evaluation, standard
+    deviation of the generation-to-generation change of the champion's score);
+  - the **winner's-curse gap** (best generation's re-evaluation against its
+    held-out score, and training best against champion level), so a lucky "best
+    generation" is not mistaken for progress;
+  - **per-opponent trends** (flat everywhere = information/noise limited; flat
+    against some and rising against others = pool limited);
+  - **growth without gain** (hidden nodes and connections against score),
+    **population convergence** (share of genomes in the top fitness bin), species
+    counts and the compatibility threshold;
+  - a plain-language **verdict with suggestions** (more matches per genome or the
+    duplicate-deal fitness when noise dominates, new inputs when the model stalls
+    everywhere, harder opponents when only the pool is exhausted, stop early
+    when the slope is flat).
+  - `--json` output for other tools; the numbers are catalogued and explained
+    like the Phase 12 statistics (`docs/STATISTICS.md`).
+- **Web interface (the Phase 11 dashboard work):** the same analysis as a page
+  of the web interface: pick one or several run directories or imported
+  `events.jsonl` files, see the curves with the stall point, noise band,
+  winner's-curse markers and per-opponent lines, the verdict text, and compare
+  runs side by side. It reads the same JSON as the CLI; no new simulation.
+  Listed under Phase 11's still-open web items.
+
+# Planned, in recommended order
+
+## Phase 21 — Endgame solver and determinized search (in progress)
+
+**Status:** design and implementation plan written, implementation about to start
+on branch `endgame-solver` (spec: `docs/superpowers/specs/2026-10-16-endgame-solver-design.md`,
+plan: `docs/superpowers/plans/2026-10-16-endgame-solver.md`).
+
+Goal: find the best overall strategy for real games, and learn from it. A
+search-based player that, from one seat's view, considers every distribution of
+the unseen cards the other players could hold and picks the move with the best
+expected finishing position (max^n, rational opponents).
+
+- **Phase A (planned in detail):** `Round::from_position` in `engine` (a pure
+  addition), an exact `EndgameSolver` strategy that solves once few cards are unseen
+  and defers to a fallback before that, `endgame-solver[:OPTIONS]` as a strategy spec,
+  `cli solve` (explain a written-down situation move by move) and `cli solver-gap`
+  (where do Adaptive, endgame-denial and the NEAT champions disagree with the solver,
+  and what does it cost), a measured hand-off threshold and a luck-free head-to-head.
+- **Phase B (outline in the spec, later):** a depth-limited sampler for the early
+  game (sample deals, search to a depth, a leaf evaluator), built on phase A's
+  measurements.
+- Limits recorded in the spec: expected value over consistent deals, not a proof
+  against a specific hidden hand; `PassRule::Final` only; no bluffing.
+
+## Phase 22 — Graphical interface for everything (planned)
+
+**Status:** not started; needs a short design first (see the open question).
+
+A simple graphical front end that starts from the program itself and covers the
+full option set and every simulation capability, so nothing needs the command line.
+"Very simple" in looks, complete in function.
+
+- **Starts from the program:** a `cli gui` command (and, in the release archives, a
+  double-clickable launcher) that starts the local server of the `web` crate and
+  opens the browser. Recommended over a native window: the `web` crate already has
+  the HTTP layer, the single-page app, the JSON API, `cli play` and the training
+  dashboard, it needs no new dependency and it works the same on the three platforms
+  the releases cover. Open question for the design: a native window (`egui`) if
+  "from the program directly" should mean no browser at all.
+- **Complete options:** the forms are generated from the same option definitions as
+  the CLI (one source of truth, so a new flag shows up in the GUI without extra
+  work): table (player count, deck, duplicate rule, pass rule, exchange rule), seat
+  strategies (the fixed ones, `adaptive` with its modifiers, `neat:` genome files,
+  `endgame-solver` with its options), matches, rounds, seed, threads, skill score,
+  extended statistics, useful-passes analysis.
+- **Complete simulation capabilities:** run a batch with live progress and cancel,
+  show the results (the summary table, the Phase 4/12 statistics with their
+  explanations, role outcomes, luck/skill score), save and reload results, compare
+  runs. Folds in the open web items of Phase 11 (simulation overview views).
+- **The other tools, in the same place:** play against the models (Phase 11, exists),
+  training with the live dashboard (Phase 10d, exists), the run analysis page
+  (Phase 17), the training advisor form (Phase 18) and the solver (Phase 21): a
+  position editor that runs `cli solve` and shows the ranked moves.
+- **Testing:** API tests that every form-to-options mapping produces exactly what the
+  CLI parser accepts, and a smoke test per screen.
+
+## Phase 18 — Training advisor: pick the opponents and settings for you (planned)
+
+Choosing the opponent pool and settings by hand (population, matches per
+genome, rounds, hall of fame, target species, opponents) is trial and error;
+the long runs show it matters (see Phase 17). A simple option that picks them.
+
+- **`cli train --auto`** (and a `cli train-advisor` that only prints the
+  recommendation): from the table (player count, deck, rules), an optional
+  starting genome or model folder, and a time budget (`--time-budget 30m`),
+  run a short probe and choose:
+  - the **opponent pool**: score the candidates (hand-written strategies, models
+    found in a models directory, the hall of fame of earlier runs) against the
+    starting genome, drop opponents that are too weak to teach anything (the
+    candidate already wins almost every game) or too strong to give signal, and
+    pick a mix with usable headroom; report the per-opponent score and standard
+    error behind each choice;
+  - **matches per genome** from the measured per-match variance, so the standard
+    error of a fitness measurement is small enough to see the improvements the
+    run is expected to make (using the duplicate-deal skill score where it
+    reduces the noise, Phase 12);
+  - population size and generations that fit the time budget on this machine
+    (measured rounds per second), rounds per match, hall-of-fame size and
+    interval, species target and threshold defaults;
+  - presets on top: `quick` (a few minutes, a sanity run), `thorough` and
+    `overnight`.
+- It prints the chosen settings and the reason for each in plain language, writes
+  them to the run's config, and they can all be overridden by flags. During the
+  run the Phase 17 analysis can stop it early or recommend a change once the
+  slope is flat.
+- **Web interface:** a "New training" form with the recommended values filled in
+  and the reasons next to them, plus the live recommendation panel; extends the
+  Phase 11 dashboard.
+- Depends on Phase 12 (statistics, skill score), Phase 13 (inputs and fitness
+  variants to choose between) and Phase 17 (the analysis).
+
+## Phase 16 — Self-play and co-evolutionary training (idea)
+
+Raised while planning Phase 12; deliberately not built yet. Today genomes train
+against a fixed opponent pool, so the opposition never gets stronger than the
+pool. Idea: train populations against each other and a hall of fame of their
+own past champions, optionally mixed with fixed strategies.
+
+- Relative fitness from the Phase 12 statistics: duplicate-deal skill scores
+  (so card luck does not swamp a zero-sum comparison) and the opponent-adjusted
+  strength rating (a result against a stronger field counts for more).
+- A fixed **anchor benchmark**: every N generations the current best is also
+  scored against frozen baselines (`docs/baselines/neat-v2` champion and the
+  hand-written strategies), so progress is absolute even though self-play
+  fitness is only relative.
+- Known risks to design for: cycling (A beats B beats C beats A) and forgetting
+  old tricks; the hall of fame and the anchors are the standard guard. The first
+  run is an experiment compared against `neat-v2`, not a new default.
+- Evidence so far (from the stagnation analysis of the long runs, see Phase 17):
+  the stall seen in the long runs looks noise- and information-limited rather
+  than opponent-limited, so this phase ranks below Phase 13's new inputs.
+
+## Phase 20 — GPU simulation port (RTX 4070) (planned, not started)
 
 Go/no-go, schedule and design for running the simulation on the GPU. Motivation
 (from the stagnation analysis, Phase 17): the long runs are noise-limited, and a
