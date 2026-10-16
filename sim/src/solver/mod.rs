@@ -6,6 +6,7 @@
 
 pub mod config;
 pub mod deals;
+pub mod gap;
 pub mod notation;
 pub mod observation;
 
