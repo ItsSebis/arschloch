@@ -1,7 +1,10 @@
 // Run with: node --test web/tests
 import assert from "node:assert/strict";
 import test from "node:test";
-import { explainHtml, esc, placeColour, skillNote, skillRows, strategyRows, tableHtml } from "../assets/results_lib.js";
+import {
+  agreement, agreementHtml, compareHtml, compareTables, estimateHtml, estimateRows, explainHtml, explainIds, esc,
+  placeColour, skillRows, strategyRows, tableHtml, verdictOf,
+} from "../assets/results_lib.js";
 
 const stat = (value, std_error = 0.01) => ({ value, std_error, n: 10 });
 const data = {
@@ -89,10 +92,98 @@ test("every inserted value is escaped, and missing numbers read as a dash", () =
   assert.ok(skillRows(noLuck).every((r) => !r.luck.includes("NaN")));
 });
 
-test("a luck-adjusted estimate that is in the file but not drawn is said so", () => {
-  assert.equal(skillNote(data), "", "duplicate results are all that is drawn");
-  const estimate = { extended: { skill: { mode: "estimate", estimate: { strategies: [] } } } };
-  assert.match(skillNote(estimate), /estimate/);
-  assert.match(skillNote({ extended: { skill: { mode: "both" } } }), /estimate/);
-  assert.equal(skillNote({ extended: {} }), "");
+const withEstimate = () => {
+  const d = structuredClone(data);
+  d.extended.skill = {
+    mode: "both",
+    duplicate: d.extended.skill.duplicate,
+    estimate: {
+      strategies: [
+        { name: "LowestLegal", skill_score_estimate: stat(-0.3), plain_mean_role_score_round1: stat(-0.33), luck_share: 0.2 },
+        { name: "Neat(<champion>)", skill_score_estimate: stat(0.6), plain_mean_role_score_round1: stat(0.62), luck_share: 0.05 },
+      ],
+    },
+    comparison: {
+      strategies: [{ name: "Neat(<champion>)", skill_score_duplicate_round1: stat(0.62), skill_score_estimate: stat(0.6), difference_in_se: -0.4, variance_removed_ratio: 0.5 }],
+      verdict: "estimator removes 50% <b>of</b> the luck",
+    },
+  };
+  return d;
+};
+
+test("the estimate is drawn best first, with its round-1 plain score", () => {
+  const rows = estimateRows(withEstimate());
+  assert.deepEqual(rows.map((r) => r.name), ["Neat(<champion>)", "LowestLegal"]);
+  assert.equal(rows[0].estimate, "+0.600 ± 0.010");
+  assert.equal(rows[0].plain, "+0.620 ± 0.010");
+  assert.equal(rows[0].luck, "5%");
+  assert.deepEqual(estimateRows(data), [], "a duplicate-only run has no estimate");
+  assert.ok(!estimateHtml(rows).includes("<champion>"));
+});
+
+test("the estimate next to the duplicate score, with the verdict escaped", () => {
+  assert.equal(agreement(data), null);
+  const ag = agreement(withEstimate());
+  assert.equal(ag.rows[0].gap, "-0.4 SE");
+  assert.equal(ag.rows[0].removed, "50%");
+  const html = agreementHtml(ag);
+  assert.ok(html.includes("&lt;b&gt;of"));
+  assert.ok(!html.includes("<b>"));
+});
+
+test("only the explanations of what the page shows are listed, never the run analysis", () => {
+  const plain = explainIds({ extended: { by_strategy: {} } });
+  assert.ok(plain.includes("avg_rank") && !plain.includes("skill_score_estimate"));
+  const both = explainIds(withEstimate());
+  for (const id of ["skill_score_duplicate", "skill_score_estimate", "luck_share", "estimator_agreement"]) assert.ok(both.includes(id), id);
+  assert.ok(!both.some((id) => id.startsWith("analysis_")));
+  const catalog = [
+    { id: "avg_rank", name: "Average place", scope: "per_strategy", meaning: "m", formula: "f" },
+    { id: "analysis_trend", name: "Trend of a run", scope: "run_analysis", meaning: "m", formula: "f" },
+    { id: "skill_score_estimate", name: "Estimate", scope: "per_strategy", meaning: "m", formula: "f" },
+  ];
+  const html = explainHtml(catalog, plain);
+  assert.ok(html.includes("Average place"));
+  assert.ok(!html.includes("Estimate"), "not in this file");
+  assert.ok(!explainHtml(catalog).includes("Trend of a run"), "run-analysis entries never show");
+});
+
+test("two files are compared by strategy name with the difference in standard errors", () => {
+  const b = structuredClone(data);
+  b.extended.by_strategy.LowestLegal.mean_role_score = stat(-0.1, 0.01);
+  b.extended.by_strategy["Neat(<champion>)"].mean_role_score = stat(0.629, 0.01);
+  b.extended.by_strategy.Extra = { mean_role_score: stat(0.2) };
+  b.statistics.matches_played = 80;
+  const cmp = compareTables(data, b);
+  const score = cmp.tables.find((t) => t.title === "Mean score");
+  assert.deepEqual(score.rows.map((r) => r.name), ["Neat(<champion>)", "LowestLegal", "Extra"], "first file's order, then the extras");
+  const low = score.rows.find((r) => r.name === "LowestLegal");
+  assert.equal(low.diff, "+0.218 ± 0.014");
+  assert.equal(verdictOf(low.z), "clear");
+  assert.equal(verdictOf(score.rows[0].z), "within noise");
+  assert.equal(score.rows[2].diff, "–", "present in one file only");
+  assert.ok(cmp.notes.some((n) => /Only in the second file: Extra/.test(n)));
+  assert.ok(cmp.notes.some((n) => /40 and 80 matches/.test(n)));
+  assert.ok(!cmp.tables.some((t) => t.title.startsWith("Skill score (estimate")), "no estimate in either file");
+});
+
+test("the comparison names the better file only when the difference is clear, and respects the direction", () => {
+  const b = structuredClone(data);
+  b.extended.by_strategy.LowestLegal.mean_role_score = stat(-0.1, 0.01);
+  b.extended.by_strategy.LowestLegal.avg_rank = stat(2.5, 0.01);
+  const html = compareHtml(compareTables(data, b));
+  const row = (title) => html.split(`<h3>${title}</h3>`)[1].split("</table>")[0].split("<tr>").find((r) => r.includes("LowestLegal"));
+  assert.ok(row("Mean score").includes("second file better"));
+  assert.ok(row("Average place").includes("second file better"), "a lower average place is better");
+  assert.ok(html.includes("within noise"));
+});
+
+test("skill tables are compared only where both files have them; a one-sided file says so", () => {
+  const cmp = compareTables(withEstimate(), data);
+  assert.ok(cmp.tables.some((t) => t.title === "Skill score (duplicate deals)"));
+  assert.ok(!cmp.tables.some((t) => t.title.startsWith("Skill score (estimate")), "second file has none");
+  assert.ok(cmp.notes.some((n) => /skill estimate/.test(n)));
+  const same = compareTables(withEstimate(), withEstimate());
+  assert.ok(same.tables.some((t) => t.title.startsWith("Skill score (estimate")));
+  assert.throws(() => compareTables(data, {}), /both files/);
 });

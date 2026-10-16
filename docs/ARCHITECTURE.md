@@ -235,7 +235,7 @@ original summary unchanged; `extended_summary` renders the sections
 appended after it. `cli evaluate` also reports the average place per cell
 and has `--explain`; `cli stats-doc` prints `docs/STATISTICS.md`.
 
-`web` also serves `cli view FILE` (Phase 11b): `ResultsApp` hands out one results file (re-read on every request) and
+`web` also serves `cli view FILE` (Phase 11b): `ResultsApp` hands out one results file (re-read on every request; `/api/compare` serves an optional second one) and
 the page `results.html` / `results_lib.js` (pure, tested in Node) / `results.js` (DOM only), with the shared `lib.js` and
 `style.css`.
 

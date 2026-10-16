@@ -83,7 +83,8 @@ configure and run simulations, to analyse a position with the solver (click the 
 settings and start the training, and to read an activity log with a progress bar and file pickers; play,
 dashboards and the run analysis stay in the browser and are started from it. `cli view results.json` shows the results
 of a simulation as tables and bars in the browser (strategies best first, places as stacked bars, the luck-adjusted
-score when there is one, an explanation of every number). See `docs/GUI.md`.
+score and the cheap estimate when there are some, an explanation of the numbers shown; `cli view A.json B.json` compares
+two files). See `docs/GUI.md`.
 
 ### The stdout summary
 

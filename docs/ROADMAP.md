@@ -38,7 +38,7 @@ grows beyond that should be split.
 
 1. ~~Pack the desktop window into the release archives (Phase 22)~~ built; the Windows and macOS windows still have to be started once by hand
 2. ~~Desktop window: file pickers, progress, a solver editor, a training form (Phase 22)~~ built; a few pieces left, see the section
-3. Results page: the luck-adjusted estimate, comparing two files (Phase 11b)
+3. ~~Results page: the luck-adjusted estimate, comparing two files (Phase 11b)~~ built
 4. Training advisor, the rest: `train --auto`, scoring against genomes, early stop, a web form (Phase 18)
 5. Settle the `hidden` input set with fresh seeds and longer runs; the casino bot's port (Phase 13)
 6. Simplification left over from Phase 19 (`session.rs`, legacy rule paths, file sizes)
@@ -602,7 +602,7 @@ results file of a batch: the strategies best first with average place, mean scor
 standard error) and the share of rounds in every place as a stacked bar, the luck-adjusted score of a duplicate-deal
 run, and the explanation of every number from the statistics catalogue stored in the file. Reload the page after a new
 run. It reads the existing output only; the logic is a pure library tested in Node, the handler in Rust. The GUI
-(Phase 22) starts it for the last simulation. The estimate view and comparing two result files are open work.
+(Phase 22) starts it for the last simulation. The luck-adjusted estimate (with its agreement with the duplicate score when both ran) is drawn, `cli view A.json B.json` (or a file picked in the page, read in the browser) puts two files side by side per strategy with the difference in standard errors marked clear or within noise, and only the explanations of what the page shows are listed (not the run-analysis statistics).
 
 ## Phase 18 — Training advisor: pick the opponents and settings for you (done, reduced)
 
@@ -635,9 +635,8 @@ check ever shows `rfd` builds on all three systems without extra packages (the b
 
 ## 3. Results page, what it lacks (Phase 11b)
 
-Show the luck-adjusted **estimate** (`--skill-score estimate` and `both`; the page only says it is there), **compare
-two results files** side by side, and list only the explanations that belong to the page (the catalogue also holds the
-run-analysis statistics). Small; logic in `web/assets/results_lib.js`, tested in Node.
+Built, see Phase 11b. Not done: comparing results files of different kinds (an `evaluate` file against a `cli` run) and
+more than two files.
 
 ## 4. Training advisor, the rest (Phase 18)
 
