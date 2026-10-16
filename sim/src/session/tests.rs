@@ -3,6 +3,7 @@ use crate::hand_reading::PassCeilings;
 use crate::strategies::LowestLegal;
 use crate::strategy::TurnContext;
 use crate::{run_match, MatchConfig};
+use engine::{Rank, Suit};
 
 fn ai(count: usize) -> Vec<AiSeat> {
     (0..count)
@@ -83,7 +84,7 @@ fn play_out(session: &mut Session) {
 }
 
 fn rank_from(rank: u8) -> Rank {
-    use Rank::*;
+    use engine::Rank::*;
     [
         Two, Three, Four, Five, Six, Seven, Eight, Nine, Ten, Jack, Queen, King, Ace,
     ][usize::from(rank)]
