@@ -39,7 +39,7 @@ grows beyond that should be split.
 1. ~~Pack the desktop window into the release archives (Phase 22)~~ built; the Windows and macOS windows still have to be started once by hand
 2. ~~Desktop window: file pickers, progress, a solver editor, a training form (Phase 22)~~ built; a few pieces left, see the section
 3. ~~Results page: the luck-adjusted estimate, comparing two files (Phase 11b)~~ built
-4. Training advisor, the rest: `train --auto`, scoring against genomes, early stop, a web form (Phase 18)
+4. ~~Training advisor, the rest: `train --auto`, scoring against genomes, early stop (Phase 18)~~ built; the web form is left, see the section
 5. Settle the `hidden` input set with fresh seeds and longer runs; the casino bot's port (Phase 13)
 6. Simplification left over from Phase 19 (`session.rs`, legacy rule paths, file sizes)
 7. Endgame solver as a toggle on every strategy (Phase 21)
@@ -612,7 +612,14 @@ with no headroom (the reference wins almost every game, or almost never), sizes 
 per-match noise (a standard error of about 0.02 on one fitness measurement), sizes population and generations from the
 measured speed and the time budget (presets `quick`, `thorough`, `overnight`; a plan that cannot fit 20 generations is
 warned about), and prints each choice with its reason plus a `cli train` command that `cli train`'s own parser is
-tested to accept. The rest of the original idea is open work, see "Open work".
+tested to accept.
+
+**Rest of the advisor (built):** `cli train --auto` runs the advisor and then the training with its settings (written into the
+run's `config.json`; the advice is saved as `advisor.txt`); the candidates can be scored against a starting genome, a models
+folder or the hall of fame of an earlier run (`--reference neat:PATH`, `--reference-models`, `--reference-hall`) instead of
+only `adaptive`; the speed is measured over the chosen pool only; the advisor reports how much of a round-1 score the hand
+explains and why that is not a training recommendation; `--when-flat advise|stop` uses the Phase 17 analysis on the run's own
+events (through `TrainObserver::should_stop`). Open: the web form, see "Open work".
 
 # Open work, in working order
 
@@ -640,13 +647,11 @@ more than two files.
 
 ## 4. Training advisor, the rest (Phase 18)
 
-`cli train --auto` (run the recommended settings and write them into the run's config instead of printing a command);
-score the candidate opponents against a **starting genome**, a **models folder** and the **hall of fame** of earlier
-runs instead of the stand-in reference player (the advisor judges against `adaptive`, which is far stronger than an early
-network); use the **duplicate-deal skill score** where it cuts the noise (Phase 12); **advise or stop a running training**
-from the Phase 17 analysis once the slope is flat; and a **"New training" form** in the web interface with the
-recommended values and the reasons next to them. Depends on Phases 12, 13 and 17 (all done). Also worth fixing while
-there: the speed is measured over all candidates, not the chosen pool.
+Built, see Phase 18 ("Rest of the advisor"). Not done: a **"New training" form in the web interface** with the
+recommended values and the reasons next to them (it needs a hook from the `web` crate into the advisor and a probe that
+runs for a minute as a background job with progress; the desktop window already has this form), advising a training that
+runs in another process (`--when-flat` only watches the run it is part of), and recommending `--fitness-skill-weight`
+(measure first whether it helps selection at all, see `docs/TRAINING.md`).
 
 ## 5. Settle the `hidden` input set, and the casino bot (Phase 13)
 

@@ -128,12 +128,49 @@ cli train-advisor --time-budget 30m            # or --preset quick|thorough|over
 
 The plan counts what the trainer plays per generation (every genome's matches plus the re-evaluations of the champion
 candidates, the champion and each pool opponent) and warns when 20 generations do not fit the budget. The speed is
-measured over all candidates, not only the chosen pool, and the noise target (a standard error of 0.02 on one
-fitness measurement) is stricter than selection between genomes on the same matches needs, so it errs on the side
-of more matches. The estimate uses the reference player's speed; a trained network is of similar cost but not identical, which is what the
-unplanned 30% is for. The advisor does not start the run: copy the printed command (or run it from the desktop window's
-"Any command" tab). Not built: scoring against a starting genome, a models folder or the hall of fame of earlier runs;
-`train --auto`; recommendations while a run is going; a web form.
+measured over the opponents of the chosen pool only (a slower candidate that was dropped does not set it), and the noise
+target (a standard error of 0.02 on one fitness measurement) is stricter than selection between genomes on the same matches
+needs, so it errs on the side of more matches. The estimate uses the reference player's speed, and a probe of a few
+matches per candidate runs with less parallel load than a real generation: in the check recorded below the plan was
+about 1.8 times too pessimistic about the time, which the unplanned 30% also covers.
+
+**Who the candidates are scored against.** `adaptive` is far stronger than an early network, so against it every
+candidate looks easy. Name the player the model will resemble instead: `--reference neat:PATH` (a starting genome;
+repeatable), `--reference-models DIR` (every genome `*.json` of a folder that this build can load) and
+`--reference-hall RUN_DIR` (the hall of fame stored in the checkpoint of an earlier run, which needs
+`--hall-of-fame`). A candidate's score is the mean over the references; the probe matches per candidate are split over
+them (at least 2 against each, at most 6 references, spread evenly), so the probe does not get longer. Measured with a
+champion trained for 28 generations as the reference (12 probe matches per candidate), `random-legal` scored +0.91 and
+was dropped as too weak, where `adaptive` scored +0.69 and kept it, and the three hand-written opponents all landed near
++0.55 to +0.63 instead of -0.18 to +0.33.
+
+**Luck adjustment.** The advisor also reports how much of the variance of a round-1 score the six hand features explain
+(the regression of `--fitness-skill-weight`, fitted on the probe matches themselves, so slightly optimistic). It does
+not recommend `--fitness-skill-weight`: all genomes of a generation play the same deals, so the adjustment cannot cancel
+deal luck inside a generation. The duplicate-deal skill score is for comparing finished players (`cli --skill-score
+duplicate`, `cli evaluate`), where it does cut the noise.
+
+**`cli train --auto`** runs the advisor and then the training with what it chose, in one command:
+
+```
+cli train --auto --out runs/auto --time-budget 30m [--opponent SPEC ...] [--reference neat:best.json]
+```
+
+`--opponent` lists the candidates the advisor judges (default: its battery); population, generations, matches per genome,
+rounds and hall of fame are the advisor's and cannot be given. The advice is printed first, the settings are written
+into the run's `config.json` like those of any run, and the advice is saved as `advisor.txt` in the run folder. Also
+`--preset`, `--probe-matches`, `--seed`, `--player-count`, `--deck-variant`.
+
+**`--when-flat advise|stop`** (any `cli train`, also with `--resume`) lets the run watch itself with the run analysis
+(`cli analyse-run`): every 5 generations from generation 30 it analyses the run's own `events.jsonl`. When the verdict
+says the last third is flat (`stop_early`, `noise_limited`, `pool_limited` or `model_limited`), `advise` prints the
+verdict messages (again only when they change) and keeps training; `stop` also ends the run once `stop_early` fires, that
+is when the smoothed curve stayed within one noise unit of its peak for the last 40% of the run. The run is then a normal
+unfinished one: `--resume --generations N` continues it. A real run (24 genomes, two opponents, 150 generations asked)
+advised at 30, 70, 75 and 85 generations and stopped at 85 (`stop_early`: nothing visible added after generation 50).
+
+The advisor does not look at a running training from outside (a later web page could); not built: a web form (the
+desktop window has one, `docs/GUI.md`).
 
 Details of every setting follow.
 
@@ -145,6 +182,8 @@ Details of every setting follow.
 | `--matches-per-genome` | 100 | more matches = less noisy fitness but slower. Cost per generation is about population x matches x rounds |
 | `--rounds` | 8 | rounds per match (roles carry over between rounds) |
 | `--reeval-matches` | 200 | matches used to score each champion; the held-out confirmation uses twice as many |
+| `--auto` | off | run the advisor first and train with its settings (see "Choosing settings") |
+| `--when-flat advise\|stop` | off | advise or stop when the run analysis finds the curve flat (see "Choosing settings") |
 | `--opponent SPEC` | `lowest-legal`, `endgame-denial`, `adaptive:reading,tempo,bully` | the training pool, in `--strategy` syntax; repeat for several. A harder pool gives a stronger player but slower early progress |
 | `--champion-candidates` | 5 | the champion is the best of the top N genomes (by training fitness) re-scored on other matches; 1 trusts the noisy training fitness |
 | `--weight-power` | 0.2 | size of weight mutations; smaller is gentler fine-tuning |

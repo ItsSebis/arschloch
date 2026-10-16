@@ -266,6 +266,53 @@ pub struct TrainArgs {
     )]
     pub features: FeatureSet,
 
+    /// Choose the settings for you: run the advisor (`cli train-advisor`, a probe of
+    /// this machine, one to a few minutes), print what it chose and why, and train with it.
+    /// The population, generations, matches per genome, hall of fame and the opponent pool
+    /// are the advisor's, so they cannot be given; `--opponent` then lists the *candidates*
+    /// the advisor judges (default: the battery of `cli evaluate`). The settings land in the
+    /// run's `config.json` as for any run, and the advice is saved as `advisor.txt` there.
+    #[arg(
+        long,
+        conflicts_with_all = [
+            "resume", "from", "runs", "population", "generations", "matches_per_genome", "hall_of_fame",
+            "hall_interval", "rounds", "player_counts", "decks"
+        ]
+    )]
+    pub auto: bool,
+
+    /// With --auto: how long the training may take (`30m`, `2h`, `1h30m`). Default: the preset's.
+    #[arg(long, requires = "auto")]
+    pub time_budget: Option<String>,
+
+    /// With --auto: `quick` (5 minutes), `thorough` (2 hours, default) or `overnight` (10 hours).
+    #[arg(long, value_enum, requires = "auto")]
+    pub preset: Option<crate::advisor::Preset>,
+
+    /// With --auto: a player the candidates are scored against instead of `adaptive` (repeatable;
+    /// `neat:PATH` is a starting genome).
+    #[arg(long, value_name = "SPEC", requires = "auto")]
+    pub reference: Vec<String>,
+
+    /// With --auto: score the candidates against the genomes (`*.json`) of this folder.
+    #[arg(long, value_name = "DIR", requires = "auto")]
+    pub reference_models: Option<PathBuf>,
+
+    /// With --auto: score the candidates against the hall of fame of the earlier run in this folder.
+    #[arg(long, value_name = "RUN_DIR", requires = "auto")]
+    pub reference_hall: Option<PathBuf>,
+
+    /// With --auto: probe matches per candidate opponent (default 40).
+    #[arg(long, requires = "auto", value_parser = clap::builder::RangedI64ValueParser::<usize>::new().range(2..))]
+    pub probe_matches: Option<usize>,
+
+    /// Watch the run's own curve with the run analysis (`cli analyse-run`): every 5 generations
+    /// from generation 30, `advise` prints the verdict once it is flat, `stop` also ends the run
+    /// when the last 40% of it added nothing visible. May accompany --resume; `--resume
+    /// --generations N` continues a stopped run.
+    #[arg(long, value_enum)]
+    pub when_flat: Option<crate::flat::WhenFlat>,
+
     /// Rayon thread-pool size. 0 lets rayon pick its own default.
     #[arg(long, default_value_t = 0)]
     pub threads: usize,
@@ -589,5 +636,63 @@ mod tests {
         ])
         .unwrap();
         assert_eq!(args.opponent, vec!["lowest-legal", "adaptive:counting"]);
+    }
+
+    #[test]
+    fn auto_decides_the_settings_so_those_flags_conflict_with_it() {
+        let ok = parse(&[
+            "--out",
+            "d",
+            "--auto",
+            "--time-budget",
+            "5m",
+            "--preset",
+            "quick",
+            "--reference",
+            "neat:g.json",
+            "--probe-matches",
+            "6",
+            "--when-flat",
+            "stop",
+        ])
+        .unwrap();
+        assert!(ok.auto && ok.when_flat == Some(crate::flat::WhenFlat::Stop));
+        for flag in [
+            &["--population", "20"][..],
+            &["--generations", "9"],
+            &["--matches-per-genome", "9"],
+            &["--hall-of-fame", "2"],
+            &["--resume"],
+            &["--runs", "2"],
+            &["--from", "x"],
+        ] {
+            let mut args = vec!["--out", "d", "--auto"];
+            args.extend_from_slice(flag);
+            assert!(parse(&args).is_err(), "{flag:?}");
+        }
+        for flag in [
+            "--time-budget",
+            "--preset",
+            "--reference",
+            "--reference-models",
+            "--reference-hall",
+            "--probe-matches",
+        ] {
+            let value = if flag == "--preset" {
+                "quick"
+            } else if flag == "--probe-matches" {
+                "5"
+            } else {
+                "5m"
+            };
+            assert!(
+                parse(&["--out", "d", flag, value]).is_err(),
+                "{flag} needs --auto"
+            );
+        }
+        assert!(
+            parse(&["--out", "d", "--resume", "--when-flat", "stop"]).is_ok(),
+            "a resumed run may be watched"
+        );
     }
 }

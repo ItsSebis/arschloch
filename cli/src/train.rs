@@ -10,6 +10,7 @@ use sim::training::{
     Trainer,
 };
 
+use crate::advisor::{self, AdvisorArgs};
 use crate::args::{DeckVariantArg, DuplicateRuleArg, StrategyArg};
 use crate::train_args::{TrainArgs, DEFAULT_OPPONENTS};
 use crate::train_output::{
@@ -266,6 +267,9 @@ fn run_set(args: &TrainArgs, mut set: SetFile, resuming: bool) -> anyhow::Result
             finished_secs: set.finished_secs.clone(),
         });
         let mut observer = observer;
+        if let Some(mode) = args.when_flat {
+            observer = observer.with_flat(mode);
+        }
         let end = trainer.run(&mut observer)?;
         set.finished_secs.push(end.elapsed_secs);
         set.current_run = index.min(set.total_runs);
@@ -279,14 +283,53 @@ fn run_set(args: &TrainArgs, mut set: SetFile, resuming: bool) -> anyhow::Result
     Ok(())
 }
 
+/// The advisor's arguments from the `--auto` ones of `cli train`.
+fn advisor_args(args: &TrainArgs) -> AdvisorArgs {
+    AdvisorArgs {
+        player_count: args.player_count,
+        deck_variant: args.deck_variant,
+        time_budget: args.time_budget.clone(),
+        preset: args.preset.unwrap_or(advisor::Preset::Thorough),
+        opponent: args.opponent.clone(),
+        reference: args.reference.clone(),
+        reference_models: args.reference_models.clone(),
+        reference_hall: args.reference_hall.clone(),
+        probe_matches: args.probe_matches.unwrap_or(40),
+        seed: args.seed,
+        out: args.out.display().to_string(),
+    }
+}
+
 pub fn run(raw_args: impl Iterator<Item = String>) -> anyhow::Result<()> {
-    let args = TrainArgs::parse_from(std::iter::once("cli train".to_owned()).chain(raw_args));
+    let mut args = TrainArgs::parse_from(std::iter::once("cli train".to_owned()).chain(raw_args));
     if args.threads > 0 {
         rayon::ThreadPoolBuilder::new()
             .num_threads(args.threads)
             .build_global()
             .context("failed to configure thread pool")?;
     }
+
+    // --auto: the advisor decides, before anything is created.
+    let advice = if args.auto {
+        anyhow::ensure!(
+            !args.out.join("checkpoint.json").exists(),
+            "{} already holds a run; choose another directory",
+            args.out.display()
+        );
+        let advice = advisor::advise(&advisor_args(&args), true)?;
+        print!("{}", advice.text);
+        args.population = advice.plan.population;
+        args.generations = Some(advice.plan.generations);
+        args.matches_per_genome = advice.plan.matches_per_genome;
+        args.rounds = advice.plan.rounds;
+        args.hall_of_fame = advice.plan.hall_of_fame;
+        args.hall_interval = advice.plan.hall_interval;
+        args.opponent.clone_from(&advice.pool);
+        // What the advisor measured in its probe is the advice; nothing else stays running.
+        Some(advice.text)
+    } else {
+        None
+    };
 
     // A set is recognised by its set file when resuming, by --runs when
     // starting; a plain run (`--runs 1`) is unchanged.
@@ -335,8 +378,23 @@ pub fn run(raw_args: impl Iterator<Item = String>) -> anyhow::Result<()> {
         } else {
             new_trainer(&args, &args.out)?
         };
+        if let Some(text) = &advice {
+            std::fs::write(args.out.join("advisor.txt"), text)
+                .with_context(|| format!("cannot write advisor.txt in {}", args.out.display()))?;
+        }
         let mut observer = TerminalObserver::new(args.out.clone(), args.quiet);
-        trainer.run(&mut observer)?;
+        if let Some(mode) = args.when_flat {
+            observer = observer.with_flat(mode);
+        }
+        let end = trainer.run(&mut observer)?;
+        if end.generations_completed < trainer.config().generations {
+            println!(
+                "stopped after {} of {} generations; `cli train --out {} --resume` continues it",
+                end.generations_completed,
+                trainer.config().generations,
+                args.out.display()
+            );
+        }
     }
     if let Some(dashboard) = dashboard {
         // The dashboard lives in this process: exiting now would leave the

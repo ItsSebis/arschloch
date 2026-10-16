@@ -52,6 +52,11 @@ pub trait TrainObserver {
     fn on_eval_progress(&mut self, _generation: u32, _done: usize, _total: usize) {}
     fn on_generation(&mut self, _event: &GenerationEvent) {}
     fn on_finish(&mut self, _end: &RunEnd) {}
+    /// Asked before every generation: `true` ends the run there (the same as reaching
+    /// the generation limit, so `--resume` continues it). Never true by default.
+    fn should_stop(&mut self) -> bool {
+        false
+    }
 }
 
 pub struct Trainer {
@@ -316,7 +321,7 @@ impl Trainer {
             .append_event(&Event::RunStart(Box::new(start.clone())))?;
         observer.on_start(&start);
 
-        while self.population.generation() < self.config.generations {
+        while self.population.generation() < self.config.generations && !observer.should_stop() {
             self.step(observer, started)?;
         }
 

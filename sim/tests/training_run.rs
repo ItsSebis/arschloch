@@ -1349,3 +1349,33 @@ fn an_old_checkpoint_without_the_new_fields_resumes_as_a_default_run() {
     fs::remove_dir_all(&run).unwrap();
     fs::remove_dir_all(&resumed).unwrap();
 }
+
+/// Stops after `after` generations, as `cli train --when-flat stop` does.
+struct StopAfter {
+    seen: usize,
+    after: usize,
+}
+
+impl TrainObserver for StopAfter {
+    fn on_generation(&mut self, _: &sim::training::GenerationEvent) {
+        self.seen += 1;
+    }
+    fn should_stop(&mut self) -> bool {
+        self.seen >= self.after
+    }
+}
+
+#[test]
+fn an_observer_can_end_a_run_early_and_resume_continues_it() {
+    let run = dir("should-stop");
+    let end = Trainer::new(config(4), opponents(), &run)
+        .unwrap()
+        .run(&mut StopAfter { seen: 0, after: 2 })
+        .unwrap();
+    assert_eq!(end.generations_completed, 2, "stopped before generation 2");
+    let mut resumed = Trainer::resume(&run, opponents(), None).unwrap();
+    assert_eq!(resumed.completed_generations(), 2);
+    let end = resumed.run(&mut Recorder::default()).unwrap();
+    assert_eq!(end.generations_completed, 4);
+    fs::remove_dir_all(&run).unwrap();
+}

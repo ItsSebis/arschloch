@@ -9,14 +9,17 @@
 )]
 
 use std::fmt::Write as _;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Instant;
 
 use anyhow::Context;
 use clap::{Parser, ValueEnum};
 use engine::{DuplicateRule, ExchangeRule, PassRule};
-use sim::training::{evaluate, match_seed, Opponents, TableSpec};
-use sim::Strategy;
+use sim::training::evaluate::{evaluate_with_round1, Round1Obs};
+use sim::training::skill_term::{adjusted_score, fit_deal_model};
+use sim::training::{match_seed, Opponents, RunDir, TableSpec};
+use sim::{NeatStrategy, Strategy};
 
 use crate::args::{DeckVariantArg, StrategyArg};
 use crate::evaluate::DEFAULT_BATTERY;
@@ -36,6 +39,8 @@ const CHAMPION_CANDIDATES: usize = 5;
 const REEVAL_MATCHES: usize = 200;
 /// Opponents in the recommended pool at most.
 const POOL_SIZE: usize = 4;
+/// Reference players at most: the probe matches of a candidate are split over them.
+const MAX_REFERENCES: usize = 6;
 
 /// `90s`, `30m`, `2h`, `1h30m` in seconds.
 pub fn parse_duration(text: &str) -> Option<f64> {
@@ -205,7 +210,7 @@ pub fn command_line(
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
-enum Preset {
+pub enum Preset {
     /// A few minutes: a sanity run.
     Quick,
     /// Two hours.
@@ -215,7 +220,7 @@ enum Preset {
 }
 
 impl Preset {
-    fn budget_seconds(self) -> f64 {
+    pub fn budget_seconds(self) -> f64 {
         match self {
             Self::Quick => 300.0,
             Self::Thorough => 7200.0,
@@ -230,100 +235,302 @@ impl Preset {
     name = "cli train-advisor",
     about = "Recommend settings for `cli train` from a short probe of this machine"
 )]
-struct AdvisorArgs {
+pub struct AdvisorArgs {
     #[arg(long, default_value_t = 4, value_parser = clap::value_parser!(u8).range(3..=6))]
-    player_count: u8,
+    pub player_count: u8,
     #[arg(long, value_enum, default_value_t = DeckVariantArg::Single)]
-    deck_variant: DeckVariantArg,
+    pub deck_variant: DeckVariantArg,
     /// How long the training may take (`30m`, `2h`, `1h30m`). Default: the preset's.
     #[arg(long)]
-    time_budget: Option<String>,
+    pub time_budget: Option<String>,
     #[arg(long, value_enum, default_value_t = Preset::Thorough)]
-    preset: Preset,
+    pub preset: Preset,
     /// A candidate opponent to judge (`--strategy` syntax); repeat for several.
     /// Default: the evaluation battery of `cli evaluate`.
     #[arg(long, value_name = "SPEC")]
-    opponent: Vec<String>,
-    /// The player the candidates are scored against (stands in for the model).
-    #[arg(long, default_value = "adaptive")]
-    reference: String,
-    /// Probe matches per candidate opponent (at least 2: the spread needs two).
+    pub opponent: Vec<String>,
+    /// A player the candidates are scored against (stands in for the model); repeat for
+    /// several. `neat:PATH` is a starting genome. Without any reference option: `adaptive`.
+    #[arg(long, value_name = "SPEC")]
+    pub reference: Vec<String>,
+    /// Score the candidates against the genomes (`*.json`) of this folder (at most six are used).
+    #[arg(long, value_name = "DIR")]
+    pub reference_models: Option<PathBuf>,
+    /// Score the candidates against the hall of fame of an earlier run in this run folder.
+    #[arg(long, value_name = "RUN_DIR")]
+    pub reference_hall: Option<PathBuf>,
+    /// Probe matches per candidate opponent (at least 2: the spread needs two), split over the
+    /// reference players (at least 2 against each).
     #[arg(long, default_value_t = 40, value_parser = clap::builder::RangedI64ValueParser::<usize>::new().range(2..))]
-    probe_matches: usize,
+    pub probe_matches: usize,
     #[arg(long, default_value_t = 0)]
-    seed: u64,
+    pub seed: u64,
     /// Run directory written into the recommended command.
     #[arg(long, default_value = "runs/auto")]
-    out: String,
+    pub out: String,
+}
+
+/// `count` of `items`, spread evenly over the list (all of them when it is short enough).
+fn thin<T: Clone>(items: &[T], count: usize) -> Vec<T> {
+    if items.len() <= count {
+        return items.to_vec();
+    }
+    (0..count)
+        .map(|i| items[i * items.len() / count].clone())
+        .collect()
+}
+
+/// A player the candidates are scored against.
+#[derive(Clone)]
+struct Reference {
+    name: String,
+    strategy: Arc<dyn Strategy>,
+}
+
+/// The reference players the options ask for; `adaptive` when none was asked for.
+fn build_references(args: &AdvisorArgs) -> anyhow::Result<Vec<Reference>> {
+    let mut found = Vec::new();
+    for spec in &args.reference {
+        let strategy = spec
+            .parse::<StrategyArg>()
+            .map_err(anyhow::Error::msg)
+            .with_context(|| format!("invalid --reference `{spec}`"))?
+            .build();
+        found.push(Reference {
+            name: spec.clone(),
+            strategy,
+        });
+    }
+    if let Some(folder) = &args.reference_models {
+        found.extend(models_in(folder)?);
+    }
+    if let Some(run) = &args.reference_hall {
+        found.extend(hall_of(run)?);
+    }
+    if found.is_empty() {
+        found.push(Reference {
+            name: "adaptive".to_owned(),
+            strategy: "adaptive"
+                .parse::<StrategyArg>()
+                .map_err(anyhow::Error::msg)?
+                .build(),
+        });
+    }
+    Ok(thin(&found, MAX_REFERENCES))
+}
+
+/// Every genome file of `folder` that this build can load, by file name.
+fn models_in(folder: &Path) -> anyhow::Result<Vec<Reference>> {
+    let mut files: Vec<PathBuf> = std::fs::read_dir(folder)
+        .with_context(|| {
+            format!(
+                "--reference-models {}: cannot read the folder",
+                folder.display()
+            )
+        })?
+        .filter_map(|entry| entry.ok().map(|e| e.path()))
+        .filter(|p| p.extension().is_some_and(|e| e == "json"))
+        .collect();
+    files.sort();
+    let models: Vec<Reference> = files
+        .iter()
+        .filter_map(|path| {
+            let strategy = NeatStrategy::from_file(path).ok()?;
+            let name = path.file_stem()?.to_string_lossy().into_owned();
+            Some(Reference {
+                name: format!("neat:{name}"),
+                strategy: Arc::new(strategy),
+            })
+        })
+        .collect();
+    anyhow::ensure!(
+        !models.is_empty(),
+        "--reference-models {}: no genome file (*.json written by `cli train`) that this build can load",
+        folder.display()
+    );
+    Ok(models)
+}
+
+/// The hall-of-fame champions stored in the checkpoint of an earlier run.
+fn hall_of(run: &Path) -> anyhow::Result<Vec<Reference>> {
+    let checkpoint = RunDir::open_existing(run)
+        .and_then(|dir| dir.read_checkpoint())
+        .with_context(|| format!("--reference-hall {}: not a run folder", run.display()))?;
+    anyhow::ensure!(
+        !checkpoint.hall_of_fame.is_empty(),
+        "--reference-hall {}: the run has no hall of fame yet (it needs --hall-of-fame and a few generations)",
+        run.display()
+    );
+    checkpoint
+        .hall_of_fame
+        .iter()
+        .map(|member| {
+            let name = format!("HoF({})", member.generation);
+            let strategy = NeatStrategy::new(name.clone(), &member.genome)
+                .with_context(|| format!("--reference-hall {}: {name}", run.display()))?;
+            Ok(Reference {
+                name,
+                strategy: Arc::new(strategy),
+            })
+        })
+        .collect()
+}
+
+/// What the probe measured about one candidate opponent.
+struct Row {
+    spec: String,
+    /// The reference players' mean score against it (+1 best .. -1 worst) and its standard error.
+    mean: f64,
+    error: f64,
+    verdict: Verdict,
+    /// The spread of one match's score against it.
+    sd: f64,
+    /// Rounds played and seconds spent probing this candidate.
+    rounds: usize,
+    seconds: f64,
+    /// Variance of one match's round-1 score, and of the same score after the regression on
+    /// the six hand features (`skill_term`): what the luck adjustment would leave of it.
+    var_round1: f64,
+    var_adjusted: f64,
 }
 
 /// What the probe measured.
 struct Probe {
-    /// Per candidate: spec, the reference player's score against it, its standard error, the
-    /// verdict, and the spread of one match's score against it.
-    rows: Vec<(String, f64, f64, Verdict, f64)>,
+    rows: Vec<Row>,
+    /// Rounds per second over the opponents of the recommended pool only (set once the pool
+    /// is chosen): a dropped candidate that plays slower or faster must not set the speed.
     rounds_per_sec: f64,
     /// Standard deviation of one match's score.
     sd_match: f64,
+    /// Share of the round-1 variance that the hand explains (pool opponents only).
+    luck_share: f64,
+}
+
+/// Rounds per second over the given probe rows.
+fn speed_of(rows: &[&Row]) -> f64 {
+    let seconds: f64 = rows.iter().map(|r| r.seconds).sum();
+    let rounds: usize = rows.iter().map(|r| r.rounds).sum();
+    rounds as f64 / seconds.max(1e-9)
+}
+
+fn variance(values: &[f64]) -> f64 {
+    let n = values.len() as f64;
+    if values.len() < 2 {
+        return 0.0;
+    }
+    let mean = values.iter().sum::<f64>() / n;
+    values.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / (n - 1.0)
+}
+
+/// Variances of the round-1 scores and of the luck-adjusted ones, from one fit over all of them.
+fn round1_variances(observations: &[Round1Obs]) -> (f64, f64) {
+    let Some(model) = fit_deal_model(std::slice::from_ref(&observations.to_vec())) else {
+        return (0.0, 0.0);
+    };
+    let plain: Vec<f64> = observations.iter().map(|o| o.score).collect();
+    let adjusted: Vec<f64> = observations
+        .iter()
+        .map(|o| adjusted_score(&model, std::slice::from_ref(o)))
+        .collect();
+    (variance(&plain), variance(&adjusted))
 }
 
 fn run_probe(
     args: &AdvisorArgs,
     candidates: &[String],
-    reference: &Arc<dyn Strategy>,
+    references: &[Reference],
     table: &TableSpec,
 ) -> anyhow::Result<Probe> {
-    let (mut rows, mut rounds) = (Vec::new(), 0usize);
-    let started = Instant::now();
+    let mut rows = Vec::new();
+    // The probe matches of a candidate are split over the references.
+    let per_reference = args.probe_matches.div_ceil(references.len()).max(2);
     for (index, spec) in candidates.iter().enumerate() {
         let opponent = spec
             .parse::<StrategyArg>()
             .map_err(anyhow::Error::msg)?
             .build();
-        let seeds: Vec<u64> = (0..args.probe_matches as u64)
-            .map(|i| match_seed(args.seed, 0xAD + index as u64, i))
-            .collect();
-        let score = evaluate(reference, table, Opponents::Only(&opponent), &seeds);
-        rounds += score.matches * table.rounds;
-        let sd = score.std_error * (score.matches as f64).sqrt();
-        rows.push((
-            spec.clone(),
-            score.mean,
-            score.std_error,
-            judge(score.mean),
-            sd,
-        ));
+        let (mut means, mut variances, mut sds) = (Vec::new(), 0.0, Vec::new());
+        let (mut rounds, mut observations) = (0usize, Vec::new());
+        let started = Instant::now();
+        for (r, reference) in references.iter().enumerate() {
+            let seeds: Vec<u64> = (0..per_reference as u64)
+                .map(|i| match_seed(args.seed, 0xAD + index as u64 + 0x1000 * r as u64, i))
+                .collect();
+            let (score, obs) = evaluate_with_round1(
+                &reference.strategy,
+                table,
+                Opponents::Only(&opponent),
+                &seeds,
+            );
+            rounds += score.matches * table.rounds;
+            means.push(score.mean);
+            variances += score.std_error * score.std_error;
+            sds.push(score.std_error * (score.matches as f64).sqrt());
+            observations.extend(obs);
+        }
+        let seconds = started.elapsed().as_secs_f64();
+        let k = references.len() as f64;
+        let mean = means.iter().sum::<f64>() / k;
+        let (var_round1, var_adjusted) = round1_variances(&observations);
+        rows.push(Row {
+            spec: spec.clone(),
+            mean,
+            error: variances.sqrt() / k,
+            verdict: judge(mean),
+            sd: pooled_sd(&sds),
+            rounds,
+            seconds,
+            var_round1,
+            var_adjusted,
+        });
     }
     Ok(Probe {
         rows,
-        rounds_per_sec: rounds as f64 / started.elapsed().as_secs_f64().max(1e-9),
+        rounds_per_sec: 0.0,
         sd_match: 0.0,
+        luck_share: 0.0,
     })
 }
 
-/// The text the advisor prints: what was measured, what was chosen and why.
+/// The text the advisor prints: what was measured, what was chosen and why. With `auto` the
+/// last line says the run starts now, instead of a command to copy.
 fn render(
     args: &AdvisorArgs,
+    references: &[Reference],
     probe: &Probe,
     pool: &[String],
     plan: &RunPlan,
     command: &str,
+    auto: bool,
 ) -> String {
     let mut out = String::new();
+    let names: Vec<String> = references.iter().map(|r| format!("`{}`", r.name)).collect();
     let _ = writeln!(
         out,
-        "Probe: {} matches per candidate, reference player `{}`.",
-        args.probe_matches, args.reference
+        "Probe: {} matches per candidate, reference player{} {}.",
+        args.probe_matches,
+        if references.len() > 1 { "s" } else { "" },
+        names.join(", ")
     );
+    if references.len() > 1 {
+        let _ = writeln!(
+            out,
+            "  The matches are split over the references ({} against each); a candidate's score is their mean.",
+            args.probe_matches.div_ceil(references.len()).max(2)
+        );
+    }
     let _ = writeln!(
         out,
         "\nCandidate opponents (the reference player's score against each, +1 best .. -1 worst):"
     );
-    for (spec, mean, error, verdict, _) in &probe.rows {
+    for row in &probe.rows {
         let _ = writeln!(
             out,
-            "  {spec:<44} {mean:+.3} +- {error:.3}  {}",
-            verdict.reason()
+            "  {:<44} {:+.3} +- {:.3}  {}",
+            row.spec,
+            row.mean,
+            row.error,
+            row.verdict.reason()
         );
     }
     let _ = writeln!(
@@ -346,19 +553,41 @@ fn render(
     );
     let _ = writeln!(
         out,
-        "Population {} and {} generations.\n  Why: this machine plays about {:.0} rounds per second; the plan needs about {:.0} s of the {:.0} s budget \
+        "Population {} and {} generations.\n  Why: the pool opponents were played at about {:.0} rounds per second; the plan needs about {:.0} s of the {:.0} s budget \
          (the rest is kept for what the estimate leaves out).",
         plan.population, plan.generations, probe.rounds_per_sec, plan.estimated_seconds, plan.budget_seconds
     );
     if plan.hall_of_fame > 0 {
         let _ = writeln!(out, "Hall of fame {} every {} generations.\n  Why: a long run needs past champions as opponents.", plan.hall_of_fame, plan.hall_interval);
     }
-    let _ = writeln!(out, "\nRun it with:\n  {command}");
+    let _ = writeln!(
+        out,
+        "Luck adjustment: the six hand features explain {:.0}% of the variance of a round-1 score against the pool.\n  \
+         Why this is only reported: every genome of a generation plays the same deals, so `--fitness-skill-weight` cannot cancel \
+         deal luck inside a generation (it only weights round 1 more). The duplicate-deal skill score cuts this noise when \
+         comparing finished players (`cli --skill-score duplicate`, `cli evaluate`).",
+        100.0 * probe.luck_share
+    );
+    if auto {
+        let _ = writeln!(
+            out,
+            "\nStarting the run with these settings (the same as:\n  {command}\n)"
+        );
+    } else {
+        let _ = writeln!(out, "\nRun it with:\n  {command}");
+    }
     out
 }
 
-/// The advice for `args`: runs the probe and returns the text to print.
-fn advise(args: &AdvisorArgs) -> anyhow::Result<String> {
+/// What the advisor recommends.
+pub struct Advice {
+    pub text: String,
+    pub plan: RunPlan,
+    pub pool: Vec<String>,
+}
+
+/// The advice for `args`: runs the probe. With `auto` the text ends in "starting the run".
+pub fn advise(args: &AdvisorArgs, auto: bool) -> anyhow::Result<Advice> {
     let budget = match &args.time_budget {
         Some(text) => parse_duration(text)
             .with_context(|| format!("--time-budget `{text}`: write e.g. 30m, 2h or 1h30m"))?,
@@ -369,11 +598,7 @@ fn advise(args: &AdvisorArgs) -> anyhow::Result<String> {
     } else {
         args.opponent.clone()
     };
-    let reference = args
-        .reference
-        .parse::<StrategyArg>()
-        .map_err(anyhow::Error::msg)?
-        .build();
+    let references = build_references(args)?;
     let table = TableSpec {
         player_count: args.player_count,
         deck_variant: args.deck_variant.into(),
@@ -382,28 +607,44 @@ fn advise(args: &AdvisorArgs) -> anyhow::Result<String> {
         exchange_rule: ExchangeRule::Forced,
         rounds: 8,
     };
-    let mut probe = run_probe(args, &candidates, &reference, &table)?;
-    let mut kept: Vec<_> = probe.rows.iter().filter(|r| r.3 == Verdict::Keep).collect();
-    kept.sort_by(|a, b| a.1.total_cmp(&b.1)); // hardest first
-    let mut pool: Vec<String> = kept.iter().take(POOL_SIZE).map(|r| r.0.clone()).collect();
+    let mut probe = run_probe(args, &candidates, &references, &table)?;
+    let mut kept: Vec<&Row> = probe
+        .rows
+        .iter()
+        .filter(|r| r.verdict == Verdict::Keep)
+        .collect();
+    kept.sort_by(|a, b| a.mean.total_cmp(&b.mean)); // hardest first
+    let mut pool: Vec<String> = kept
+        .iter()
+        .take(POOL_SIZE)
+        .map(|r| r.spec.clone())
+        .collect();
     let mut warning = String::new();
     if pool.is_empty() {
         pool = probe
             .rows
             .iter()
             .take(POOL_SIZE)
-            .map(|r| r.0.clone())
+            .map(|r| r.spec.clone())
             .collect();
         warning = format!("Warning: no candidate had headroom against the reference player; keeping the first {POOL_SIZE}.\n\n");
     }
-    // The spread of the opponents that will actually be played, not of every candidate.
-    let pool_sds: Vec<f64> = probe
+    // Spread, speed and luck of the opponents that will actually be played, not of every candidate.
+    let chosen: Vec<&Row> = probe
         .rows
         .iter()
-        .filter(|r| pool.contains(&r.0))
-        .map(|r| r.4)
+        .filter(|r| pool.contains(&r.spec))
         .collect();
-    probe.sd_match = pooled_sd(&pool_sds);
+    probe.sd_match = pooled_sd(&chosen.iter().map(|r| r.sd).collect::<Vec<_>>());
+    probe.rounds_per_sec = speed_of(&chosen);
+    let (var_plain, var_adj): (f64, f64) = chosen.iter().fold((0.0, 0.0), |(p, a), r| {
+        (p + r.var_round1, a + r.var_adjusted)
+    });
+    probe.luck_share = if var_plain > 0.0 {
+        (1.0 - var_adj / var_plain).max(0.0)
+    } else {
+        0.0
+    };
     let matches = matches_for_error(probe.sd_match, TARGET_ERROR);
     let plan = plan_run(
         budget,
@@ -421,13 +662,14 @@ fn advise(args: &AdvisorArgs) -> anyhow::Result<String> {
         .to_possible_value()
         .map_or_else(String::new, |v| v.get_name().to_owned());
     let command = command_line(&plan, args.player_count, &deck, &pool, &args.out);
-    Ok(warning + &render(args, &probe, &pool, &plan, &command))
+    let text = warning + &render(args, &references, &probe, &pool, &plan, &command, auto);
+    Ok(Advice { text, plan, pool })
 }
 
 pub fn run(raw_args: impl Iterator<Item = String>) -> anyhow::Result<()> {
     let args =
         AdvisorArgs::parse_from(std::iter::once("cli train-advisor".to_owned()).chain(raw_args));
-    print!("{}", advise(&args)?);
+    print!("{}", advise(&args, false)?.text);
     Ok(())
 }
 
@@ -600,7 +842,7 @@ mod tests {
             "runs/x",
         ])
         .unwrap();
-        let text = advise(&args).unwrap();
+        let text = advise(&args, false).unwrap().text;
         assert!(
             text.contains("lowest-legal") && text.contains("random-legal"),
             "{text}"
@@ -623,9 +865,118 @@ mod tests {
     fn a_bad_budget_is_explained() {
         let args =
             AdvisorArgs::try_parse_from(["cli train-advisor", "--time-budget", "soon"]).unwrap();
-        assert!(advise(&args)
-            .unwrap_err()
+        assert!(advise(&args, false)
+            .err()
+            .unwrap()
             .to_string()
             .contains("--time-budget"));
+    }
+
+    fn row(spec: &str, rounds: usize, seconds: f64) -> Row {
+        Row {
+            spec: spec.into(),
+            mean: 0.0,
+            error: 0.0,
+            verdict: Verdict::Keep,
+            sd: 0.3,
+            rounds,
+            seconds,
+            var_round1: 1.0,
+            var_adjusted: 0.8,
+        }
+    }
+
+    #[test]
+    fn the_speed_is_that_of_the_chosen_pool_not_of_every_candidate() {
+        let rows = [row("fast", 1000, 1.0), row("slow-and-dropped", 1000, 99.0)];
+        let chosen: Vec<&Row> = rows.iter().filter(|r| r.spec == "fast").collect();
+        assert!((speed_of(&chosen) - 1000.0).abs() < 1e-9);
+        let all: Vec<&Row> = rows.iter().collect();
+        assert!(
+            (speed_of(&all) - 20.0).abs() < 1e-9,
+            "what the old code measured"
+        );
+    }
+
+    #[test]
+    fn references_are_thinned_evenly_and_default_to_adaptive() {
+        assert_eq!(thin(&[1, 2, 3], 6), vec![1, 2, 3]);
+        assert_eq!(thin(&(0..12).collect::<Vec<_>>(), 4), vec![0, 3, 6, 9]);
+        let args = AdvisorArgs::try_parse_from(["cli train-advisor"]).unwrap();
+        let refs = build_references(&args).unwrap();
+        assert_eq!(refs.len(), 1);
+        assert_eq!(refs[0].name, "adaptive");
+    }
+
+    #[test]
+    fn bad_references_are_explained() {
+        let bad = |extra: &[&str]| {
+            let args = AdvisorArgs::try_parse_from(
+                std::iter::once("cli train-advisor").chain(extra.iter().copied()),
+            )
+            .unwrap();
+            format!("{:#}", build_references(&args).err().unwrap())
+        };
+        assert!(bad(&["--reference", "nonsense"]).contains("--reference `nonsense`"));
+        assert!(bad(&["--reference-models", "/nonexistent-folder"]).contains("--reference-models"));
+        assert!(bad(&["--reference-hall", "/nonexistent-folder"]).contains("--reference-hall"));
+        let empty =
+            std::env::temp_dir().join(format!("arschloch-advisor-empty-{}", std::process::id()));
+        std::fs::create_dir_all(&empty).unwrap();
+        assert!(bad(&["--reference-models", empty.to_str().unwrap()]).contains("no genome file"));
+        std::fs::remove_dir_all(&empty).unwrap();
+    }
+
+    #[test]
+    fn the_luck_adjustment_cannot_leave_more_variance_than_the_scores_had() {
+        // The score is the hand's strength plus noise: the regression removes the first part.
+        let observations: Vec<Round1Obs> = (0..60)
+            .map(|i| {
+                let x = f64::from(i % 10) / 10.0;
+                let noise = f64::from((i * 7) % 5) / 50.0;
+                Round1Obs {
+                    score: 2.0 * x + noise,
+                    features: [x, 0.0, 0.0, 0.0, 0.0, 0.0],
+                }
+            })
+            .collect();
+        let (plain, adjusted) = round1_variances(&observations);
+        assert!(plain > 0.0 && adjusted < 0.2 * plain, "{plain} {adjusted}");
+        assert_eq!(round1_variances(&[]), (0.0, 0.0));
+    }
+
+    #[test]
+    fn several_references_are_split_over_the_probe_matches_and_the_run_is_auto_ready() {
+        let args = AdvisorArgs::try_parse_from([
+            "cli train-advisor",
+            "--probe-matches",
+            "8",
+            "--time-budget",
+            "10m",
+            "--opponent",
+            "lowest-legal",
+            "--opponent",
+            "random-legal",
+            "--reference",
+            "lowest-legal",
+            "--reference",
+            "random-legal",
+            "--out",
+            "runs/x",
+        ])
+        .unwrap();
+        let advice = advise(&args, true).unwrap();
+        assert!(
+            advice
+                .text
+                .contains("references `lowest-legal`, `random-legal`")
+                || advice.text.contains("`lowest-legal`, `random-legal`"),
+            "{}",
+            advice.text
+        );
+        assert!(advice.text.contains("4 against each"), "{}", advice.text);
+        assert!(advice.text.contains("Luck adjustment"), "{}", advice.text);
+        assert!(advice.text.contains("Starting the run"), "{}", advice.text);
+        assert!(!advice.pool.is_empty() && advice.plan.population >= MIN_POPULATION);
     }
 }

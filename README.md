@@ -74,7 +74,8 @@ duplicate-card rule, thread count, and cross-compiling a Windows `.exe`).
 ### Choosing training settings
 
 `cli train-advisor --time-budget 30m` probes this machine and the candidate opponents and prints recommended `cli train`
-settings with the reason for each, ending in a command to run. See `docs/TRAINING.md`.
+settings with the reason for each, ending in a command to run; `cli train --auto --out DIR` runs the training with them, and
+`--when-flat stop` ends a run whose curve has gone flat. See `docs/TRAINING.md`.
 
 ### The desktop window
 

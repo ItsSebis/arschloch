@@ -285,6 +285,8 @@ pub struct TerminalObserver {
     total_generations: u32,
     first_generation: Option<u32>,
     generation_secs: Vec<f64>,
+    /// `--when-flat`: looks at the run's own events while it trains.
+    flat: Option<crate::flat::FlatWatch>,
 }
 
 impl TerminalObserver {
@@ -303,7 +305,15 @@ impl TerminalObserver {
             total_generations: 0,
             first_generation: None,
             generation_secs: Vec::new(),
+            flat: None,
         }
+    }
+
+    /// Advises or stops when the run's analysis finds the curve flat (`--when-flat`).
+    #[must_use]
+    pub fn with_flat(mut self, mode: crate::flat::WhenFlat) -> Self {
+        self.flat = Some(crate::flat::FlatWatch::new(self.out.clone(), mode));
+        self
     }
 
     /// Marks this run as part of a set (its rows then end with the set's ETA).
@@ -386,7 +396,14 @@ impl TrainObserver for TerminalObserver {
         self.clear_progress();
         self.generation_secs.push(event.generation_secs);
         let first = *self.first_generation.get_or_insert(event.generation);
+        let advice = self
+            .flat
+            .as_mut()
+            .and_then(|flat| flat.after_generation(event.generation));
         if self.quiet {
+            if let Some(advice) = advice {
+                println!("{advice}");
+            }
             return;
         }
         if (event.generation - first).is_multiple_of(HEADER_EVERY) && event.generation != first {
@@ -407,6 +424,15 @@ impl TrainObserver for TerminalObserver {
             );
         }
         println!("{row}");
+        if let Some(advice) = advice {
+            println!("{advice}");
+        }
+    }
+
+    fn should_stop(&mut self) -> bool {
+        self.flat
+            .as_ref()
+            .is_some_and(crate::flat::FlatWatch::stopping)
     }
 
     fn on_finish(&mut self, end: &RunEnd) {
