@@ -1,6 +1,6 @@
 //! Short card names for reports and the `solve` command: `9H`, `10S`, `AC`.
 
-use engine::{Card, Rank, Suit};
+use engine::{Card, Move, Rank, Suit};
 
 const RANKS: [(Rank, &str); 13] = [
     (Rank::Two, "2"),
@@ -39,6 +39,21 @@ pub fn card_token(card: &Card) -> String {
     format!("{rank}{suit}")
 }
 
+/// `9H 10S AC`.
+#[must_use]
+pub fn cards_text(cards: &[Card]) -> String {
+    cards.iter().map(card_token).collect::<Vec<_>>().join(" ")
+}
+
+/// `pass`, or the cards of the combo.
+#[must_use]
+pub fn move_text(mv: Move) -> String {
+    match mv {
+        Move::Pass => "pass".to_owned(),
+        Move::Play(combo) => cards_text(combo.cards()),
+    }
+}
+
 /// Inverse of [`card_token`], case-insensitive.
 #[must_use]
 pub fn parse_card_token(token: &str) -> Option<(Rank, Suit)> {
@@ -59,6 +74,7 @@ pub fn parse_card_token(token: &str) -> Option<(Rank, Suit)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use engine::Combo;
 
     #[test]
     fn tokens_round_trip_for_every_card() {
@@ -70,6 +86,18 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn cards_and_moves_read_as_text() {
+        let cards = [
+            Card::new(Rank::Nine, Suit::Hearts, 0),
+            Card::new(Rank::Ace, Suit::Clubs, 1),
+        ];
+        assert_eq!(cards_text(&cards), "9H AC");
+        assert_eq!(move_text(Move::Pass), "pass");
+        let combo = Combo::from_slice(&cards[..1]).unwrap();
+        assert_eq!(move_text(Move::Play(combo)), "9H");
     }
 
     #[test]

@@ -1,8 +1,7 @@
 //! `EndgameSolver`: exact play once few cards are unseen, a fallback
 //! strategy before that. See docs/superpowers/specs/2026-10-16-endgame-solver-design.md.
 
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use engine::{Card, DuplicateRule, Move};
 
@@ -28,12 +27,7 @@ pub struct EndgameSolver {
     config: SolverConfig,
     fallback: Arc<dyn Strategy>,
     name: String,
-    decisions: AtomicU64,
-    eligible: AtomicU64,
-    solved: AtomicU64,
-    fell_back_budget: AtomicU64,
-    fell_back_other: AtomicU64,
-    nodes: AtomicU64,
+    stats: Mutex<SolverStats>,
 }
 
 impl EndgameSolver {
@@ -46,25 +40,25 @@ impl EndgameSolver {
                 "EndgameSolver({},T={})",
                 spec.fallback, spec.solver.max_unseen
             ),
-            decisions: AtomicU64::new(0),
-            eligible: AtomicU64::new(0),
-            solved: AtomicU64::new(0),
-            fell_back_budget: AtomicU64::new(0),
-            fell_back_other: AtomicU64::new(0),
-            nodes: AtomicU64::new(0),
+            stats: Mutex::new(SolverStats::default()),
         }
     }
 
+    /// Counters are plain sums, so the order in which threads add to them
+    /// does not matter.
     #[must_use]
     pub fn stats(&self) -> SolverStats {
-        SolverStats {
-            decisions: self.decisions.load(Ordering::Relaxed),
-            eligible: self.eligible.load(Ordering::Relaxed),
-            solved: self.solved.load(Ordering::Relaxed),
-            fell_back_budget: self.fell_back_budget.load(Ordering::Relaxed),
-            fell_back_other: self.fell_back_other.load(Ordering::Relaxed),
-            nodes: self.nodes.load(Ordering::Relaxed),
-        }
+        *self.lock()
+    }
+
+    fn lock(&self) -> std::sync::MutexGuard<'_, SolverStats> {
+        self.stats
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    fn count(&self, update: impl FnOnce(&mut SolverStats)) {
+        update(&mut self.lock());
     }
 
     /// The solver's move, or `None` to defer to the fallback.
@@ -78,25 +72,27 @@ impl EndgameSolver {
         if observation.unseen.len() > self.config.max_unseen {
             return None;
         }
-        self.eligible.fetch_add(1, Ordering::Relaxed);
+        self.count(|s| s.eligible += 1);
         match analyze(&observation, &self.config) {
             Ok(report) => {
-                self.nodes.fetch_add(report.nodes, Ordering::Relaxed);
                 let best = report.best().mv;
-                if legal_moves.contains(&best) {
-                    self.solved.fetch_add(1, Ordering::Relaxed);
-                    Some(best)
-                } else {
-                    self.fell_back_other.fetch_add(1, Ordering::Relaxed);
-                    None
-                }
+                let usable = legal_moves.contains(&best);
+                self.count(|s| {
+                    s.nodes += report.nodes;
+                    if usable {
+                        s.solved += 1;
+                    } else {
+                        s.fell_back_other += 1;
+                    }
+                });
+                usable.then_some(best)
             }
             Err(SolveError::BudgetExceeded) => {
-                self.fell_back_budget.fetch_add(1, Ordering::Relaxed);
+                self.count(|s| s.fell_back_budget += 1);
                 None
             }
             Err(_) => {
-                self.fell_back_other.fetch_add(1, Ordering::Relaxed);
+                self.count(|s| s.fell_back_other += 1);
                 None
             }
         }
@@ -118,7 +114,7 @@ impl Strategy for EndgameSolver {
         if legal_moves.len() == 1 {
             return legal_moves[0];
         }
-        self.decisions.fetch_add(1, Ordering::Relaxed);
+        self.count(|s| s.decisions += 1);
         self.solve(legal_moves, duplicate_rule, context)
             .unwrap_or_else(|| {
                 self.fallback

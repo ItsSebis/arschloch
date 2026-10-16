@@ -6,45 +6,6 @@ use engine::Card;
 
 use super::observation::Observation;
 
-/// Number of ways to split the unseen cards among the other seats by hand
-/// size, ignoring pass ceilings (an upper bound of the consistent deals).
-/// `u128::MAX` on overflow.
-#[must_use]
-pub fn count_deals(observation: &Observation) -> u128 {
-    let mut remaining = observation.unseen.len();
-    let mut total: u128 = 1;
-    for (seat, &size) in observation.hand_sizes.iter().enumerate() {
-        if seat == usize::from(observation.seat) {
-            continue;
-        }
-        let ways = binomial(remaining, size);
-        total = match total.checked_mul(ways) {
-            Some(value) => value,
-            None => return u128::MAX,
-        };
-        remaining = remaining.saturating_sub(size);
-    }
-    total
-}
-
-/// `n` choose `k`, `u128::MAX` on overflow.
-fn binomial(n: usize, k: usize) -> u128 {
-    if k > n {
-        return 0;
-    }
-    let k = k.min(n - k);
-    let mut result: u128 = 1;
-    for i in 0..k {
-        // result * (n - i) / (i + 1) stays integral at every step.
-        let factor = (n - i) as u128;
-        result = match result.checked_mul(factor) {
-            Some(value) => value / (i as u128 + 1),
-            None => return u128::MAX,
-        };
-    }
-    result
-}
-
 /// Calls `visit` for every consistent deal (hands by seat; our own seat
 /// holds `observation.hand`, seats that are out hold nothing); `visit`
 /// returns `false` to stop. Returns how many deals were visited. The order
@@ -188,7 +149,6 @@ mod tests {
     #[test]
     fn splitting_three_distinct_cards_one_two_gives_three_deals() {
         let o = observation(vec![card(Rank::Two, Suit::Clubs, 3)], [1, 2], three_cards());
-        assert_eq!(count_deals(&o), 3);
         let mut seen = Vec::new();
         let n = for_each_deal(&o, |hands| {
             assert_eq!(hands[0], o.hand);
@@ -210,7 +170,6 @@ mod tests {
             card(Rank::Eight, Suit::Hearts, 1),
         ];
         let o = observation(vec![card(Rank::Two, Suit::Clubs, 3)], [2, 0], unseen);
-        assert_eq!(count_deals(&o), 1);
         let n = for_each_deal(&o, |hands| {
             assert!(hands[2].is_empty());
             true
@@ -224,7 +183,6 @@ mod tests {
             card(Rank::King, Suit::Spades, 4),
         ];
         let o = observation(vec![card(Rank::Two, Suit::Clubs, 3)], [2, 2], four);
-        assert_eq!(count_deals(&o), 6);
         assert_eq!(for_each_deal(&o, |_| true), 6);
     }
 

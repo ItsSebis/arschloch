@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use anyhow::Context;
 use engine::{standard_deck, Card, Combo, DeckVariant, DuplicateRule, SeatId};
 use sim::hand_reading::PassCeilings;
-use sim::solver::notation::{card_token, parse_card_token};
+use sim::solver::notation::{cards_text, move_text, parse_card_token};
 use sim::solver::{analyze, MoveReport, MoveStats, Observation, SolverConfig};
 
 const USAGE: &str = "usage: cli solve FILE [--max-unseen N] [--budget N]   (see docs/SOLVER.md)";
@@ -253,18 +253,6 @@ pub(crate) fn parse_position(text: &str) -> Result<Observation, String> {
     })
 }
 
-fn move_name(stats: &MoveStats) -> String {
-    match stats.mv {
-        engine::Move::Pass => "pass".to_owned(),
-        engine::Move::Play(combo) => combo
-            .cards()
-            .iter()
-            .map(card_token)
-            .collect::<Vec<_>>()
-            .join(" "),
-    }
-}
-
 /// The ranked moves as text; `exp.place` is 1-based (1 = first out).
 pub(crate) fn render(report: &MoveReport, observation: &Observation) -> String {
     use std::fmt::Write as _;
@@ -275,12 +263,7 @@ pub(crate) fn render(report: &MoveReport, observation: &Observation) -> String {
         out,
         "seat {} to move, hand: {}",
         observation.seat,
-        observation
-            .hand
-            .iter()
-            .map(card_token)
-            .collect::<Vec<_>>()
-            .join(" ")
+        cards_text(&observation.hand)
     );
     let _ = writeln!(
         out,
@@ -296,7 +279,7 @@ pub(crate) fn render(report: &MoveReport, observation: &Observation) -> String {
         let _ = writeln!(
             out,
             "{:<22} {:>9.2} {:>+8.2} {:>6}/{:<3} {:>8.0}%",
-            move_name(stats),
+            move_text(stats.mv),
             stats.mean_place + 1.0,
             report.score(stats),
             stats.best_place + 1,

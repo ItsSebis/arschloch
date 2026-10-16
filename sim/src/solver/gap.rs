@@ -11,7 +11,7 @@ use engine::{
 use rand::seq::SliceRandom;
 use rand::SeedableRng;
 
-use super::notation::card_token;
+use super::notation::{cards_text, move_text};
 use super::{analyze, MoveReport, Observation, SolveError, SolverConfig};
 use crate::hand_reading::PassTracker;
 use crate::match_runner::turn_context_for;
@@ -62,18 +62,6 @@ pub struct GapStats {
 const KEEP_WORST: usize = 5;
 const COST_EPSILON: f64 = 1e-9;
 
-fn move_text(mv: Move) -> String {
-    match mv {
-        Move::Pass => "pass".to_owned(),
-        Move::Play(combo) => combo
-            .cards()
-            .iter()
-            .map(card_token)
-            .collect::<Vec<_>>()
-            .join(" "),
-    }
-}
-
 fn situation(
     observation: &Observation,
     strategy: &str,
@@ -81,23 +69,14 @@ fn situation(
     best: Move,
     cost: f64,
 ) -> String {
-    let hand: Vec<String> = observation.hand.iter().map(card_token).collect();
     let table = match observation.on_table {
         None => "leading".to_owned(),
-        Some((holder, combo)) => format!(
-            "on {} by seat {holder}",
-            combo
-                .cards()
-                .iter()
-                .map(card_token)
-                .collect::<Vec<_>>()
-                .join(" ")
-        ),
+        Some((holder, combo)) => format!("on {} by seat {holder}", cards_text(combo.cards())),
     };
     format!(
         "seat {}, hand [{}], {table}, {} unseen: {strategy} plays {}, solver prefers {} (costs {cost:.2} places)",
         observation.seat,
-        hand.join(" "),
+        cards_text(&observation.hand),
         observation.unseen.len(),
         move_text(chosen),
         move_text(best),
