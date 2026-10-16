@@ -8,16 +8,19 @@ import {
 const $ = (id) => document.getElementById(id);
 
 let current = null; // the first file, kept for comparing with a picked one
+let other = null; // the second file: { data, label } from the browser or the command line
+let pending = null; // a file picked before the first load finished
 
 function setStatus(text, ok = true) {
   $("status").textContent = text;
   $("status").style.color = ok ? "" : "var(--neg)";
 }
 
-function drawCompare(other, label) {
+function drawCompare() {
+  if (!current || !other) return;
   try {
-    $("compare").innerHTML = compareHtml(compareTables(current, other));
-    $("compare-status").textContent = `Second file: ${label}`;
+    $("compare").innerHTML = compareHtml(compareTables(current, other.data));
+    $("compare-status").textContent = `Second file: ${other.label}`;
   } catch (error) {
     $("compare").innerHTML = "";
     $("compare-status").textContent = String(error.message ?? error);
@@ -25,11 +28,28 @@ function drawCompare(other, label) {
 }
 
 async function loadServedCompare() {
-  const response = await fetch("/api/compare", { cache: "no-store" });
-  if (response.status === 404) return; // no second file on the command line
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error ?? `HTTP ${response.status}`);
-  drawCompare(data, "given on the command line");
+  try {
+    const response = await fetch("/api/compare", { cache: "no-store" });
+    if (response.status === 404) return; // no second file on the command line
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error ?? `HTTP ${response.status}`);
+    other = { data, label: "given on the command line" };
+  } catch (error) {
+    // The first file is fine: the failure belongs to the comparison, not to the page status.
+    $("compare").innerHTML = "";
+    $("compare-status").textContent = String(error.message ?? error);
+  }
+}
+
+async function readPicked(file) {
+  try {
+    other = { data: JSON.parse(await file.text()), label: file.name };
+    drawCompare();
+  } catch (error) {
+    other = null;
+    $("compare").innerHTML = "";
+    $("compare-status").textContent = `${file.name} is not valid JSON: ${error.message}`;
+  }
 }
 
 async function load() {
@@ -52,7 +72,18 @@ async function load() {
     $("agreement").innerHTML = both ? agreementHtml(both) : "";
     $("explain").innerHTML = explainHtml(data.statistics_catalog, explainIds(data));
     setStatus("loaded");
-    await loadServedCompare();
+    // A file picked in the browser wins over the command line, and a reload redraws it
+    // against the new first file.
+    if (pending) {
+      const file = pending;
+      pending = null;
+      await readPicked(file);
+    } else if (other && other.label !== "given on the command line") drawCompare();
+    else {
+      other = null;
+      await loadServedCompare();
+      drawCompare();
+    }
   } catch (error) {
     setStatus(String(error.message ?? error), false);
   }
@@ -60,13 +91,13 @@ async function load() {
 
 $("compare-file").addEventListener("change", async (event) => {
   const file = event.target.files[0];
-  if (!file || !current) return;
-  try {
-    drawCompare(JSON.parse(await file.text()), file.name);
-  } catch (error) {
-    $("compare").innerHTML = "";
-    $("compare-status").textContent = `${file.name} is not valid JSON: ${error.message}`;
+  if (!file) return;
+  if (!current) {
+    pending = file; // the first file is still loading: draw as soon as it is there
+    $("compare-status").textContent = `${file.name}: waiting for the first file…`;
+    return;
   }
+  await readPicked(file);
 });
 
 $("reload").addEventListener("click", load);

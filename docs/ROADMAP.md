@@ -602,7 +602,7 @@ results file of a batch: the strategies best first with average place, mean scor
 standard error) and the share of rounds in every place as a stacked bar, the luck-adjusted score of a duplicate-deal
 run, and the explanation of every number from the statistics catalogue stored in the file. Reload the page after a new
 run. It reads the existing output only; the logic is a pure library tested in Node, the handler in Rust. The GUI
-(Phase 22) starts it for the last simulation. The luck-adjusted estimate (with its agreement with the duplicate score when both ran) is drawn, `cli view A.json B.json` (or a file picked in the page, read in the browser) puts two files side by side per strategy with the difference in standard errors marked clear or within noise, and only the explanations of what the page shows are listed (not the run-analysis statistics).
+(Phase 22) starts it for the last simulation. The luck-adjusted estimate (with its agreement with the duplicate score when both ran) is drawn, `cli view A.json B.json` (or a file picked in the page, read in the browser) puts two files side by side per strategy with the difference (± its combined standard error) and a verdict, clear or within noise (no z value is shown; the rating table gets no verdict, and a missing standard error gives no verdict), and only the explanations of what the page shows are listed (not the run-analysis statistics).
 
 ## Phase 18 — Training advisor: pick the opponents and settings for you (done, reduced)
 

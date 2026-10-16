@@ -187,3 +187,52 @@ test("skill tables are compared only where both files have them; a one-sided fil
   assert.ok(same.tables.some((t) => t.title.startsWith("Skill score (estimate")));
   assert.throws(() => compareTables(data, {}), /both files/);
 });
+
+test("an unknown standard error (null) is not 0: no plus-minus and no verdict", () => {
+  const a = structuredClone(data);
+  const b = structuredClone(data);
+  a.extended.by_strategy.LowestLegal.mean_role_score = { value: -0.3, std_error: null };
+  b.extended.by_strategy.LowestLegal.mean_role_score = { value: 0.5 };
+  const row = compareTables(a, b).tables.find((t) => t.title === "Mean score").rows.find((r) => r.name === "LowestLegal");
+  assert.equal(row.z, null);
+  assert.equal(row.diff, "+0.800");
+  assert.equal(row.a, "-0.300");
+  assert.equal(verdictOf(row.z), "");
+  const nan = structuredClone(a);
+  nan.extended.by_strategy.LowestLegal.mean_role_score.std_error = NaN;
+  assert.equal(compareTables(nan, b).tables[0].rows.find((r) => r.name === "LowestLegal").z, null);
+  assert.equal(verdictOf(NaN), "");
+});
+
+test("the comparison always says what it assumes, and the rating gets no verdict", () => {
+  const b = structuredClone(data);
+  b.extended.by_strategy.LowestLegal.strength_rating = stat(300, 1);
+  const cmp = compareTables(data, b);
+  assert.ok(cmp.notes.some((n) => /relative to each file's own field.*same table size and rules/.test(n)));
+  assert.ok(cmp.notes.some((n) => /independent.*by chance/.test(n)));
+  const html = compareHtml(cmp);
+  const rating = html.split("<h3>Strength rating</h3>")[1].split("</table>")[0];
+  assert.ok(!/better|clear|within noise/.test(rating.replace(/<th>.*?<\/th>/g, "")), "no verdict for the rating");
+  assert.ok(cmp.notes.every((n) => !/is empty/.test(n)));
+});
+
+test("the agreement shows n/a where the file wrote 0.0 for an undefined value", () => {
+  const d = withEstimate();
+  d.extended.skill.comparison.strategies[0].difference_in_se = 0;
+  d.extended.skill.comparison.strategies[0].variance_removed_ratio = 0;
+  const ag = agreement(d);
+  assert.equal(ag.rows[0].gap, "n/a");
+  assert.equal(ag.rows[0].removed, "n/a");
+  assert.ok(agreementHtml(ag).includes("Share of duplicate's luck removed"));
+});
+
+test("a strategy named like an Object property is looked up as a name", () => {
+  const a = structuredClone(data);
+  const b = structuredClone(data);
+  b.extended.by_strategy.constructor = { mean_role_score: stat(0.2) };
+  const cmp = compareTables(a, b);
+  const score = cmp.tables.find((t) => t.title === "Mean score");
+  assert.deepEqual(score.rows.map((r) => r.name).slice(-1), ["constructor"]);
+  assert.equal(score.rows.at(-1).diff, "–");
+  assert.ok(cmp.notes.some((n) => /Only in the second file: constructor/.test(n)));
+});
