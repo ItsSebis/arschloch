@@ -1,0 +1,257 @@
+//! `EndgameSolver`: exact play once few cards are unseen, a fallback
+//! strategy before that. See docs/superpowers/specs/2026-10-16-endgame-solver-design.md.
+
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
+
+use engine::{Card, DuplicateRule, Move};
+
+use crate::solver::config::SolverSpec;
+use crate::solver::{analyze, Observation, SolveError, SolverConfig};
+use crate::strategy::{ContextNeeds, Strategy, TurnContext};
+
+/// What the solver did so far (all decisions of this instance).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct SolverStats {
+    /// Decisions with more than one legal move.
+    pub decisions: u64,
+    /// Decisions the solver tried to solve (supported position, few enough unseen cards).
+    pub eligible: u64,
+    pub solved: u64,
+    pub fell_back_budget: u64,
+    pub fell_back_other: u64,
+    /// Search nodes spent in total.
+    pub nodes: u64,
+}
+
+pub struct EndgameSolver {
+    config: SolverConfig,
+    fallback: Arc<dyn Strategy>,
+    name: String,
+    decisions: AtomicU64,
+    eligible: AtomicU64,
+    solved: AtomicU64,
+    fell_back_budget: AtomicU64,
+    fell_back_other: AtomicU64,
+    nodes: AtomicU64,
+}
+
+impl EndgameSolver {
+    #[must_use]
+    pub fn new(spec: SolverSpec) -> Self {
+        Self {
+            config: spec.solver,
+            fallback: spec.fallback.build(),
+            name: format!(
+                "EndgameSolver({},T={})",
+                spec.fallback, spec.solver.max_unseen
+            ),
+            decisions: AtomicU64::new(0),
+            eligible: AtomicU64::new(0),
+            solved: AtomicU64::new(0),
+            fell_back_budget: AtomicU64::new(0),
+            fell_back_other: AtomicU64::new(0),
+            nodes: AtomicU64::new(0),
+        }
+    }
+
+    #[must_use]
+    pub fn stats(&self) -> SolverStats {
+        SolverStats {
+            decisions: self.decisions.load(Ordering::Relaxed),
+            eligible: self.eligible.load(Ordering::Relaxed),
+            solved: self.solved.load(Ordering::Relaxed),
+            fell_back_budget: self.fell_back_budget.load(Ordering::Relaxed),
+            fell_back_other: self.fell_back_other.load(Ordering::Relaxed),
+            nodes: self.nodes.load(Ordering::Relaxed),
+        }
+    }
+
+    /// The solver's move, or `None` to defer to the fallback.
+    fn solve(
+        &self,
+        legal_moves: &[Move],
+        duplicate_rule: DuplicateRule,
+        context: &TurnContext<'_>,
+    ) -> Option<Move> {
+        let observation = Observation::from_context(context, duplicate_rule)?;
+        if observation.unseen.len() > self.config.max_unseen {
+            return None;
+        }
+        self.eligible.fetch_add(1, Ordering::Relaxed);
+        match analyze(&observation, &self.config) {
+            Ok(report) => {
+                self.nodes.fetch_add(report.nodes, Ordering::Relaxed);
+                let best = report.best().mv;
+                if legal_moves.contains(&best) {
+                    self.solved.fetch_add(1, Ordering::Relaxed);
+                    Some(best)
+                } else {
+                    self.fell_back_other.fetch_add(1, Ordering::Relaxed);
+                    None
+                }
+            }
+            Err(SolveError::BudgetExceeded) => {
+                self.fell_back_budget.fetch_add(1, Ordering::Relaxed);
+                None
+            }
+            Err(_) => {
+                self.fell_back_other.fetch_add(1, Ordering::Relaxed);
+                None
+            }
+        }
+    }
+}
+
+impl Strategy for EndgameSolver {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn choose_play(
+        &self,
+        legal_moves: &[Move],
+        duplicate_rule: DuplicateRule,
+        context: &TurnContext<'_>,
+        rng: &mut dyn rand::Rng,
+    ) -> Move {
+        if legal_moves.len() == 1 {
+            return legal_moves[0];
+        }
+        self.decisions.fetch_add(1, Ordering::Relaxed);
+        self.solve(legal_moves, duplicate_rule, context)
+            .unwrap_or_else(|| {
+                self.fallback
+                    .choose_play(legal_moves, duplicate_rule, context, rng)
+            })
+    }
+
+    fn needs(&self) -> ContextNeeds {
+        ContextNeeds::ALL
+    }
+
+    fn choose_exchange_cards(
+        &self,
+        hand: &[Card],
+        count: usize,
+        duplicate_rule: DuplicateRule,
+        rng: &mut dyn rand::Rng,
+    ) -> Vec<Card> {
+        self.fallback
+            .choose_exchange_cards(hand, count, duplicate_rule, rng)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::hand_reading::PassTracker;
+    use crate::match_runner::turn_context_for;
+    use crate::solver::config::SolverSpec;
+    use crate::strategy::ContextNeeds;
+    use crate::test_support::for_each_state;
+    use rand::SeedableRng;
+
+    fn spec(max_unseen: usize) -> SolverSpec {
+        SolverSpec {
+            solver: crate::solver::SolverConfig {
+                max_unseen,
+                node_budget: 300_000,
+            },
+            ..SolverSpec::default()
+        }
+    }
+
+    #[test]
+    fn it_always_returns_a_legal_move_and_counts_what_it_did() {
+        let solver = EndgameSolver::new(spec(5));
+        let mut rng = rand::rngs::StdRng::seed_from_u64(1);
+        for_each_state(41, 3, |state, _| {
+            let round = state.round;
+            let seat = round.seat_to_move().unwrap();
+            let mut tracker = PassTracker::new(usize::from(state.players), state.rule);
+            let ctx = turn_context_for(
+                round,
+                seat,
+                state.players,
+                state.round_deck,
+                &mut tracker,
+                ContextNeeds::ALL,
+            );
+            let legal = round.legal_moves();
+            let mv = solver.choose_play(&legal, state.rule, &ctx, &mut rng);
+            assert!(legal.contains(&mv));
+        });
+        let s = solver.stats();
+        assert!(s.solved > 0, "the endgames of the random rounds are solved");
+        assert_eq!(
+            s.solved + s.fell_back_budget + s.fell_back_other,
+            s.eligible
+        );
+        assert!(s.eligible <= s.decisions);
+    }
+
+    #[test]
+    fn under_the_free_pass_rule_it_defers_to_the_fallback() {
+        let solver = EndgameSolver::new(spec(40));
+        let mut rng = rand::rngs::StdRng::seed_from_u64(2);
+        for_each_state(43, 1, |state, _| {
+            let round = state.round;
+            let seat = round.seat_to_move().unwrap();
+            let mut tracker = PassTracker::new(usize::from(state.players), state.rule);
+            let mut ctx = turn_context_for(
+                round,
+                seat,
+                state.players,
+                state.round_deck,
+                &mut tracker,
+                ContextNeeds::ALL,
+            );
+            ctx.table.pass_rule = engine::PassRule::Free;
+            let legal = round.legal_moves();
+            let mv = solver.choose_play(&legal, state.rule, &ctx, &mut rng);
+            assert!(legal.contains(&mv));
+        });
+        assert_eq!(solver.stats().eligible, 0);
+        assert!(solver.stats().decisions > 0);
+    }
+
+    #[test]
+    fn a_single_legal_move_is_returned_without_searching() {
+        let solver = EndgameSolver::new(spec(40));
+        let mut rng = rand::rngs::StdRng::seed_from_u64(3);
+        let mut seen_single = false;
+        for_each_state(47, 2, |state, _| {
+            let round = state.round;
+            let legal = round.legal_moves();
+            if legal.len() != 1 {
+                return;
+            }
+            seen_single = true;
+            let seat = round.seat_to_move().unwrap();
+            let mut tracker = PassTracker::new(usize::from(state.players), state.rule);
+            let ctx = turn_context_for(
+                round,
+                seat,
+                state.players,
+                state.round_deck,
+                &mut tracker,
+                ContextNeeds::ALL,
+            );
+            assert_eq!(
+                solver.choose_play(&legal, state.rule, &ctx, &mut rng),
+                legal[0]
+            );
+        });
+        assert!(seen_single);
+        assert_eq!(solver.stats().eligible, 0);
+    }
+
+    #[test]
+    fn the_name_shows_the_configuration() {
+        assert_eq!(
+            EndgameSolver::new(spec(7)).name(),
+            "EndgameSolver(adaptive,T=7)"
+        );
+    }
+}

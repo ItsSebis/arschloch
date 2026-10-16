@@ -4,6 +4,7 @@
 //! unseen cards the other seats could hold (`deals`), solve each one exactly
 //! (`search`, max^n) and average per move (`report`).
 
+pub mod config;
 pub mod deals;
 pub mod notation;
 pub mod observation;
