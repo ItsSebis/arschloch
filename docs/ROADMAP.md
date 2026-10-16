@@ -30,7 +30,7 @@ grows beyond that should be split.
 | 17 | Run analysis tool (CLI and web) | done |
 | 19 | CPU performance and simplification | done |
 | 21 | Endgame solver and determinized search | done (phase B open) |
-| 22 | Desktop GUI to configure and run simulations | planned |
+| 22 | Desktop GUI to configure and run simulations | done |
 | 11b | Web views for simulation results | planned |
 | 18 | Training advisor: pick the opponents and settings for you | planned |
 | 16 | Self-play and co-evolutionary training | idea |
@@ -38,16 +38,12 @@ grows beyond that should be split.
 
 **Order of the open work, and why:**
 
-1. **Phase 22, the desktop GUI:** configuring and running simulations with the complete
-   option set, plus an activity log. It comes after the solver so that the new strategy
-   and the solve command are in it from the start. It deliberately does not duplicate
-   what the browser does well.
-2. **Phase 11b, web views for simulation results:** the chart-heavy overview of results.
-   After the GUI, which can then open it for a finished run.
-3. **Phase 18, the training advisor:** consumes the Phase 17 analysis; its form is a web
+1. **Phase 11b, web views for simulation results:** the chart-heavy overview of results.
+   The GUI can then open it for a finished run.
+2. **Phase 18, the training advisor:** consumes the Phase 17 analysis; its form is a web
    page.
-4. **Phase 16, self-play:** research; the Phase 17 analysis is how to judge it.
-5. **Phase 20, the GPU port:** the largest and least certain; it only pays off for long
+3. **Phase 16, self-play:** research; the Phase 17 analysis is how to judge it.
+4. **Phase 20, the GPU port:** the largest and least certain; it only pays off for long
    training runs.
 
 # Done
@@ -562,48 +558,22 @@ expected finishing position (max^n, rational opponents).
 - Limits recorded in the spec: expected value over consistent deals, not a proof
   against a specific hidden hand; `PassRule::Final` only; no bluffing.
 
+## Phase 22 — Desktop GUI to configure and run simulations (done)
+
+**Status:** built (`gui` crate, binary `arschloch-gui`; user guide `docs/GUI.md`). A native egui window that builds the
+arguments of a `cli` run from a form with every option, runs the real `cli` as a child process, streams its output into
+an activity log (also written to `arschloch-gui.log`), cancels it, saves and loads presets, runs any `cli` command,
+and starts `cli play` / `cli watch` and opens the browser for the parts that stay on the web (play against the
+models, dashboards, run analysis, and the result charts of Phase 11b). Behaviour cannot drift from the command line:
+the window has no simulation code, and a test runs the real `cli` with the arguments the form builds.
+
+Left out on purpose, as the first version should stay small: file pickers (paths are typed), progress bars (the log
+shows the output), a solver position editor and a training form (reachable through "Any command" and
+`cli solve`/`cli train`), and the release archives (the window is not packaged yet; `cargo run --release -p gui`).
+It is not in the workspace's `default-members` because it pulls in a windowing stack (about 300 more crates in
+`Cargo.lock`); CI's `--workspace` runs include it.
+
 # Planned, in recommended order
-
-## Phase 22 — Desktop GUI to configure and run simulations (planned)
-
-**Status:** not started; needs a short design first.
-
-A simple native window, started from the program itself, for the things that are
-easier to click than to type: configuring simulations with the complete option set,
-running them, and reading what is going on. Anything chart-heavy or layout-heavy stays
-in the browser, where it is already good (the `web` crate: play against the models,
-the training dashboard, the run analysis page); the window only links there.
-
-- **In the window (kept easy):**
-  - *Configure a simulation:* every option of the plain `cli` run: table (player
-    count, deck, duplicate rule, pass rule, exchange rule), one strategy per seat
-    (the fixed strategies, `adaptive` with its modifiers, `neat:` genome files through a
-    file picker, `endgame-solver` with its options), matches, rounds, seed, threads,
-    skill score, extended statistics, useful-passes analysis, output file. Presets can
-    be saved and loaded. The form is generated from the same option definitions as
-    the CLI, so a new flag shows up without extra work and the window can show the
-    equivalent command line.
-  - *Run and watch:* start, progress, cancel.
-  - *Activity log:* a scrolling log of what the program is doing (runs started and
-    finished, warnings, errors, the lines the CLI would print), kept per session and
-    saved to a file.
-  - *Results as text:* the summary table of a finished run, load and save of
-    `results.json`.
-  - *Further easy items, if they stay easy:* start a training run from a form and tail
-    its progress line; the Phase 21 solver position editor with the ranked moves as a
-    table; the evaluate command.
-- **Stays in the browser (buttons in the window start the existing server and open the
-  page):** play against the models, the training dashboard, the run analysis page
-  (Phase 17), the simulation result views (Phase 11b), the training advisor form
-  (Phase 18).
-- **Design questions for the first step:** toolkit (recommendation: `egui`/`eframe`,
-  pure Rust, one dependency tree, the same on Linux, Windows and macOS, no web view);
-  where it lives (recommendation: its own workspace crate and binary behind its own
-  release asset, so the CLI build and CI stay light; `cli gui` only launches it); the
-  shared option definitions (extract the `clap` structs' metadata once, used by both).
-- **Testing:** every form-to-options mapping is checked against the CLI parser (the
-  window must produce exactly the options the CLI accepts); the window logic is kept
-  free of drawing code so it is unit-tested; a manual check per screen.
 
 ## Phase 11b — Web views for simulation results (planned)
 

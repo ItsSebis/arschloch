@@ -235,6 +235,14 @@ original summary unchanged; `extended_summary` renders the sections
 appended after it. `cli evaluate` also reports the average place per cell
 and has `--explain`; `cli stats-doc` prints `docs/STATISTICS.md`.
 
+### `gui` (Phase 22)
+
+A native desktop window (egui) that builds the arguments of a `cli` run from a form, runs the `cli` program as a child
+process, streams its output into an activity log and starts the browser-based tools. It depends on no other crate of
+the workspace, so it can never drift from the behaviour of the command line; a test runs the real `cli` with the
+arguments the form builds. It is left out of the workspace's `default-members` (it pulls in a windowing stack); see
+`docs/GUI.md`.
+
 ### `neat` (Phase 10; core done in 10a)
 
 A generic NEAT library crate with no game knowledge (genomes,

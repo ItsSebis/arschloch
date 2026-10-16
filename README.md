@@ -71,6 +71,11 @@ duplicate-card rule, thread count, and cross-compiling a Windows `.exe`).
   analyse a written-down situation and `cli solver-gap` to see where other
   strategies deviate; see `docs/SOLVER.md`.
 
+### The desktop window
+
+`cargo run --release -p gui` opens a small window to configure and run simulations and to read an activity log; play,
+dashboards and the run analysis stay in the browser and are started from it. See `docs/GUI.md`.
+
 ### The stdout summary
 
 - **Role counts by strategy** — across every round simulated, how often

@@ -1,6 +1,9 @@
 [workspace]
 resolver = "2"
-members = ["engine", "sim", "cli", "web", "neat"]
+members = ["engine", "sim", "cli", "web", "neat", "gui"]
+# `gui` pulls in a windowing stack; plain `cargo build/test` leave it out
+# (`--workspace` and `-p gui` include it).
+default-members = ["engine", "sim", "cli", "web", "neat"]
 
 [workspace.package]
 edition = "2021"
