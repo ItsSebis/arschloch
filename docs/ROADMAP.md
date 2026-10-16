@@ -626,6 +626,11 @@ the long runs show it matters (see Phase 17). A simple option that picks them.
 
 ## Phase 16 — Self-play and co-evolutionary training (idea)
 
+**Status:** not started, on purpose (decision of the overnight run of 2026-10-16): it is a research question that needs
+long training runs and a judgement of the results, not a feature to write unattended. The tools to judge it exist (Phase
+12 skill scores, Phase 17 run analysis, Phase 18 advisor for the settings, Phase 21 solver as an independent yardstick
+for the endgame).
+
 Raised while planning Phase 12; deliberately not built yet. Today genomes train
 against a fixed opponent pool, so the opposition never gets stronger than the
 pool. Idea: train populations against each other and a hall of fame of their
@@ -646,6 +651,10 @@ own past champions, optionally mixed with fixed strategies.
   than opponent-limited, so this phase ranks below Phase 13's new inputs.
 
 ## Phase 20 — GPU simulation port (RTX 4070) (planned, not started)
+
+**Status:** not started, and not startable on the development machine of 2026-10-16: there is no NVIDIA driver or CUDA
+toolchain there (the RTX 4070 is on the owner's desktop). The first step is the G0 spike in the schedule below, measured
+on that machine; Phase 19's numbers and the Phase 18 advisor's measured rounds per second are the CPU reference to beat.
 
 Go/no-go, schedule and design for running the simulation on the GPU. Motivation
 (from the stagnation analysis, Phase 17): the long runs look noise-limited by hand analysis (the Phase 17 tool's verdicts on the same runs are mixed, see `docs/baselines/phase-17/README.md`), and a
