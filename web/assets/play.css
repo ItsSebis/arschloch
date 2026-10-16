@@ -34,6 +34,7 @@ button.primary { background: var(--accent); color: #fff; border-color: var(--acc
 .choice { display: flex; gap: 6px; }
 .choice button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
 .opponents { display: flex; flex-wrap: wrap; gap: 8px; }
+.opp { display: inline-flex; align-items: center; gap: 4px; }
 .topbar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .spacer { flex: 1; }
 .seats { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }

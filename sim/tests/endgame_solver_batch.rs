@@ -67,3 +67,72 @@ fn a_batch_with_the_solver_is_identical_on_one_and_many_threads() {
         );
     }
 }
+
+fn play(seats: &[Arc<dyn Strategy>], pass_rule: PassRule) -> Summary {
+    let configs: Vec<MatchConfig> = configs(4, DeckVariant::Single)
+        .into_iter()
+        .map(|c| MatchConfig { pass_rule, ..c })
+        .collect();
+    run_batch(&configs, seats)
+        .iter()
+        .map(|r| (r.role_history.clone(), r.trick_count))
+        .collect()
+}
+
+fn wrapped(inner: Arc<dyn Strategy>, max_unseen: usize) -> Arc<dyn Strategy> {
+    Arc::new(EndgameSolver::wrapping(
+        inner,
+        SolverConfig {
+            max_unseen,
+            node_budget: 100_000,
+        },
+    ))
+}
+
+#[test]
+fn a_wrapped_strategy_plays_exactly_like_itself_while_the_solver_does_not_engage() {
+    // `RandomLegal` draws from the rng on every decision, forced ones included, and
+    // `Adaptive` reads the passes: any difference in what the wrapper hands on shows.
+    let bare = || -> Vec<Arc<dyn Strategy>> {
+        vec![
+            Arc::new(sim::RandomLegal),
+            Arc::new(sim::Adaptive::new(
+                "reading,counting".parse::<sim::AdaptiveConfig>().unwrap(),
+            )),
+            Arc::new(LowestLegal),
+            Arc::new(sim::RandomLegal),
+        ]
+    };
+    let alone = play(&bare(), PassRule::Final);
+    let wrap_all = |max_unseen| -> Vec<Arc<dyn Strategy>> {
+        bare().into_iter().map(|s| wrapped(s, max_unseen)).collect()
+    };
+    assert_eq!(play(&wrap_all(0), PassRule::Final), alone, "threshold 0");
+    // The solver supports the pass rule `final` only: under `free` it never engages.
+    let free_alone = play(&bare(), PassRule::Free);
+    assert_eq!(play(&wrap_all(40), PassRule::Free), free_alone, "free");
+}
+
+#[test]
+fn a_wrapped_strategy_hands_the_endgame_to_the_solver() {
+    let inner: Arc<dyn Strategy> = Arc::new(LowestLegal);
+    let solver = Arc::new(EndgameSolver::wrapping(
+        inner.clone(),
+        SolverConfig {
+            max_unseen: 4,
+            node_budget: 100_000,
+        },
+    ));
+    let seats: Vec<Arc<dyn Strategy>> =
+        vec![solver.clone(), inner.clone(), inner.clone(), inner.clone()];
+    let with = play(&seats, PassRule::Final);
+    assert!(solver.stats().solved > 0, "{:?}", solver.stats());
+    assert_ne!(
+        with,
+        play(
+            &[inner.clone(), inner.clone(), inner.clone(), inner],
+            PassRule::Final
+        )
+    );
+    assert_eq!(solver.name(), "LowestLegal+Solver(T=4)");
+}

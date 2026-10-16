@@ -69,6 +69,60 @@ impl FromStr for StrategyName {
     }
 }
 
+/// The suffix that turns any strategy spec into "that strategy, with the solver
+/// finishing the round".
+pub const SOLVER_SUFFIX: &str = "+solver";
+
+/// Splits `BASE+solver[:OPTIONS]` into `BASE` and what follows `+solver` (the empty
+/// string, or `:OPTIONS`); `None` when the spec has no such suffix. A path that merely
+/// contains `+solver` (`neat:a+solver.json`) is not a suffix: it must end the spec or
+/// be followed by `:`.
+#[must_use]
+pub fn split_solver_suffix(spec: &str) -> Option<(&str, &str)> {
+    let at = spec.rfind(SOLVER_SUFFIX)?;
+    let rest = &spec[at + SOLVER_SUFFIX.len()..];
+    (rest.is_empty() || rest.starts_with(':')).then(|| (&spec[..at], rest))
+}
+
+/// The limits of a `+solver[:OPTIONS]` suffix: `:N` is `max-unseen=N`, otherwise a comma
+/// separated list of `max-unseen=N` and `budget=N` (no `fallback`: the wrapped strategy
+/// is the fallback). `rest` is what `split_solver_suffix` returned.
+///
+/// # Errors
+///
+/// An option that is not a number or not one of those two.
+pub fn parse_solver_toggle(rest: &str) -> Result<SolverConfig, String> {
+    let options = rest.strip_prefix(':').unwrap_or(rest).trim();
+    let mut config = SolverConfig::default();
+    if let Ok(limit) = options.parse::<usize>() {
+        config.max_unseen = limit;
+        return Ok(config);
+    }
+    for option in options.split(',').map(str::trim).filter(|o| !o.is_empty()) {
+        let (key, value) = option.split_once('=').ok_or_else(|| {
+            format!("`{option}` is not KEY=VALUE (`+solver:N` sets max-unseen to N)")
+        })?;
+        match key {
+            "max-unseen" => {
+                config.max_unseen = value
+                    .parse()
+                    .map_err(|_| format!("max-unseen: `{value}` is not a number"))?;
+            }
+            "budget" => {
+                config.node_budget = value
+                    .parse()
+                    .map_err(|_| format!("budget: `{value}` is not a number"))?;
+            }
+            other => {
+                return Err(format!(
+                    "unknown +solver option `{other}`; expected max-unseen or budget"
+                ))
+            }
+        }
+    }
+    Ok(config)
+}
+
 /// The options of `endgame-solver[:OPTIONS]`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SolverSpec {
@@ -133,6 +187,31 @@ mod tests {
         assert!("depth=3".parse::<SolverSpec>().is_err());
         assert!("max-unseen=x".parse::<SolverSpec>().is_err());
         assert!("fallback=nope".parse::<SolverSpec>().is_err());
+    }
+
+    #[test]
+    fn the_solver_suffix_splits_off_and_parses() {
+        assert_eq!(
+            split_solver_suffix("adaptive+solver"),
+            Some(("adaptive", ""))
+        );
+        assert_eq!(
+            split_solver_suffix("adaptive:reading,tempo+solver:8"),
+            Some(("adaptive:reading,tempo", ":8"))
+        );
+        assert_eq!(split_solver_suffix("adaptive"), None);
+        assert_eq!(split_solver_suffix("neat:a+solver.json"), None);
+        assert_eq!(
+            split_solver_suffix("neat:a+solver.json+solver"),
+            Some(("neat:a+solver.json", ""))
+        );
+        assert_eq!(parse_solver_toggle("").unwrap(), SolverConfig::default());
+        assert_eq!(parse_solver_toggle(":8").unwrap().max_unseen, 8);
+        let both = parse_solver_toggle(":max-unseen=4,budget=99").unwrap();
+        assert_eq!((both.max_unseen, both.node_budget), (4, 99));
+        assert!(parse_solver_toggle(":fallback=adaptive").is_err());
+        assert!(parse_solver_toggle(":x").is_err());
+        assert!(parse_solver_toggle(":max-unseen=x").is_err());
     }
 
     #[test]

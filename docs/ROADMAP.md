@@ -42,7 +42,7 @@ grows beyond that should be split.
 4. ~~Training advisor, the rest: `train --auto`, scoring against genomes, early stop (Phase 18)~~ built; the web form is left, see the section
 5. Settle the `hidden` input set with fresh seeds and longer runs; the casino bot's port (Phase 13)
 6. Simplification left over from Phase 19: the file splits and shared helpers are done; the rest is listed in the section
-7. Endgame solver as a toggle on every strategy (Phase 21)
+7. ~~Endgame solver as a toggle on every strategy (Phase 21)~~ built; training a genome with the solver finishing its rounds is left, see the section
 8. Endgame solver, phase B: the early game (Phase 21)
 9. Phase 16, self-play and co-evolutionary training (an idea)
 10. Phase 20, the GPU port (the largest and least certain)
@@ -694,16 +694,21 @@ Left open:
   (440). They were not on this item's list; split them the same way (tests into `tests.rs` first) when they are next
   touched.
 
-## 7. Endgame solver as a toggle on every strategy (Phase 21)
+## 7. Endgame solver as a toggle on every strategy (Phase 21) -- built
 
-`endgame-solver` is a strategy of its own, but it is only useful in the endgame: it plays exactly only the last ~11% of
-the decisions and otherwise defers to a fallback. Turn that around: an **endgame solver toggle** on every strategy
-(Adaptive, endgame-denial, the NEAT champions, the simple ones). The player plays with its chosen strategy as before;
-once the hand-off threshold is reached (unseen cards at or below the limit, 6 by default) the solver takes over and
-solves the rest of the round. A strategy spec option (for example `adaptive+solver` or `:solver=6`), the same switch in
-the GUI, the web play page and `cli train`/`evaluate` pools; the existing `EndgameSolver` fallback becomes the generic
-wrapper. Measure with the luck-free head to head: each strategy with and without the toggle, and whether training a
-NEAT genome with the solver finishing its rounds changes what it learns.
+`SPEC+solver[:N]` wraps any strategy spec (`adaptive+solver`, `neat:PATH+solver:8`): the strategy plays until at most N
+(default 6) cards are unseen, then the solver plays the rest of the round (`sim::EndgameSolver::wrapping`; the
+`endgame-solver` strategy is unchanged and its output byte-identical). It works in every spec position (`--strategy`,
+`cli evaluate`, `cli play`, `train --opponent`), as a tick box per seat in the desktop window and per opponent on the web
+play page. Under `--pass-rule free` the wrapper never engages. Behaviour and limits: `docs/SOLVER.md`; measurements:
+`docs/baselines/solver-toggle/README.md`. Luck-free head to head, one toggled seat (T=6) against three plain copies,
+gain in score: `adaptive` +0.133, `endgame-denial` +0.127, `hold-back-pairs` +0.113, `lowest-legal` +0.181, the neat-v2
+champion +0.083 (all +-0.005 to 0.007), so every strategy, the champion included, profits.
+
+Still open from this item: **training a NEAT genome with the solver finishing its rounds** (does the genome learn a
+different early game when it never plays its own endgame?). It needs the trainer to build the genome's seat as a wrapped
+strategy and is expensive: a threshold-6 solver costs about 1400 times a plain round, so a run needs threshold 2-4 or a
+much smaller pool; as an opponent in a training pool the toggle already works (`train --opponent adaptive+solver:2`).
 
 ## 8. Endgame solver, phase B: the early game (Phase 21)
 

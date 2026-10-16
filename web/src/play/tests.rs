@@ -452,3 +452,31 @@ fn the_catalog_and_the_page_are_served() {
     );
     std::fs::remove_file(path).ok();
 }
+
+#[test]
+fn an_opponent_can_get_the_endgame_solver_with_a_suffix() {
+    let (app, path) = app("solver-suffix");
+    let (_, view) = new_game(
+        &app,
+        3,
+        1,
+        &["lowest-legal+solver", "model:champion+solver:4"],
+    );
+    let names: Vec<&str> = view["seats"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s["name"].as_str().unwrap())
+        .collect();
+    assert!(names.contains(&"LowestLegal+Solver(T=6)"), "{names:?}");
+    assert!(names.contains(&"Neat(champion)+Solver(T=4)"), "{names:?}");
+    for bad in ["ghost+solver", "lowest-legal+solver:x", "+solver"] {
+        let body = json!({"players": 3, "opponents": ["lowest-legal", bad], "human_seat": 0});
+        assert_eq!(
+            call(&app, "POST", "/api/games", &body.to_string()).0,
+            400,
+            "{bad}"
+        );
+    }
+    let _ = std::fs::remove_file(path);
+}

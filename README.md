@@ -70,6 +70,10 @@ duplicate-card rule, thread count, and cross-compiling a Windows `.exe`).
   fallback strategy (`adaptive` by default) before that. Also `cli solve` to
   analyse a written-down situation and `cli solver-gap` to see where other
   strategies deviate; see `docs/SOLVER.md`.
+- `SPEC+solver[:N]` — the endgame solver as a toggle on any strategy spec
+  (`adaptive+solver`, `neat:champion.json+solver:8`): the strategy plays until
+  at most N (default 6) cards are unseen, the solver plays the rest of the
+  round. Works in every spec position, the desktop window and the play page.
 
 ### Choosing training settings
 

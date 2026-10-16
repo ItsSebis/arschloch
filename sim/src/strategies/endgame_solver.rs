@@ -27,6 +27,11 @@ pub struct EndgameSolver {
     config: SolverConfig,
     fallback: Arc<dyn Strategy>,
     name: String,
+    /// Whether a forced move (one legal move) still goes to the fallback. The
+    /// `endgame-solver` strategy returns it directly; a wrapper hands it on, so the
+    /// wrapped strategy sees (and draws randomness for) every decision it would
+    /// have made alone.
+    delegate_forced: bool,
     stats: Mutex<SolverStats>,
 }
 
@@ -40,6 +45,24 @@ impl EndgameSolver {
                 "EndgameSolver({},T={})",
                 spec.fallback, spec.solver.max_unseen
             ),
+            delegate_forced: false,
+            stats: Mutex::new(SolverStats::default()),
+        }
+    }
+
+    /// Any strategy with the solver taking over once at most `config.max_unseen`
+    /// cards are unseen (`SPEC+solver[:N]`). Until then, and whenever the solver cannot
+    /// answer (the `free` pass rule, over budget), `inner` plays, so with
+    /// `max_unseen = 0` this plays exactly like `inner`. The exchange is `inner`'s.
+    /// The match runner builds the context for the strongest needs, which feeds
+    /// `inner`'s pass tracking and hand reading on every turn, whoever then plays.
+    #[must_use]
+    pub fn wrapping(inner: Arc<dyn Strategy>, config: SolverConfig) -> Self {
+        Self {
+            config,
+            name: format!("{}+Solver(T={})", inner.name(), config.max_unseen),
+            fallback: inner,
+            delegate_forced: true,
             stats: Mutex::new(SolverStats::default()),
         }
     }
@@ -112,8 +135,13 @@ impl Strategy for EndgameSolver {
         context: &TurnContext<'_>,
         rng: &mut dyn rand::Rng,
     ) -> Move {
-        if legal_moves.len() == 1 {
+        if legal_moves.len() == 1 && !self.delegate_forced {
             return legal_moves[0];
+        }
+        if legal_moves.len() == 1 {
+            return self
+                .fallback
+                .choose_play(legal_moves, duplicate_rule, context, rng);
         }
         self.count(|s| s.decisions += 1);
         self.solve(legal_moves, duplicate_rule, context)

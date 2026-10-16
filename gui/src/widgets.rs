@@ -6,7 +6,7 @@
 use eframe::egui;
 
 use crate::advisor::Recommendation;
-use crate::form::Form;
+use crate::form::{self, Form};
 use crate::solver::{Place, Report, SolverForm};
 use crate::PickTarget;
 use crate::STRATEGIES;
@@ -185,7 +185,7 @@ pub fn solver_report(ui: &mut egui::Ui, report: &Report) {
 pub fn strategy_rows(form: &mut Form, ui: &mut egui::Ui, pick: &mut Option<PickTarget>) {
     ui.separator();
     ui.label(
-            "Strategy per seat (a name, `adaptive:reading,tempo`, `neat:PATH`, `endgame-solver:max-unseen=6`):",
+            "Strategy per seat (a name, `adaptive:reading,tempo`, `neat:PATH`, `endgame-solver:max-unseen=6`, or any of them `+solver`):",
         );
     for (seat, spec) in form.strategies.iter_mut().enumerate() {
         ui.horizontal(|ui| {
@@ -200,6 +200,17 @@ pub fn strategy_rows(form: &mut Form, ui: &mut egui::Ui, pick: &mut Option<PickT
                 });
             if ui.button("Genome file").clicked() {
                 *pick = Some(PickTarget::Genome(seat));
+            }
+            let mut solver = form::has_solver(spec);
+            if ui
+                .checkbox(&mut solver, "+ solver")
+                .on_hover_text(
+                    "The endgame solver plays the last cards of each round (6 or fewer unseen); \
+                     this seat's strategy plays the rest. Writes `+solver` behind the spec.",
+                )
+                .changed()
+            {
+                *spec = form::with_solver(spec, solver);
             }
         });
     }

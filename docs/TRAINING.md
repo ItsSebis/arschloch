@@ -202,7 +202,7 @@ Details of every setting follow.
 | `--reeval-matches` | 200 | matches used to score each champion; the held-out confirmation uses twice as many |
 | `--auto` | off | run the advisor first and train with its settings (see "Choosing settings") |
 | `--when-flat advise\|stop` | off | advise or stop when the run analysis finds the curve flat (see "Choosing settings") |
-| `--opponent SPEC` | `lowest-legal`, `endgame-denial`, `adaptive:reading,tempo,bully` | the training pool, in `--strategy` syntax; repeat for several. A harder pool gives a stronger player but slower early progress |
+| `--opponent SPEC` | `lowest-legal`, `endgame-denial`, `adaptive:reading,tempo,bully` | the training pool, in `--strategy` syntax; repeat for several. Any spec may end in `+solver[:N]` (the endgame solver plays the last cards of that opponent): exact but slow, so use `+solver:2` to `+solver:4` in a pool (`docs/baselines/solver-toggle/README.md` has the cost) A harder pool gives a stronger player but slower early progress |
 | `--champion-candidates` | 5 | the champion is the best of the top N genomes (by training fitness) re-scored on other matches; 1 trusts the noisy training fitness |
 | `--weight-power` | 0.2 | size of weight mutations; smaller is gentler fine-tuning |
 | `--hall-of-fame N` | 0 (off) | frozen past champions join the training opponents (`--hall-interval K`: every K generations). No measured benefit against the default pool; worth trying when the pool includes evolved opponents |

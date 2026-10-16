@@ -92,7 +92,9 @@ cargo run -p cli -- \
   a seat-position bias in how cards are dealt (see `docs/RULES.md`,
   "Players & Deck"). Must be repeated exactly `--player-count` times.
   Each value is a spec, `SPEC := FIXED | "adaptive" | "adaptive:"
-  OPTIONS | "neat:" PATH | "endgame-solver" | "endgame-solver:" OPTIONS`
+  OPTIONS | "neat:" PATH | "endgame-solver" | "endgame-solver:" OPTIONS`,
+  optionally followed by `"+solver"` or `"+solver:" N` (any strategy, with the
+  endgame solver playing the last cards; `docs/SOLVER.md`)
   (`neat:` is a trained genome file, see `docs/TRAINING.md`; `endgame-solver`
   plays the last few cards exactly with options `max-unseen=N`, `budget=N`
   and `fallback=NAME`, see `docs/SOLVER.md`):

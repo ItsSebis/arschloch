@@ -68,6 +68,11 @@ function optionsFor(selectedId) {
   return group("model", "Trained models") + group("strategy", "Hand-written strategies");
 }
 
+// An opponent id may end in "+solver" (the endgame solver finishes the round).
+function splitSolver(id) {
+  return id.endsWith("+solver") ? [id.slice(0, -"+solver".length), true] : [id, false];
+}
+
 function renderSetup() {
   const remembered = state.setup ?? {};
   $("players").innerHTML = [3, 4, 5, 6]
@@ -76,9 +81,10 @@ function renderSetup() {
   $("seat").innerHTML = `<option value="">random</option>${Array.from({ length: state.players }, (_, i) => `<option value="${i}">seat ${i + 1}</option>`).join("")}`;
   $("seat").value = remembered.human_seat !== undefined && remembered.human_seat < state.players ? String(remembered.human_seat) : "";
   $("opponents").innerHTML = Array.from({ length: state.players - 1 }, (_, i) => {
-    const wanted = remembered.opponents?.[i] ?? DEFAULT_OPPONENTS[i % DEFAULT_OPPONENTS.length];
+    const [wanted, solver] = splitSolver(remembered.opponents?.[i] ?? DEFAULT_OPPONENTS[i % DEFAULT_OPPONENTS.length]);
     const id = state.catalog.some((e) => e.id === wanted) ? wanted : state.catalog[0]?.id;
-    return `<select data-opponent="${i}" aria-label="Opponent ${i + 1}">${optionsFor(id)}</select>`;
+    return `<span class="opp"><select data-opponent="${i}" aria-label="Opponent ${i + 1}">${optionsFor(id)}</select>
+      <label class="muted" title="The endgame solver plays the last cards of every round (6 or fewer unseen), this opponent the rest"><input type="checkbox" data-solver="${i}"${solver ? " checked" : ""}> solver</label></span>`;
   }).join("");
   $("rule").hidden = $("deck").value !== "double";
 }
@@ -93,7 +99,7 @@ function readSetup() {
     exchange_rule: $("exchangerule").value,
     rounds: Number($("rounds").value),
     ...(seat === "" ? {} : { human_seat: Number(seat) }),
-    opponents: [...document.querySelectorAll("[data-opponent]")].map((s) => s.value),
+    opponents: [...document.querySelectorAll("[data-opponent]")].map((s, i) => s.value + (document.querySelector(`[data-solver="${i}"]`)?.checked ? "+solver" : "")),
   };
 }
 

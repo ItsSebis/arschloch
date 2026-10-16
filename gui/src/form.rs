@@ -26,6 +26,33 @@ choices!(PassRule { Final = "final", Free = "free" });
 choices!(ExchangeRule { Forced = "forced", Free = "free" });
 choices!(SkillScore { Off = "off", Estimate = "estimate", Duplicate = "duplicate", Both = "both" });
 
+/// Whether a spec ends in `+solver` or `+solver:OPTIONS` (the endgame solver finishes the
+/// round for that strategy).
+pub fn has_solver(spec: &str) -> bool {
+    solver_suffix_at(spec.trim()).is_some()
+}
+
+const SOLVER_SUFFIX: &str = "+solver";
+
+/// Where the toggle starts: the last `+solver` that ends the spec or is followed by `:`
+/// (the GUI does not link `sim`; the rule is the one of `sim::split_solver_suffix`).
+fn solver_suffix_at(spec: &str) -> Option<usize> {
+    let at = spec.rfind(SOLVER_SUFFIX)?;
+    let rest = &spec[at + SOLVER_SUFFIX.len()..];
+    (rest.is_empty() || rest.starts_with(':')).then_some(at)
+}
+
+/// The spec with the `+solver` toggle added or removed; the options of an existing toggle
+/// are kept when it stays on.
+pub fn with_solver(spec: &str, on: bool) -> String {
+    let spec = spec.trim();
+    match (solver_suffix_at(spec), on) {
+        (Some(at), false) => spec[..at].to_owned(),
+        (None, true) => format!("{spec}{SOLVER_SUFFIX}"),
+        _ => spec.to_owned(),
+    }
+}
+
 /// The strategy every new seat starts with.
 const DEFAULT_STRATEGY: &str = "adaptive";
 
@@ -249,6 +276,19 @@ mod tests {
             "the negative control must fail"
         );
         let _ = std::fs::remove_file(output);
+    }
+
+    #[test]
+    fn the_solver_toggle_adds_and_removes_the_suffix() {
+        assert!(!has_solver("adaptive:reading"));
+        assert!(has_solver("adaptive:reading+solver:8"));
+        assert_eq!(
+            with_solver("adaptive:reading", true),
+            "adaptive:reading+solver"
+        );
+        assert_eq!(with_solver("adaptive+solver:8", false), "adaptive");
+        assert_eq!(with_solver("adaptive+solver:8", true), "adaptive+solver:8");
+        assert_eq!(with_solver("adaptive", false), "adaptive");
     }
 
     #[test]

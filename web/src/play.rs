@@ -4,7 +4,7 @@
 //!
 //! - `GET  /`, `/play.js`, `/play-lib.js`, `/play.css`: the page
 //! - `GET  /api/catalog`: the opponents a game can be set up with
-//! - `POST /api/games`: start a game
+//! - `POST /api/games`: start a game (an opponent id may end in `+solver[:N]`)
 //! - `GET  /api/games/ID?events_since=N`: the view and the events from N
 //! - `POST /api/games/ID/{play,pass,give,next}`: the human acts
 //! - `GET  /api/games/ID/advice?model=ID`: a model ranks the legal moves
@@ -177,6 +177,28 @@ impl PlayApp {
         self.catalog.iter().find(|entry| entry.id == id)
     }
 
+    /// A catalog entry, or one with the endgame solver added: `ID+solver[:N]` is the
+    /// entry `ID` playing until at most N (default 6) cards are unseen, the solver after
+    /// that (`sim::EndgameSolver::wrapping`). A wrapped model gives no advice.
+    fn resolve(&self, id: &str) -> Option<CatalogEntry> {
+        let Some((base, rest)) = sim::split_solver_suffix(id) else {
+            return self.entry(id).cloned();
+        };
+        let config = sim::parse_solver_toggle(rest).ok()?;
+        let base = self.entry(base)?;
+        let strategy: Arc<dyn Strategy> = Arc::new(sim::EndgameSolver::wrapping(
+            Arc::clone(&base.strategy),
+            config,
+        ));
+        Some(CatalogEntry {
+            id: id.to_owned(),
+            label: strategy.name().to_owned(),
+            kind: OpponentKind::Strategy,
+            strategy,
+            model: None,
+        })
+    }
+
     fn catalog_response(&self) -> Response {
         let entries: Vec<Value> = self
             .catalog
@@ -256,10 +278,10 @@ impl PlayApp {
         }
         let mut entries = Vec::new();
         for id in ids {
-            let Some(entry) = id.as_str().and_then(|id| self.entry(id)) else {
+            let Some(entry) = id.as_str().and_then(|id| self.resolve(id)) else {
                 return Err(bad(400, "an opponent is not in the catalog"));
             };
-            entries.push(entry.clone());
+            entries.push(entry);
         }
         let human_seat = match request["human_seat"].as_u64() {
             None => u8::try_from(rand::random::<u32>() % u32::from(players)).unwrap_or(0),

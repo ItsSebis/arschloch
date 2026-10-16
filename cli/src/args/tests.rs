@@ -451,3 +451,41 @@ fn endgame_solver_specs_parse() {
         "EndgameSolver(adaptive,T=6)"
     );
 }
+
+#[test]
+fn the_solver_toggle_wraps_any_spec() {
+    let arg = "adaptive:reading+solver:8".parse::<StrategyArg>().unwrap();
+    match &arg {
+        StrategyArg::WithSolver(base, config) => {
+            assert!(matches!(**base, StrategyArg::Adaptive(_)));
+            assert_eq!(config.max_unseen, 8);
+        }
+        other => panic!("expected a wrapped spec, got {other:?}"),
+    }
+    assert_eq!(
+        "lowest-legal+solver"
+            .parse::<StrategyArg>()
+            .unwrap()
+            .build()
+            .name(),
+        "LowestLegal+Solver(T=6)"
+    );
+    assert_eq!(
+        "lowest-legal+solver:max-unseen=3,budget=500"
+            .parse::<StrategyArg>()
+            .unwrap()
+            .build()
+            .name(),
+        "LowestLegal+Solver(T=3)"
+    );
+    for bad in [
+        "endgame-solver+solver",
+        "adaptive+solver+solver",
+        "adaptive+solver:fallback=adaptive",
+        "adaptive+solver:x",
+        "nonexistent+solver",
+        "+solver",
+    ] {
+        assert!(bad.parse::<StrategyArg>().is_err(), "{bad}");
+    }
+}

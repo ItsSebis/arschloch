@@ -34,7 +34,9 @@ pub use match_runner::{
     deal_round_seed, play_out, run_batch, run_batch_with, run_match, run_match_with, PlayCounters,
     RunOptions,
 };
-pub use solver::config::{SolverSpec, StrategyName};
+pub use solver::config::{
+    parse_solver_toggle, split_solver_suffix, SolverSpec, StrategyName, SOLVER_SUFFIX,
+};
 pub use solver::SolverConfig;
 pub use statistics::{aggregate, RoleRetention, Statistics};
 pub use strategies::{

@@ -26,6 +26,35 @@ fallback.
 
 It reports as `EndgameSolver(<fallback>,T=<max-unseen>)`. The exchange is always the fallback's choice.
 
+## As a toggle on any strategy: `SPEC+solver`
+
+Add `+solver` to any strategy spec and that strategy plays as before until at most `N` cards are unseen (default 6),
+then the solver plays the rest of the round: `adaptive+solver`, `adaptive:reading,tempo+solver:8`,
+`neat:docs/baselines/neat-v2/champion.json+solver`, `lowest-legal+solver:max-unseen=4,budget=500000`. `+solver:N` is
+`max-unseen=N`; `budget=N` is the only other option (the wrapped strategy is the fallback). It works wherever a strategy
+spec does: `--strategy`, `cli evaluate`, `cli play`, `train --opponent`, `train --auto --opponent`, the strategy rows of
+the desktop window (a tick box per seat) and the web play page (a "solver" box per opponent; the server takes ids such as
+`lowest-legal+solver` or `model:champion-v2+solver:4`). It reports as `<name>+Solver(T=N)`.
+
+- **Before the hand-off** the wrapped strategy decides every move, forced ones too, with the same random stream as
+  alone: with `max-unseen=0` a wrapped strategy plays move for move like the bare one (tested, 3 strategies including
+  one that draws random numbers on every decision).
+- **The exchange** (which cards a loser gives) is always the wrapped strategy's.
+- **Per-round state** needs nothing extra: the pass tracker (what the passes revealed) lives in the match runner and
+  catches up on the whole round's history at each request, so the wrapped strategy and the solver both see every
+  event, also those that happened while the other one was playing. A wrapped strategy asks for the full context
+  (`ContextNeeds::ALL`), which costs a little time in the early game (see the measurements).
+- **`--pass-rule free`**: the solver supports `final` only, so under `free` the wrapper never engages and the wrapped
+  strategy plays the whole round (tested: identical to the bare strategy).
+- Over budget or no consistent split of the unseen cards: the wrapped strategy plays that decision, as with
+  `endgame-solver`.
+- `endgame-solver[:OPTIONS]` is unchanged (same output byte for byte); `endgame-solver+solver` and `X+solver+solver`
+  are errors.
+- **Training pools:** `train --opponent adaptive+solver` works (and `neat:PATH+solver` is frozen into the run
+  directory like a plain genome). The solver makes the opponent's endgame exact but slow: see
+  `docs/baselines/solver-toggle/README.md` for the cost per match. Training a *genome* with the solver finishing its
+  own rounds is not built (a genome is one of the `neat` strategies, the toggle is only on opponents and in play).
+
 ## Explaining a situation: `cli solve FILE`
 
 `cli solve [--max-unseen N] [--budget N] FILE` reads a position and prints every legal move with its expected
@@ -74,7 +103,7 @@ Those are the lessons; `docs/baselines/solver/README.md` has the first results.
 ## Limits
 
 - Cost grows quickly with the number of unseen cards; `max-unseen` and `budget` bound it. Measured defaults: 6 unseen cards, 2M nodes per decision (T=8 already takes minutes per 200 games). At T=6 the solver plays exactly about 11% of the decisions of a 4-player single-deck round.
-- It beats the strategy it falls back to clearly (+0.14 score head to head) but not the trained neat champion, whose strength lies in the part of the round the solver does not play; see the measurements.
+- It beats the strategy it falls back to clearly (+0.14 score head to head) but not the trained neat champion, whose strength lies in the part of the round the solver does not play; see the measurements. The better use is the toggle: the champion with `+solver` beats three plain champions by +0.083 (`docs/baselines/solver-toggle/README.md`).
 - The unseen cards are weighted equally; hand reading only removes impossible splits. Pass ceilings are used as hard
   facts: a seat that passed on purpose while holding a beating card (`adaptive`'s deception, `hold-back-pairs`) makes
   the real split look impossible until that seat plays above its ceiling. The solver then solves the wrong splits, or

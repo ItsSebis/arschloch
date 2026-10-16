@@ -44,7 +44,7 @@ impl App {
             });
             ui.label("Candidate opponents");
             ui.text_edit_singleline(&mut form.opponents).on_hover_text(
-                "Strategy specs separated by spaces; empty uses the advisor's battery",
+                "Strategy specs separated by spaces (any may end in +solver); empty uses the advisor's battery",
             );
             ui.end_row();
         });

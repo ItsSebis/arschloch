@@ -21,10 +21,17 @@ use crate::train_output::{
 /// Resolves a stored `neat:@RELATIVE` spec (a frozen copy inside the run
 /// directory) to a loadable `neat:PATH`; every other spec is unchanged.
 fn resolve_spec(spec: &str, out: &Path) -> String {
-    match spec.trim().strip_prefix("neat:@") {
-        Some(relative) => format!("neat:{}", out.join(relative).display()),
+    let (base, toggle) = split_toggle(spec.trim());
+    match base.strip_prefix("neat:@") {
+        Some(relative) => format!("neat:{}{toggle}", out.join(relative).display()),
         None => spec.to_owned(),
     }
+}
+
+/// A spec split into the strategy and its `+solver[:N]` toggle (empty when there is none),
+/// so the genome path of `neat:PATH+solver` is not confused with the toggle.
+fn split_toggle(spec: &str) -> (&str, &str) {
+    sim::split_solver_suffix(spec).map_or((spec, ""), |(base, _)| spec.split_at(base.len()))
 }
 
 /// Builds the opponent pool from `--strategy`-style specs (frozen
@@ -56,7 +63,8 @@ fn build_opponents(specs: &[String], out: &Path) -> anyhow::Result<Vec<Opponent>
 fn freeze_neat_specs(specs: &[String], out: &Path) -> anyhow::Result<Vec<String>> {
     let mut frozen = Vec::with_capacity(specs.len());
     for (index, spec) in specs.iter().enumerate() {
-        let Some(path) = spec.trim().strip_prefix("neat:") else {
+        let (base, toggle) = split_toggle(spec.trim());
+        let Some(path) = base.strip_prefix("neat:") else {
             frozen.push(spec.clone());
             continue;
         };
@@ -74,7 +82,7 @@ fn freeze_neat_specs(specs: &[String], out: &Path) -> anyhow::Result<Vec<String>
                     target.display()
                 )
             })?;
-        frozen.push(format!("neat:@{relative}"));
+        frozen.push(format!("neat:@{relative}{toggle}"));
     }
     Ok(frozen)
 }
@@ -473,5 +481,30 @@ mod tests {
             .unwrap()
             .to_string();
         assert!(error.contains("duplicates `LowestLegal`"), "{error}");
+    }
+
+    #[test]
+    fn the_solver_toggle_survives_freezing_and_resolving_a_genome_spec() {
+        let dir = std::env::temp_dir().join(format!("arschloch-freeze-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let genome = dir.join("g.json");
+        std::fs::write(&genome, "{}").unwrap();
+        let out = dir.join("run");
+        let specs = vec![
+            format!("neat:{}+solver:8", genome.display()),
+            "adaptive+solver".to_owned(),
+        ];
+        let frozen = freeze_neat_specs(&specs, &out).unwrap();
+        assert_eq!(
+            frozen,
+            vec!["neat:@opponents/0-g.json+solver:8", "adaptive+solver"]
+        );
+        assert!(out.join("opponents/0-g.json").exists());
+        assert_eq!(
+            resolve_spec(&frozen[0], &out),
+            format!("neat:{}+solver:8", out.join("opponents/0-g.json").display())
+        );
+        assert_eq!(resolve_spec(&frozen[1], &out), "adaptive+solver");
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }
