@@ -1,5 +1,10 @@
 # Endgame Solver Implementation Plan
 
+> **Executed 2026-10-16 (Phase 21). The code in the repository is authoritative:** this plan's code blocks are the
+> starting point, not the end state. What changed on the way (a position memo, a bounded memo, `Final`-rule position
+> checks, pruned deal enumeration, a double-deck note, no `count_deals`, one stats mutex) is recorded in the spec's last
+> section, "Revisions after reading the code" and "Revisions while building".
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** A search-based strategy, `EndgameSolver`, that plays exactly (max^n, over every consistent distribution of the unseen cards) once few cards are unseen and defers to a fallback strategy before that, plus the tools to learn from it (`cli solve`, `cli solver-gap`).

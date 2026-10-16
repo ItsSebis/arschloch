@@ -101,3 +101,22 @@ These replace the matching statements above where they differ.
 - **Opponent policies** (`OpponentModel::Policy`) see the round state only: hand, opponents' hand sizes and trick state, and the unseen set derived from the deal; no pass ceilings, and a fixed RNG seed per call, so only deterministic policies are meaningful.
 - **`cli solve` takes no pass ceilings in v1**, only the pass state of the current trick; the ceilings come from the strategy path (`TurnContext`).
 - **Measurement of `T` happens after the strategy exists** (plan Task 8), not in the first task; the default `max_unseen` starts at 6 until then.
+
+## Revisions while building (2026-10-16, after the plan)
+
+- **Position memo.** The search remembers positions that different move orders reach (key: all hands, the table combo and
+  its holder, the seat to move, who passed, and the order in which seats went out: the same hands can follow different
+  finishing orders; the reference test found this). It made a 3-player T=4 run 95x cheaper (mean 132,203 to 1,389 nodes
+  per decision). It is bounded: one table of 2^18 slots allocated up front (about 40 MB per decision in flight, never
+  resized), because an unbounded memo ran a measurement out of memory.
+- **`Round::from_position` is strict** about Final-rule tricks: every seat between the holder and the seat to move must
+  have passed or be out. `Round::combo_holder` and `player_count` were added for the search key.
+- **Deal enumeration prunes** cards that beat a seat's size-1 pass ceiling while assigning them, so contradictory
+  ceilings cost nothing; the rank-group check uses the group size only (ceilings are closed upwards). `count_deals` was
+  dropped (unused).
+- **Defaults come from measurement** (`docs/baselines/solver/README.md`): `max-unseen=6`, `budget=2000000`; T=8 is over
+  budget on about 12% of the solved decisions.
+- **Known limits:** pass ceilings are hard constraints (a seat that passed on purpose while holding a beating card makes
+  the true split look impossible; the `use_pass_ceilings` switch was not built); `cli solve` numbers a double deck's
+  identical cards in the order given and says so; phase B (the early-game sampler) is not started.
+
