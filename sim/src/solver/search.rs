@@ -4,9 +4,12 @@
 //! finishing place; ties go to the first move in the engine's move order.
 //! This is the rational-opponents model (the spec's default); alpha-beta is
 //! not sound for more than two players, so there is no pruning beyond the
-//! node budget.
+//! node budget. Positions that different move orders lead to are solved once
+//! (a memo keyed by everything that decides the rest of the game).
 
-use engine::{Move, Round};
+use std::collections::HashMap;
+
+use engine::{Card, Move, Round, SeatId};
 
 /// 0-based finishing place by seat (0 = first out), for all seats.
 pub type Places = [u8; 6];
@@ -15,9 +18,38 @@ pub type Places = [u8; 6];
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BudgetExceeded;
 
+/// Everything that decides how a deal continues.
+#[derive(Hash, PartialEq, Eq)]
+struct Position {
+    hands: Vec<Vec<Card>>,
+    on_table: Vec<Card>,
+    holder: Option<SeatId>,
+    turn: SeatId,
+    passed: Vec<bool>,
+    /// Who went out, in order: the same hands can follow different orders.
+    finished: Vec<SeatId>,
+}
+
+impl Position {
+    fn of(round: &Round, turn: SeatId) -> Self {
+        let seats = || (0..round.player_count()).filter_map(|s| SeatId::try_from(s).ok());
+        Self {
+            hands: seats().map(|s| round.hand(s).to_vec()).collect(),
+            on_table: round
+                .current_combo()
+                .map_or_else(Vec::new, |combo| combo.cards().to_vec()),
+            holder: round.combo_holder(),
+            turn,
+            passed: seats().map(|s| round.has_passed(s)).collect(),
+            finished: round.finishing_order().to_vec(),
+        }
+    }
+}
+
 pub struct Search {
     remaining: u64,
     used: u64,
+    memo: HashMap<Position, Places>,
 }
 
 impl Search {
@@ -26,6 +58,7 @@ impl Search {
         Self {
             remaining: node_budget,
             used: 0,
+            memo: HashMap::new(),
         }
     }
 
@@ -61,12 +94,16 @@ impl Search {
         if round.is_complete() {
             return Ok(places_of(round));
         }
+        let seat = round.seat_to_move().expect("round is not complete");
+        let position = Position::of(round, seat);
+        if let Some(&places) = self.memo.get(&position) {
+            return Ok(places);
+        }
         if self.remaining == 0 {
             return Err(BudgetExceeded);
         }
         self.remaining -= 1;
         self.used += 1;
-        let seat = round.seat_to_move().expect("round is not complete");
         let mut best: Option<Places> = None;
         for mv in round.legal_moves() {
             let mut next = round.clone();
@@ -77,7 +114,9 @@ impl Search {
                 best = Some(value);
             }
         }
-        Ok(best.expect("a seat to move has at least one legal move"))
+        let best = best.expect("a seat to move has at least one legal move");
+        self.memo.insert(position, best);
+        Ok(best)
     }
 }
 
@@ -204,6 +243,55 @@ mod tests {
             checked += 1;
         });
         assert!(checked > 20, "only {checked} positions were small enough");
+    }
+
+    /// Non-terminal nodes of the plain game tree (no memoisation).
+    fn naive_nodes(round: &Round) -> u64 {
+        if round.is_complete() {
+            return 0;
+        }
+        let seat = round.seat_to_move().unwrap();
+        1 + round
+            .legal_moves()
+            .into_iter()
+            .map(|mv| {
+                let mut next = round.clone();
+                next.submit_move(seat, mv).unwrap();
+                naive_nodes(&next)
+            })
+            .sum::<u64>()
+    }
+
+    #[test]
+    fn equal_positions_are_searched_once() {
+        // Seat 0 can lead its low cards in any order while the others pass, so
+        // many lines reach the same position.
+        let hands = vec![
+            vec![
+                c(Rank::Three, Suit::Clubs, 0),
+                c(Rank::Four, Suit::Clubs, 1),
+                c(Rank::Five, Suit::Clubs, 2),
+                c(Rank::Six, Suit::Clubs, 3),
+            ],
+            vec![
+                c(Rank::Seven, Suit::Clubs, 4),
+                c(Rank::Eight, Suit::Clubs, 5),
+            ],
+            vec![c(Rank::Nine, Suit::Clubs, 6), c(Rank::Ten, Suit::Clubs, 7)],
+        ];
+        let round = Round::from_position(hands, RULE, 0, None, &[false; 3]).unwrap();
+        let mut search = Search::new(10_000_000);
+        let memoised = search.root_values(&round).unwrap();
+        // `root_values` does not count the root itself.
+        let plain = naive_nodes(&round) - 1;
+        assert!(
+            search.nodes_used() < plain,
+            "{} nodes searched, {plain} in the plain tree",
+            search.nodes_used()
+        );
+        // The values are those of the plain search (reference agreement is
+        // tested above on random positions); here: one entry per legal move.
+        assert_eq!(memoised.len(), round.legal_moves().len());
     }
 
     #[test]

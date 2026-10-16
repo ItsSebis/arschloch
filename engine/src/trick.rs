@@ -130,6 +130,11 @@ impl Trick {
         self.rule == PassRule::Final && self.passed[usize::from(seat)]
     }
 
+    /// The seat holding the trick's current play, if anyone has played.
+    pub(crate) fn winner(&self) -> Option<SeatId> {
+        self.winner
+    }
+
     pub(crate) fn leader(&self) -> SeatId {
         self.leader
     }

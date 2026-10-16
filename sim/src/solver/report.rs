@@ -59,6 +59,15 @@ pub enum SolveError {
     InvalidPosition,
 }
 
+/// What one move did over the deals so far.
+struct Tally {
+    mv: Move,
+    sum: f64,
+    best: u8,
+    worst: u8,
+    best_count: u64,
+}
+
 /// Solves the observed position exactly for every consistent deal. The
 /// places are absolute: `Round::from_position` enters the seats already out
 /// first in the finishing order, so the seats still playing take the places
@@ -74,11 +83,7 @@ pub fn analyze(observation: &Observation, config: &SolverConfig) -> Result<MoveR
     }
     let seat = usize::from(observation.seat);
     let mut search = Search::new(config.node_budget);
-    let mut moves: Vec<Move> = Vec::new();
-    let mut sums: Vec<f64> = Vec::new();
-    let mut best_places: Vec<u8> = Vec::new();
-    let mut worst_places: Vec<u8> = Vec::new();
-    let mut best_counts: Vec<u64> = Vec::new();
+    let mut tallies: Vec<Tally> = Vec::new();
     let mut error = None;
 
     let deals = for_each_deal(observation, |deal| {
@@ -90,22 +95,25 @@ pub fn analyze(observation: &Observation, config: &SolverConfig) -> Result<MoveR
             error = Some(SolveError::BudgetExceeded);
             return false;
         };
-        if moves.is_empty() {
-            moves = values.iter().map(|(mv, _)| *mv).collect();
-            sums = vec![0.0; moves.len()];
-            best_places = vec![u8::MAX; moves.len()];
-            worst_places = vec![0; moves.len()];
-            best_counts = vec![0; moves.len()];
+        if tallies.is_empty() {
+            tallies = values
+                .iter()
+                .map(|&(mv, _)| Tally {
+                    mv,
+                    sum: 0.0,
+                    best: u8::MAX,
+                    worst: 0,
+                    best_count: 0,
+                })
+                .collect();
         }
         let lowest = values.iter().map(|(_, p)| p[seat]).min().unwrap_or(0);
-        for (i, (_, places)) in values.iter().enumerate() {
+        for (tally, (_, places)) in tallies.iter_mut().zip(&values) {
             let place = places[seat];
-            sums[i] += f64::from(place);
-            best_places[i] = best_places[i].min(place);
-            worst_places[i] = worst_places[i].max(place);
-            if place == lowest {
-                best_counts[i] += 1;
-            }
+            tally.sum += f64::from(place);
+            tally.best = tally.best.min(place);
+            tally.worst = tally.worst.max(place);
+            tally.best_count += u64::from(place == lowest);
         }
         true
     });
@@ -116,17 +124,16 @@ pub fn analyze(observation: &Observation, config: &SolverConfig) -> Result<MoveR
     if deals == 0 {
         return Err(SolveError::NoConsistentDeal);
     }
-    let denominator = deals as f64;
+    let deals_f = deals as f64;
     Ok(MoveReport {
-        moves: moves
+        moves: tallies
             .iter()
-            .enumerate()
-            .map(|(i, &mv)| MoveStats {
-                mv,
-                mean_place: sums[i] / denominator,
-                best_place: best_places[i],
-                worst_place: worst_places[i],
-                best_share: best_counts[i] as f64 / denominator,
+            .map(|t| MoveStats {
+                mv: t.mv,
+                mean_place: t.sum / deals_f,
+                best_place: t.best,
+                worst_place: t.worst,
+                best_share: t.best_count as f64 / deals_f,
             })
             .collect(),
         deals,

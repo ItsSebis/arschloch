@@ -164,6 +164,12 @@ impl Round {
         })
     }
 
+    /// Seats at the table.
+    #[must_use]
+    pub fn player_count(&self) -> usize {
+        self.hands.len()
+    }
+
     /// Whether `seat` has passed in the current trick and is out of it
     /// until the trick ends (`PassRule::Final` only; always `false` under
     /// `Free`).
@@ -238,6 +244,13 @@ impl Round {
     #[must_use]
     pub fn current_combo(&self) -> Option<&Combo> {
         self.current_combo.as_ref()
+    }
+
+    /// The seat holding the combo on the table (the trick's current winner);
+    /// `None` when the active seat leads a fresh trick.
+    #[must_use]
+    pub fn combo_holder(&self) -> Option<SeatId> {
+        self.trick.winner()
     }
 
     /// The seat that led the trick currently in progress.

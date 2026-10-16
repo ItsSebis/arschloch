@@ -601,3 +601,35 @@ fn from_position_with_a_seat_already_out_finishes_the_round() {
     // Seat 0 was out before, seat 1 emptied next, seat 2 is last.
     assert_eq!(round.finishing_order(), &[0, 1, 2]);
 }
+
+#[test]
+fn combo_holder_follows_the_trick() {
+    let rule = DuplicateRule::FirstDealtWins;
+    let mut round = Round::new(hands3(), rule, 0).unwrap();
+    assert_eq!(round.combo_holder(), None, "a fresh trick has no holder");
+    round
+        .submit_move(0, Move::Play(combo(vec![card(Rank::Three, Suit::Clubs)])))
+        .unwrap();
+    assert_eq!(round.combo_holder(), Some(0));
+    round
+        .submit_move(1, Move::Play(combo(vec![card(Rank::Six, Suit::Clubs)])))
+        .unwrap();
+    assert_eq!(round.combo_holder(), Some(1));
+    round.submit_move(2, Move::Pass).unwrap();
+    assert_eq!(
+        round.combo_holder(),
+        Some(1),
+        "a pass does not change the holder"
+    );
+    round.submit_move(0, Move::Pass).unwrap();
+    assert_eq!(
+        round.combo_holder(),
+        None,
+        "the trick is over, seat 1 leads"
+    );
+
+    let five = combo(vec![card(Rank::Five, Suit::Hearts)]);
+    let rebuilt = Round::from_position(hands3(), rule, 1, Some((0, five)), &[false; 3]).unwrap();
+    assert_eq!(rebuilt.combo_holder(), Some(0));
+    assert_eq!(rebuilt.player_count(), 3);
+}
