@@ -41,7 +41,7 @@ grows beyond that should be split.
 3. ~~Results page: the luck-adjusted estimate, comparing two files (Phase 11b)~~ built
 4. ~~Training advisor, the rest: `train --auto`, scoring against genomes, early stop (Phase 18)~~ built; the web form is left, see the section
 5. Settle the `hidden` input set with fresh seeds and longer runs; the casino bot's port (Phase 13)
-6. Simplification left over from Phase 19 (`session.rs`, legacy rule paths, file sizes)
+6. Simplification left over from Phase 19: the file splits and shared helpers are done; the rest is listed in the section
 7. Endgame solver as a toggle on every strategy (Phase 21)
 8. Endgame solver, phase B: the early game (Phase 21)
 9. Phase 16, self-play and co-evolutionary training (an idea)
@@ -662,16 +662,37 @@ the default and retrain the committed champion. The casino repo's TypeScript NEA
 its feature port has to learn the new inputs before a `hidden` or `all` genome can play there (outside this repository).
 Needs hours of compute; the result decides a default, so it is measured, not assumed.
 
-## 6. Simplification left over from Phase 19
+## 6. Simplification left over from Phase 19 (mostly done)
 
-Done in Phase 19: the speed work and its measurements. Not done: `sim/src/session.rs` (1038 lines) still repeats the
-deal/exchange/role loop of `run_match`; `trainer.rs` (455) and `useful_passes.rs` (408) are over the 400-line guideline;
-duplicated helpers across strategies (`min_by` on size and top card, `highest_unseen`, `strength()`); and the legacy
-`--pass-rule free` / `--exchange-rule free` paths (flag plumbing in about 25 places, `choose_exchange_cards` in 9
-strategies) could move behind a `legacy-rules` feature, **only if** the old baselines are no longer wanted. Every change
-must leave the `docs/baselines/perf/bench.sh` checksums and the reference batch outputs byte-identical. Small leftovers
-of Phases 21 to 22: `StrategyName` in `sim` duplicates the strategy list of `cli`, `gap.rs` repeats the deal setup of
-`match_runner`, the card-bit helper exists twice.
+Done (behaviour unchanged: the reference batch, `evaluate`, `train` and `solver-gap` outputs and every
+`docs/baselines/perf/bench.sh` checksum are byte-identical before and after each step):
+
+- The files over the 400-line guideline that this item named are split into modules (see "Module layout of the larger
+  files" in `docs/ARCHITECTURE.md`): `cli/src/advisor.rs` 1057 lines -> 187 (+ `plan`, `references`, `probe`, `render`,
+  `tests`), `train_output.rs` 786 -> 12 (+ `render`, `observer`, `tests`), `train_args.rs` 714 -> 340, `gui/src/main.rs`
+  803 -> 351 (+ `tabs/`), `sim/src/session.rs` 1038 -> 269 (+ `types`, `flow`, `view`), `trainer.rs` 460 -> 257 (+ `setup`),
+  `useful_passes.rs` 408 -> 215 (+ `rollout`).
+- The session shares what it can with `run_match`: the shuffled, numbered deck (`match_runner::shuffled_numbered_deck`,
+  also used by `solver::gap`) and the card-bit helper (`sim::card_bits`, used by the turn context and the solver's
+  search). `highest_unseen`, `lowest_play` and `strength()` were already single functions; `GreedyHighest` now uses the new
+  `highest_play`, the mirror of `lowest_play`.
+
+Left open:
+
+- The rest of the session's round flow stays separate from `run_match`: it is a suspendable state machine (the human acts
+  between steps, the exchange waits for their cards), not a loop, so sharing the loop would mean rebuilding `run_match`
+  as a driver of the session, which risks the bench checksums for little gain.
+- `StrategyName` in `sim` (the fallback of `endgame-solver`) and `FixedStrategy` in `cli` are two lists of the same
+  strategies. Merging them means deciding whether `fallback=random-legal` becomes valid, which changes what the CLI
+  accepts and its error text, so it was not done here.
+- The `legacy-rules` feature gating for `--pass-rule free` / `--exchange-rule free` (flag plumbing in about 25 places,
+  `choose_exchange_cards` in 9 strategies) is **skipped on purpose**: the old baselines under `docs/baselines/`
+  (`pre-neat`, `neat-v1`, `pass-final`) are still wanted and reproduced with those flags.
+- Other files still over 400 lines (most of it unit tests in the same file): `sim/src/stats_catalog.rs` (964),
+  `training/evaluate.rs` (961), `training/config.rs` (758), `web/src/routes.rs` (646), `strategies/neat_player/mod.rs`
+  (614), `gui/src/solver.rs` (572), `cli/src/evaluate.rs` (550), `web/src/play.rs` (545), `training/trainer/stages.rs`
+  (440). They were not on this item's list; split them the same way (tests into `tests.rs` first) when they are next
+  touched.
 
 ## 7. Endgame solver as a toggle on every strategy (Phase 21)
 

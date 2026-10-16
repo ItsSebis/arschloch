@@ -247,6 +247,28 @@ the workspace, so it can never drift from the behaviour of the command line; a t
 arguments the form builds. It is left out of the workspace's `default-members` (it pulls in a windowing stack); see
 `docs/GUI.md`.
 
+### Module layout of the larger files
+
+A file that grew past about 400 lines is a directory with the root file as its entry; each child holds one concern, and
+`tests.rs` holds the unit tests. (Open-work item 6 of the roadmap.)
+
+- `sim::session` (the interactive game): `types` (config, errors, card ids, `GameEvent`, the views), `flow` (dealing,
+  the exchange, the AI seats playing until the human must act, the end of a round), `view` (legal moves, model advice,
+  `view()`), and `session.rs` itself (the `Session` state and the human's commands). The deck is dealt with
+  `match_runner::shuffled_numbered_deck`, the same function `run_match` and `solver::gap` use.
+- `sim::training::trainer`: `setup` (new run, warm start, resume), `stages`, `seeds`, `progress`, `stats`; `trainer.rs`
+  keeps `Trainer`, the observer trait and the generation loop (`run`, `step`).
+- `sim::useful_passes`: `rollout` (one pass's rollouts and the match replay); the types, `summarise` and
+  `analyse_useful_passes` stay in `useful_passes.rs`.
+- `sim::card_bits`: one card as a bit of a `u128` by its `deal_index` (used by the turn context and the solver's search).
+- `sim::strategies`: `lowest_play`, `highest_play` and `highest_unseen` are the shared selection helpers.
+- `cli::advisor` (`train-advisor`): `plan` (time budget, matches per genome, the `cli train` command line),
+  `references` (the players the candidates are scored against), `probe`, `render`; `advisor.rs` has the options and
+  `advise`. `cli::train_output`: `render` (pure line renderers) and `observer` (what is printed while a run goes);
+  `cli::train_args` keeps its tests in `train_args/tests.rs`.
+- `gui`: `tabs/` adds the drawing methods of one tab each to `App` (`simulation`, `solver`, `training`, `picker`);
+  `main.rs` keeps the state, the job handling and the frame loop.
+
 ### `neat` (Phase 10; core done in 10a)
 
 A generic NEAT library crate with no game knowledge (genomes,
