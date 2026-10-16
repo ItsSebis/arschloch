@@ -29,7 +29,7 @@ grows beyond that should be split.
 | 15 | Rule change: the exchange gives your highest cards | done |
 | 17 | Run analysis tool (CLI and web) | done |
 | 19 | CPU performance and simplification | done |
-| 21 | Endgame solver and determinized search | in progress |
+| 21 | Endgame solver and determinized search | done (phase B open) |
 | 22 | Desktop GUI to configure and run simulations | planned |
 | 11b | Web views for simulation results | planned |
 | 18 | Training advisor: pick the opponents and settings for you | planned |
@@ -38,19 +38,16 @@ grows beyond that should be split.
 
 **Order of the open work, and why:**
 
-1. **Phase 21, the endgame solver** (in progress): the goal is the best strategy for real
-   games, and it produces the sharpest tool for learning from games (`cli solve`,
-   `cli solver-gap`). Nothing else depends on it.
-2. **Phase 22, the desktop GUI:** configuring and running simulations with the complete
+1. **Phase 22, the desktop GUI:** configuring and running simulations with the complete
    option set, plus an activity log. It comes after the solver so that the new strategy
    and the solve command are in it from the start. It deliberately does not duplicate
    what the browser does well.
-3. **Phase 11b, web views for simulation results:** the chart-heavy overview of results.
+2. **Phase 11b, web views for simulation results:** the chart-heavy overview of results.
    After the GUI, which can then open it for a finished run.
-4. **Phase 18, the training advisor:** consumes the Phase 17 analysis; its form is a web
+3. **Phase 18, the training advisor:** consumes the Phase 17 analysis; its form is a web
    page.
-5. **Phase 16, self-play:** research; the Phase 17 analysis is how to judge it.
-6. **Phase 20, the GPU port:** the largest and least certain; it only pays off for long
+4. **Phase 16, self-play:** research; the Phase 17 analysis is how to judge it.
+5. **Phase 20, the GPU port:** the largest and least certain; it only pays off for long
    training runs.
 
 # Done
@@ -539,26 +536,27 @@ per round or the 16 threads do not scale. Finding out which is the first task.
   phase ends with a before/after table and the new rounds/s numbers for the two
   real training setups above.
 
-# In progress
+## Phase 21 — Endgame solver and determinized search (done)
 
-## Phase 21 — Endgame solver and determinized search (in progress)
-
-**Status:** design and implementation plan written, implementation about to start
-on branch `endgame-solver` (spec: `docs/superpowers/specs/2026-10-16-endgame-solver-design.md`,
-plan: `docs/superpowers/plans/2026-10-16-endgame-solver.md`).
+**Status:** phase A built and measured (spec: `docs/superpowers/specs/2026-10-16-endgame-solver-design.md`,
+plan: `docs/superpowers/plans/2026-10-16-endgame-solver.md`, user guide `docs/SOLVER.md`, measurements
+`docs/baselines/solver/README.md`). Result: the solver clearly beats the strategy it falls back to (+0.14 score head to
+head, luck-free) but plays exactly only the last ~11% of the decisions, so it does not catch the neat-v2 champion
+(+0.63 against -0.08 in the same table). The hand-off threshold defaults to 6 unseen cards (T=8 is too costly). A
+position memo made the search about 95x cheaper. Phase B below is the way to close the gap.
 
 Goal: find the best overall strategy for real games, and learn from it. A
 search-based player that, from one seat's view, considers every distribution of
 the unseen cards the other players could hold and picks the move with the best
 expected finishing position (max^n, rational opponents).
 
-- **Phase A (planned in detail):** `Round::from_position` in `engine` (a pure
+- **Phase A (done):** `Round::from_position` in `engine` (a pure
   addition), an exact `EndgameSolver` strategy that solves once few cards are unseen
   and defers to a fallback before that, `endgame-solver[:OPTIONS]` as a strategy spec,
   `cli solve` (explain a written-down situation move by move) and `cli solver-gap`
   (where do Adaptive, endgame-denial and the NEAT champions disagree with the solver,
   and what does it cost), a measured hand-off threshold and a luck-free head-to-head.
-- **Phase B (outline in the spec, later):** a depth-limited sampler for the early
+- **Phase B (not started, outline in the spec):** a depth-limited sampler for the early
   game (sample deals, search to a depth, a leaf evaluator), built on phase A's
   measurements.
 - Limits recorded in the spec: expected value over consistent deals, not a proof
