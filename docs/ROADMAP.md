@@ -42,9 +42,10 @@ grows beyond that should be split.
 4. Training advisor, the rest: `train --auto`, scoring against genomes, early stop, a web form (Phase 18)
 5. Settle the `hidden` input set with fresh seeds and longer runs; the casino bot's port (Phase 13)
 6. Simplification left over from Phase 19 (`session.rs`, legacy rule paths, file sizes)
-7. Endgame solver, phase B: the early game (Phase 21)
-8. Phase 16, self-play and co-evolutionary training (an idea)
-9. Phase 20, the GPU port (the largest and least certain)
+7. Endgame solver as a toggle on every strategy (Phase 21)
+8. Endgame solver, phase B: the early game (Phase 21)
+9. Phase 16, self-play and co-evolutionary training (an idea)
+10. Phase 20, the GPU port (the largest and least certain)
 
 # Done
 
@@ -645,7 +646,18 @@ must leave the `docs/baselines/perf/bench.sh` checksums and the reference batch 
 of Phases 21 to 22: `StrategyName` in `sim` duplicates the strategy list of `cli`, `gap.rs` repeats the deal setup of
 `match_runner`, the card-bit helper exists twice.
 
-## 7. Endgame solver, phase B: the early game (Phase 21)
+## 7. Endgame solver as a toggle on every strategy (Phase 21)
+
+`endgame-solver` is a strategy of its own, but it is only useful in the endgame: it plays exactly only the last ~11% of
+the decisions and otherwise defers to a fallback. Turn that around: an **endgame solver toggle** on every strategy
+(Adaptive, endgame-denial, the NEAT champions, the simple ones). The player plays with its chosen strategy as before;
+once the hand-off threshold is reached (unseen cards at or below the limit, 6 by default) the solver takes over and
+solves the rest of the round. A strategy spec option (for example `adaptive+solver` or `:solver=6`), the same switch in
+the GUI, the web play page and `cli train`/`evaluate` pools; the existing `EndgameSolver` fallback becomes the generic
+wrapper. Measure with the luck-free head to head: each strategy with and without the toggle, and whether training a
+NEAT genome with the solver finishing its rounds changes what it learns.
+
+## 8. Endgame solver, phase B: the early game (Phase 21)
 
 The solver plays only the last ~11% of the decisions exactly, which is why the neat champion still beats it by a wide
 margin (+0.63 against -0.08). Phase B: **sample** consistent deals of the unseen cards instead of enumerating them, search
@@ -656,7 +668,7 @@ samples per decision are the numbers to measure (`cli solver-gap` and the luck-f
 much dishonest passes hurt (pass ceilings are hard constraints today), and `--pass-rule free`. Gets its own spec first;
 the design outline is in `docs/superpowers/specs/2026-10-16-endgame-solver-design.md`.
 
-## 8. Phase 16 — Self-play and co-evolutionary training (idea)
+## 9. Phase 16 — Self-play and co-evolutionary training (idea)
 
 **Status:** not started, on purpose (decision of the overnight run of 2026-10-16): it is a research question that needs
 long training runs and a judgement of the results, not a feature to write unattended. The tools to judge it exist (Phase
@@ -682,7 +694,7 @@ own past champions, optionally mixed with fixed strategies.
   the stall seen in the long runs looked noise- and information-limited by hand analysis (the Phase 17 tool is more cautious: `docs/baselines/phase-17/README.md`) rather
   than opponent-limited, so this phase ranks below Phase 13's new inputs.
 
-## 9. Phase 20 — GPU simulation port (RTX 4070) (planned, not started)
+## 10. Phase 20 — GPU simulation port (RTX 4070) (planned, not started)
 
 **Status:** not started, and not startable on the development machine of 2026-10-16: there is no NVIDIA driver or CUDA
 toolchain there (the RTX 4070 is on the owner's desktop). The first step is the G0 spike in the schedule below, measured
