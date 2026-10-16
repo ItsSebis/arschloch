@@ -78,6 +78,27 @@ impl Trick {
         }
     }
 
+    /// A trick in progress under `PassRule::Final`, rebuilt from what a seat
+    /// can observe: who leads/holds, whose turn it is and who has passed.
+    /// `winner` is the holder of the combo on the table (`None` on a fresh
+    /// trick).
+    pub(crate) fn from_parts(
+        leader: SeatId,
+        turn: SeatId,
+        winner: Option<SeatId>,
+        passed: [bool; 6],
+    ) -> Self {
+        Self {
+            leader,
+            turn,
+            winner,
+            passes_since_last_play: 0,
+            required_passes: 0,
+            rule: PassRule::Final,
+            passed,
+        }
+    }
+
     /// The seats that may still act after `seat` under `Final`: active,
     /// not passed, and not the current winner. `None` of them means the
     /// trick is over.

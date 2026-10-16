@@ -511,3 +511,93 @@ fn a_cloned_round_continues_identically() {
         assert_eq!(original.play_history(), copy.play_history());
     }
 }
+
+fn hands3() -> Vec<Vec<Card>> {
+    vec![
+        vec![
+            card(Rank::Three, Suit::Clubs),
+            card(Rank::Nine, Suit::Clubs),
+        ],
+        vec![card(Rank::Six, Suit::Clubs), card(Rank::Ten, Suit::Clubs)],
+        vec![card(Rank::Four, Suit::Clubs), card(Rank::King, Suit::Clubs)],
+    ]
+}
+
+#[test]
+fn from_position_rejects_inconsistent_positions() {
+    let rule = DuplicateRule::FirstDealtWins;
+    let five = combo(vec![card(Rank::Five, Suit::Hearts)]);
+    // two seats only
+    assert!(Round::from_position(
+        vec![hands3()[0].clone(), hands3()[1].clone()],
+        rule,
+        0,
+        None,
+        &[false; 2]
+    )
+    .is_none());
+    // turn out of range / turn's hand empty
+    assert!(Round::from_position(hands3(), rule, 3, None, &[false; 3]).is_none());
+    let mut with_empty = hands3();
+    with_empty[1].clear();
+    assert!(Round::from_position(with_empty.clone(), rule, 1, None, &[false; 3]).is_none());
+    // passed vector of the wrong length
+    assert!(Round::from_position(hands3(), rule, 0, None, &[false; 2]).is_none());
+    // the seat to move cannot have passed
+    assert!(
+        Round::from_position(hands3(), rule, 1, Some((0, five)), &[false, true, false]).is_none()
+    );
+    // holder cannot be the seat to move, nor a seat that passed
+    assert!(Round::from_position(hands3(), rule, 1, Some((1, five)), &[false; 3]).is_none());
+    assert!(
+        Round::from_position(hands3(), rule, 1, Some((0, five)), &[true, false, false]).is_none()
+    );
+    // someone passed on a fresh trick
+    assert!(Round::from_position(hands3(), rule, 0, None, &[false, false, true]).is_none());
+    // a seat that is out cannot have passed
+    assert!(
+        Round::from_position(with_empty, rule, 0, Some((2, five)), &[false, true, false]).is_none()
+    );
+}
+
+#[test]
+fn from_position_mid_trick_plays_on_like_a_live_round() {
+    let rule = DuplicateRule::FirstDealtWins;
+    let five = combo(vec![card(Rank::Five, Suit::Hearts)]);
+    // Seat 0 played a 5; seat 1 to move.
+    let mut round = Round::from_position(hands3(), rule, 1, Some((0, five)), &[false; 3]).unwrap();
+    assert_eq!(round.seat_to_move(), Some(1));
+    assert_eq!(round.current_combo(), Some(&five));
+    let moves = round.legal_moves();
+    assert!(moves.contains(&Move::Pass));
+    assert!(moves.contains(&Move::Play(combo(vec![card(Rank::Six, Suit::Clubs)]))));
+    assert!(moves.contains(&Move::Play(combo(vec![card(Rank::Ten, Suit::Clubs)]))));
+    assert!(!moves.contains(&Move::Play(combo(vec![card(Rank::Three, Suit::Clubs)]))));
+
+    // Seat 1 passes (final: out of the trick), seat 2 passes: seat 0 leads again.
+    round.submit_move(1, Move::Pass).unwrap();
+    assert!(round.has_passed(1));
+    assert_eq!(round.seat_to_move(), Some(2));
+    round.submit_move(2, Move::Pass).unwrap();
+    assert_eq!(round.current_combo(), None);
+    assert_eq!(round.seat_to_move(), Some(0));
+}
+
+#[test]
+fn from_position_with_a_seat_already_out_finishes_the_round() {
+    let rule = DuplicateRule::FirstDealtWins;
+    let mut hands = hands3();
+    hands[0].clear(); // seat 0 is out
+    let mut round = Round::from_position(hands, rule, 1, None, &[false; 3]).unwrap();
+    // Seat 1 leads and plays one card, seat 2 passes, seat 1 leads again and goes out.
+    round
+        .submit_move(1, Move::Play(combo(vec![card(Rank::Six, Suit::Clubs)])))
+        .unwrap();
+    round.submit_move(2, Move::Pass).unwrap();
+    round
+        .submit_move(1, Move::Play(combo(vec![card(Rank::Ten, Suit::Clubs)])))
+        .unwrap();
+    assert!(round.is_complete());
+    // Seat 0 was out before, seat 1 emptied next, seat 2 is last.
+    assert_eq!(round.finishing_order(), &[0, 1, 2]);
+}
