@@ -14,6 +14,7 @@ use rand::seq::SliceRandom;
 use rand::SeedableRng;
 use rayon::prelude::*;
 
+use crate::card_bits::card_bit;
 use crate::hand_features::HandFeatures;
 use crate::hand_reading::{PassCeilings, PassTracker};
 use crate::match_config::MatchConfig;
@@ -76,11 +77,6 @@ pub(crate) fn turn_context_for<'a>(
     // the deck; decks hold at most 104 cards), so "seen" is a bit per
     // index; the unseen cards keep the deck's order.
     let unseen_cards: Vec<Card> = if needs.contains(ContextNeeds::UNSEEN) {
-        let bit = |card: &Card| {
-            1u128
-                .checked_shl(u32::from(card.deal_index))
-                .expect("deal indices of a round's deck are below 128")
-        };
         let mut seen = 0u128;
         for card in round.hand(seat).iter().chain(
             round
@@ -88,10 +84,14 @@ pub(crate) fn turn_context_for<'a>(
                 .iter()
                 .flat_map(|(_, combo)| combo.cards()),
         ) {
-            seen |= bit(card);
+            seen |= card_bit(*card);
         }
         let mut unseen = Vec::with_capacity(round_deck.len());
-        unseen.extend(round_deck.iter().filter(|card| seen & bit(card) == 0));
+        unseen.extend(
+            round_deck
+                .iter()
+                .filter(|card| seen & card_bit(**card) == 0),
+        );
         unseen
     } else {
         Vec::new()

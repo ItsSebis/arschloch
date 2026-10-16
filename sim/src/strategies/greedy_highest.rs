@@ -5,6 +5,7 @@
 
 use engine::{Card, DuplicateRule, Move};
 
+use crate::strategies::highest_play;
 use crate::strategy::{ContextNeeds, Strategy, TurnContext};
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -22,17 +23,7 @@ impl Strategy for GreedyHighest {
         _context: &TurnContext<'_>,
         _rng: &mut dyn rand::Rng,
     ) -> Move {
-        legal_moves
-            .iter()
-            .filter_map(|mv| match mv {
-                Move::Play(combo) => Some((combo.size(), combo.top_card(duplicate_rule), mv)),
-                Move::Pass => None,
-            })
-            .max_by(|a, b| {
-                a.0.cmp(&b.0)
-                    .then_with(|| a.1.compare(&b.1, duplicate_rule))
-            })
-            .map_or(Move::Pass, |(_, _, mv)| *mv)
+        highest_play(legal_moves, duplicate_rule).map_or(Move::Pass, |mv| *mv)
     }
 
     fn needs(&self) -> ContextNeeds {

@@ -2,6 +2,7 @@
 //! built on top of `engine`'s single-round primitives. See
 //! docs/ARCHITECTURE.md, "sim".
 
+mod card_bits;
 pub mod duplicate;
 pub mod extended_stats;
 pub mod hand_features;
