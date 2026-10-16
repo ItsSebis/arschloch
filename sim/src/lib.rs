@@ -12,6 +12,7 @@ pub mod match_result;
 pub mod match_runner;
 pub mod session;
 pub mod skill;
+pub mod solver;
 pub mod statistics;
 pub mod stats_catalog;
 pub mod strategies;
