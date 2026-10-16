@@ -168,7 +168,7 @@ mod tests {
         ];
         let o = observation(vec![card(Rank::Two, Suit::Clubs, 3)], [2, 0], unseen);
         let n = for_each_deal(&o, |hands| {
-            assert!(hands[2].is_empty());
+            assert_eq!(hands[2].len(), 0);
             true
         });
         assert_eq!(n, 1);

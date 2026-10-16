@@ -54,7 +54,7 @@ impl Job {
         })
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, target_os = "linux"))]
     fn id(&self) -> u32 {
         self.child.id()
     }
@@ -199,7 +199,7 @@ mod tests {
             ["a", "", "b"],
             "an empty quoted argument stays"
         );
-        assert!(split_args("   ").is_empty());
+        assert_eq!(split_args("   "), Vec::<String>::new());
     }
 
     #[test]
