@@ -32,16 +32,14 @@ grows beyond that should be split.
 | 21 | Endgame solver and determinized search | done (phase B open) |
 | 22 | Desktop GUI to configure and run simulations | done |
 | 11b | Web views for simulation results | done |
-| 18 | Training advisor: pick the opponents and settings for you | planned |
+| 18 | Training advisor: pick the opponents and settings for you | done, reduced |
 | 16 | Self-play and co-evolutionary training | idea |
 | 20 | GPU simulation port (RTX 4070) | planned, not started |
 
 **Order of the open work, and why:**
 
-1. **Phase 18, the training advisor:** consumes the Phase 17 analysis; its form is a web
-   page.
-2. **Phase 16, self-play:** research; the Phase 17 analysis is how to judge it.
-3. **Phase 20, the GPU port:** the largest and least certain; it only pays off for long
+1. **Phase 16, self-play:** research; the Phase 17 analysis is how to judge it.
+2. **Phase 20, the GPU port:** the largest and least certain; it only pays off for long
    training runs.
 
 # Done
@@ -580,9 +578,16 @@ run, and the explanation of every number from the statistics catalogue stored in
 run. It reads the existing output only; the logic is a pure library tested in Node, the handler in Rust. The GUI
 (Phase 22) starts it for the last simulation. Not built: the luck/skill estimate view and comparing two result files.
 
-# Planned, in recommended order
+## Phase 18 — Training advisor: pick the opponents and settings for you (done, reduced)
 
-## Phase 18 — Training advisor: pick the opponents and settings for you (planned)
+**Status:** a reduced version is built: `cli train-advisor` (`cli/src/advisor.rs`, user guide in `docs/TRAINING.md`,
+"Choosing settings"). It probes the machine with a reference player (`adaptive`) against the candidate opponents, drops
+opponents with no headroom, sizes matches per genome from the measured per-match noise, sizes population and
+generations from the measured speed and the time budget (presets `quick`, `thorough`, `overnight`), and prints each
+choice with its reason plus a `cli train` command that `cli train`'s own parser is tested to accept. **Not built, kept
+here as the open part of the idea:** `cli train --auto`, scoring candidates against a starting genome, a models
+folder or the hall of fame of earlier runs, using the duplicate-deal skill score to cut noise, stopping or advising
+during a run from the Phase 17 analysis, and the web form. The original plan follows.
 
 Choosing the opponent pool and settings by hand (population, matches per
 genome, rounds, hall of fame, target species, opponents) is trial and error;
@@ -616,6 +621,8 @@ the long runs show it matters (see Phase 17). A simple option that picks them.
   Phase 11 dashboard.
 - Depends on Phase 12 (statistics, skill score), Phase 13 (inputs and fitness
   variants to choose between) and Phase 17 (the analysis).
+
+# Planned, in recommended order
 
 ## Phase 16 — Self-play and co-evolutionary training (idea)
 

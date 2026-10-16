@@ -71,6 +71,11 @@ duplicate-card rule, thread count, and cross-compiling a Windows `.exe`).
   analyse a written-down situation and `cli solver-gap` to see where other
   strategies deviate; see `docs/SOLVER.md`.
 
+### Choosing training settings
+
+`cli train-advisor --time-budget 30m` probes this machine and the candidate opponents and prints recommended `cli train`
+settings with the reason for each, ending in a command to run. See `docs/TRAINING.md`.
+
 ### The desktop window
 
 `cargo run --release -p gui` opens a small window to configure and run simulations and to read an activity log; play,
