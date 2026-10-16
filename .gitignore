@@ -1,5 +1,7 @@
 /target
 
+/runs
+/results.json
 __pycache__/
 *.pyc
 dist/
