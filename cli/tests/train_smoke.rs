@@ -1365,3 +1365,44 @@ fn several_settings_train_warn_without_the_table_features_and_record_the_lists()
         assert!(!out.exists(), "{bad:?}");
     }
 }
+
+#[test]
+fn auto_checks_the_cheap_things_before_the_probe() {
+    // A bad candidate spec: reported at once, nothing probed, nothing created.
+    let out = run_dir("auto-spec");
+    let result = cli(&[
+        "train",
+        "--auto",
+        "--out",
+        out.to_str().unwrap(),
+        "--opponent",
+        "nonsense",
+    ]);
+    assert!(!result.status.success());
+    assert!(
+        text(&result.stderr).contains("invalid --opponent `nonsense`"),
+        "{}",
+        text(&result.stderr)
+    );
+    assert!(!text(&result.stdout).contains("Probe:"));
+    assert!(!out.exists());
+    // A busy dashboard port: also before the probe.
+    let busy = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = busy.local_addr().unwrap().port().to_string();
+    let out = run_dir("auto-port");
+    let result = cli(&[
+        "train",
+        "--auto",
+        "--out",
+        out.to_str().unwrap(),
+        "--serve",
+        &port,
+    ]);
+    assert!(!result.status.success());
+    assert!(
+        text(&result.stderr).contains("cannot start the dashboard"),
+        "{}",
+        text(&result.stderr)
+    );
+    assert!(!text(&result.stdout).contains("Probe:"));
+}

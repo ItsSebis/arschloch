@@ -200,14 +200,27 @@ pub fn render_set_run_banner(index: u32, total: u32, seed: u64) -> String {
 }
 
 /// The closing summary of a set: one line per run, then the total time.
+///
+/// `stopped_at` is the planned number of generations when the last run in `ends` was stopped
+/// early (`--when-flat stop`): the set then did not finish, that run is marked, and the summary
+/// says its numbers are not comparable with runs that trained to the end.
 #[must_use]
-pub fn render_set_summary(ends: &[(String, RunEnd)], total_secs: f64) -> String {
+pub fn render_set_summary(
+    ends: &[(String, RunEnd)],
+    total_secs: f64,
+    stopped_at: Option<u32>,
+) -> String {
     let mut text = format!(
-        "set finished: {} runs in {}",
+        "set {}: {} runs in {}",
+        if stopped_at.is_some() {
+            "stopped early"
+        } else {
+            "finished"
+        },
         ends.len(),
         format_duration(total_secs)
     );
-    for (name, end) in ends {
+    for (position, (name, end)) in ends.iter().enumerate() {
         let confirmed = end.best_heldout.as_ref().or(end.best_reeval.as_ref());
         match (end.best_generation, confirmed) {
             (Some(generation), Some(score)) => {
@@ -223,6 +236,19 @@ pub fn render_set_summary(ends: &[(String, RunEnd)], total_secs: f64) -> String 
                 let _ = write!(text, "\n  {name}: no champion");
             }
         }
+        if let Some(planned) = stopped_at.filter(|_| position + 1 == ends.len()) {
+            let _ = write!(
+                text,
+                "\n    stopped after {} of {planned} generations",
+                end.generations_completed
+            );
+        }
+    }
+    if stopped_at.is_some() {
+        text.push_str(
+            "\n  the stopped run and the runs not started are not comparable with runs that trained to the end; \
+             `--resume` on the set directory continues it",
+        );
     }
     text
 }
@@ -601,6 +627,38 @@ mod tests {
             ..end
         };
         assert!(!render_summary(&none, std::path::Path::new("x")).contains("best champion"));
+    }
+
+    #[test]
+    fn a_set_stopped_early_says_so_and_marks_the_unequal_run() {
+        let end = |done| RunEnd {
+            generations_completed: done,
+            best_generation: Some(3),
+            best_reeval: Some(stat(0.5)),
+            best_heldout: Some(stat(0.4)),
+            elapsed_secs: 10.0,
+        };
+        let ends = vec![
+            ("run-1".to_owned(), end(100)),
+            ("run-2".to_owned(), end(45)),
+        ];
+        let done = render_set_summary(&ends[..1], 10.0, None);
+        assert!(done.starts_with("set finished: 1 runs"), "{done}");
+        let text = render_set_summary(&ends, 20.0, Some(100));
+        assert!(text.starts_with("set stopped early: 2 runs"), "{text}");
+        assert!(
+            text.contains("stopped after 45 of 100 generations"),
+            "{text}"
+        );
+        assert!(
+            text.contains("not comparable") && text.contains("--resume"),
+            "{text}"
+        );
+        assert_eq!(
+            text.matches("stopped after").count(),
+            1,
+            "only the last run is marked: {text}"
+        );
     }
 
     #[test]

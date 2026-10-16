@@ -131,21 +131,29 @@ candidates, the champion and each pool opponent) and warns when 20 generations d
 measured over the opponents of the chosen pool only (a slower candidate that was dropped does not set it), and the noise
 target (a standard error of 0.02 on one fitness measurement) is stricter than selection between genomes on the same matches
 needs, so it errs on the side of more matches. The estimate uses the reference player's speed, and a probe of a few
-matches per candidate runs with less parallel load than a real generation: in the check recorded below the plan was
-about 1.8 times too pessimistic about the time, which the unplanned 30% also covers.
+matches per candidate runs with less parallel load than a real generation, so it measures a lower speed than the run
+reaches: in the check recorded below the plan estimated about 1.8 times the time the run needed (the run ended well before
+its budget). The unplanned 30% of the budget is a reserve for the opposite error, not a cover for this one. All matches
+of a candidate (every reference times every seed) run as one parallel batch, which removed most of the extra pessimism of
+several small batches one after the other: with three references and 12 probe matches per candidate (8 threads, release
+build, short runs, so noisy) the measured speed was 21k and 64k rounds per second before and 63k and 99k after the change,
+against 55k to 89k before and 76k to 100k after with one reference.
 
 **Who the candidates are scored against.** `adaptive` is far stronger than an early network, so against it every
 candidate looks easy. Name the player the model will resemble instead: `--reference neat:PATH` (a starting genome;
 repeatable), `--reference-models DIR` (every genome `*.json` of a folder that this build can load) and
 `--reference-hall RUN_DIR` (the hall of fame stored in the checkpoint of an earlier run, which needs
 `--hall-of-fame`). A candidate's score is the mean over the references; the probe matches per candidate are split over
-them (at least 2 against each, at most 6 references, spread evenly), so the probe does not get longer. Measured with a
+them (at least 2 against each, at most 6 references, spread evenly); the header prints the number actually played per
+candidate (rounded up to a multiple of the number of references, never fewer than twice that number), so the probe is
+about as long as with one reference. Measured with a
 champion trained for 28 generations as the reference (12 probe matches per candidate), `random-legal` scored +0.91 and
 was dropped as too weak, where `adaptive` scored +0.69 and kept it, and the three hand-written opponents all landed near
 +0.55 to +0.63 instead of -0.18 to +0.33.
 
 **Luck adjustment.** The advisor also reports how much of the variance of a round-1 score the six hand features explain
-(the regression of `--fitness-skill-weight`, fitted on the probe matches themselves, so slightly optimistic). It does
+(the regression of `--fitness-skill-weight`, fitted on the probe matches themselves, so slightly optimistic), with the
+number of observations it rests on; with fewer than 30 it prints `n/a` (raise `--probe-matches`). It does
 not recommend `--fitness-skill-weight`: all genomes of a generation play the same deals, so the adjustment cannot cancel
 deal luck inside a generation. The duplicate-deal skill score is for comparing finished players (`cli --skill-score
 duplicate`, `cli evaluate`), where it does cut the noise.
@@ -157,7 +165,11 @@ cli train --auto --out runs/auto --time-budget 30m [--opponent SPEC ...] [--refe
 ```
 
 `--opponent` lists the candidates the advisor judges (default: its battery); population, generations, matches per genome,
-rounds and hall of fame are the advisor's and cannot be given. The advice is printed first, the settings are written
+rounds and hall of fame are the advisor's and cannot be given; neither can the flags that change what a generation costs
+or means (`--reeval-matches`, `--champion-candidates`, `--racing-top`/`--racing-matches`, `--fitness`, `--features`,
+`--duplicate-rule`, `--pass-rule`, `--exchange-rule`), because the advisor's estimate assumes their defaults (give them to
+`cli train` directly, with the advisor's settings, if you need them). The arguments, the candidate specs and the `--serve`
+port are checked before the probe, so a typo fails at once instead of after minutes. The advice is printed first, the settings are written
 into the run's `config.json` like those of any run, and the advice is saved as `advisor.txt` in the run folder. Also
 `--preset`, `--probe-matches`, `--seed`, `--player-count`, `--deck-variant`.
 
@@ -166,7 +178,13 @@ into the run's `config.json` like those of any run, and the advice is saved as `
 says the last third is flat (`stop_early`, `noise_limited`, `pool_limited` or `model_limited`), `advise` prints the
 verdict messages (again only when they change) and keeps training; `stop` also ends the run once `stop_early` fires, that
 is when the smoothed curve stayed within one noise unit of its peak for the last 40% of the run. The run is then a normal
-unfinished one: `--resume --generations N` continues it. A real run (24 genomes, two opponents, 150 generations asked)
+unfinished one: `--resume` continues it (add `--generations N` to change the total). A resumed run is judged again only
+after 5 generations of its own, so it is not stopped at once on the history that stopped it. In a set (`--runs N`) a run
+stopped this way is not recorded as finished: the set ends there (the later runs wait), the summary marks the run and says
+it is not comparable with the others, and `--resume` on the set directory continues that run. With `--auto`, a plan with
+fewer than 30 generations (a budget that is too small) gets a warning that `--when-flat` will not fire. When no `run_end`
+exists yet (always, mid-run) the analysis takes the generation with the best re-evaluation mean in the events as the best
+generation, so a run is stopped only where `cli analyse-run` of the finished run would also say `stop_early`. A real run (24 genomes, two opponents, 150 generations asked)
 advised at 30, 70, 75 and 85 generations and stopped at 85 (`stop_early`: nothing visible added after generation 50).
 
 The advisor does not look at a running training from outside (a later web page could); not built: a web form (the

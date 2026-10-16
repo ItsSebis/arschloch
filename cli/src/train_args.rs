@@ -269,14 +269,21 @@ pub struct TrainArgs {
     /// Choose the settings for you: run the advisor (`cli train-advisor`, a probe of
     /// this machine, one to a few minutes), print what it chose and why, and train with it.
     /// The population, generations, matches per genome, hall of fame and the opponent pool
-    /// are the advisor's, so they cannot be given; `--opponent` then lists the *candidates*
+    /// are the advisor's, so they cannot be given (nor can `--reeval-matches`,
+    /// `--champion-candidates`, `--racing-*`, `--fitness`, `--features` and the rule flags:
+    /// the advisor's cost estimate assumes their defaults); `--opponent` then lists the *candidates*
     /// the advisor judges (default: the battery of `cli evaluate`). The settings land in the
     /// run's `config.json` as for any run, and the advice is saved as `advisor.txt` there.
     #[arg(
         long,
         conflicts_with_all = [
             "resume", "from", "runs", "population", "generations", "matches_per_genome", "hall_of_fame",
-            "hall_interval", "rounds", "player_counts", "decks"
+            "hall_interval", "rounds", "player_counts", "decks",
+            // The advisor priced a run with the default evaluation, fitness, features and
+            // rules; a flag that changes the cost or the meaning of a generation would make
+            // its plan wrong, so these are not accepted either.
+            "reeval_matches", "champion_candidates", "racing_top", "racing_matches", "fitness",
+            "features", "duplicate_rule", "pass_rule", "exchange_rule"
         ]
     )]
     pub auto: bool,
@@ -665,6 +672,15 @@ mod tests {
             &["--resume"],
             &["--runs", "2"],
             &["--from", "x"],
+            &["--reeval-matches", "50"],
+            &["--champion-candidates", "3"],
+            &["--racing-top", "0.5"],
+            &["--racing-matches", "20"],
+            &["--fitness", "mean"],
+            &["--features", "all"],
+            &["--duplicate-rule", "last-dealt-wins"],
+            &["--pass-rule", "final"],
+            &["--exchange-rule", "forced"],
         ] {
             let mut args = vec!["--out", "d", "--auto"];
             args.extend_from_slice(flag);

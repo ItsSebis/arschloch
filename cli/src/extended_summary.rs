@@ -233,11 +233,12 @@ fn skill_section(skill: &SkillOutput) -> String {
         for s in &cmp.strategies {
             let _ = writeln!(
                 out,
-                "  {}: duplicate {} vs estimate {} ({:+.1} SE apart)",
+                "  {}: duplicate {} vs estimate {} ({} apart)",
                 s.name,
                 with_error(&s.skill_score_duplicate_round1, 3, true, true),
                 with_error(&s.skill_score_estimate, 3, true, true),
                 s.difference_in_se
+                    .map_or_else(|| "n/a".to_owned(), |gap| format!("{gap:+.1} SE"))
             );
         }
     }

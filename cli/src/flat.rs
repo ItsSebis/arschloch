@@ -11,6 +11,18 @@ use sim::training::analysis::{analyse, load_runs, Verdict, VerdictCode};
 pub const MIN_GENERATIONS: u32 = 30;
 /// The analysis runs after every this many generations.
 const CHECK_EVERY: u32 = 5;
+/// A resumed run is judged again only after this many generations of its own since the resume,
+/// so a run stopped as flat is not stopped again at once on the same old history.
+pub const MIN_NEW_GENERATIONS: u32 = 5;
+
+/// How a stopped run is continued (the one hint, used by the advice text and by `cli train`).
+#[must_use]
+pub fn resume_hint(dir: &std::path::Path) -> String {
+    format!(
+        "`cli train --out {} --resume` continues it (add --generations N to change the total)",
+        dir.display()
+    )
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
 pub enum WhenFlat {
@@ -48,6 +60,8 @@ pub struct FlatWatch {
     /// The codes last advised, so the same advice is not repeated every five generations.
     advised: Vec<VerdictCode>,
     stopping: bool,
+    /// The first generation this process trained (differs from 0 on a resume).
+    first_generation: Option<u32>,
 }
 
 impl FlatWatch {
@@ -58,6 +72,7 @@ impl FlatWatch {
             mode,
             advised: Vec::new(),
             stopping: false,
+            first_generation: None,
         }
     }
 
@@ -69,7 +84,11 @@ impl FlatWatch {
     /// Called after generation number `generation` is written; the text to print, if any.
     pub fn after_generation(&mut self, generation: u32) -> Option<String> {
         let completed = generation + 1;
-        if completed < MIN_GENERATIONS || !completed.is_multiple_of(CHECK_EVERY) {
+        let first = *self.first_generation.get_or_insert(generation);
+        if completed < MIN_GENERATIONS
+            || !completed.is_multiple_of(CHECK_EVERY)
+            || completed - first < MIN_NEW_GENERATIONS
+        {
             return None;
         }
         // An unreadable or too short file is not a reason to disturb the run.
@@ -90,8 +109,8 @@ impl FlatWatch {
         if stop {
             let _ = write!(
                 text,
-                "\n  stopping here (--when-flat stop); `cli train --out {} --resume --generations N` continues the run.",
-                self.dir.display()
+                "\n  stopping here (--when-flat stop); {}.",
+                resume_hint(&self.dir)
             );
         }
         Some(text)
@@ -141,5 +160,36 @@ mod tests {
             "35 generations, but the folder holds no run"
         );
         assert!(!watch.stopping());
+    }
+
+    fn flat_run_dir(name: &str, generations: u32) -> PathBuf {
+        let dir =
+            std::env::temp_dir().join(format!("arschloch-flat-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut text = String::new();
+        for g in 0..generations {
+            let _ = writeln!(
+                text,
+                r#"{{"type":"generation","generation":{g},"champion":{{"reeval":{{"mean":0.5,"std_error":0.05}}}}}}"#
+            );
+        }
+        std::fs::write(dir.join("events.jsonl"), text).unwrap();
+        dir
+    }
+
+    #[test]
+    fn a_resumed_run_is_not_judged_before_it_has_new_generations_of_its_own() {
+        let dir = flat_run_dir("resume", 60);
+        // A run that trained generations 55..=59 itself is judged at 60 and stops.
+        let mut live = FlatWatch::new(dir.clone(), WhenFlat::Stop);
+        for g in 55..59 {
+            assert!(live.after_generation(g).is_none());
+        }
+        assert!(live.after_generation(59).is_some() && live.stopping());
+        // The same history, resumed at generation 59: one new generation is not enough.
+        let mut resumed = FlatWatch::new(dir.clone(), WhenFlat::Stop);
+        assert!(resumed.after_generation(59).is_none() && !resumed.stopping());
+        let _ = std::fs::remove_dir_all(dir);
     }
 }

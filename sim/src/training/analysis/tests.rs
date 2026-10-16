@@ -1268,3 +1268,48 @@ fn the_real_runs_that_stalled_at_the_end_are_not_still_improving() {
             .any(|v| v.code == VerdictCode::StillImproving));
     }
 }
+
+// ---- mid-run analysis (cli train --when-flat) -----------------------------
+
+/// Rises to 0.6 by generation 20, then stays flat, with one high point at generation 30.
+fn plateau_with_late_best(n: u32) -> Vec<Gen> {
+    (0..n)
+        .map(|g| {
+            let mean = if g == 30 {
+                0.66
+            } else {
+                0.6 - 0.02 * (20.0 - f64::from(g.min(20)))
+            };
+            gen(g, mean)
+        })
+        .collect()
+}
+
+#[test]
+fn mid_run_analysis_uses_the_best_generation_of_the_events() {
+    let gens = plateau_with_late_best(60);
+    let mid = analyse(&run_of(&gens));
+    assert_eq!(
+        mid.best_generation, None,
+        "the reported field stays null without run_end"
+    );
+    // The same events, truncated copy on disk, read back by the loader as `analyse-run` does.
+    let dir = temp_dir("mid-run");
+    let file = dir.join("events.jsonl");
+    write_events(&file, &gens);
+    let loaded = load_runs(&file).unwrap();
+    let from_file = analyse(&loaded.runs[0]);
+    assert_eq!(mid.verdict, from_file.verdict);
+    assert!(
+        !mid.verdict.iter().any(|v| v.code == VerdictCode::StopEarly),
+        "the best generation (30) is after the stall ({}): {:?}",
+        mid.stall_generation,
+        mid.verdict
+    );
+    // The first 45 generations of the finished run agree with a truncated copy of its events.
+    write_events(&file, &gens[..45]);
+    let truncated = analyse(&load_runs(&file).unwrap().runs[0]);
+    let prefix = analyse(&run_of(&gens[..45]));
+    assert_eq!(prefix.verdict, truncated.verdict);
+    assert_eq!(prefix.stall_generation, truncated.stall_generation);
+}

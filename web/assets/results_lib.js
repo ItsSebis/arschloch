@@ -76,10 +76,10 @@ export function agreement(data) {
       name: s.name,
       duplicate: pm(s.skill_score_duplicate_round1, 3, true),
       estimate: pm(s.skill_score_estimate, 3, true),
-      // The file writes 0.0 when the standard error or the duplicate luck share is 0, which
-      // means "not defined", not "no difference" / "nothing removed" (sim/src/skill/compare.rs).
-      gap: !s.difference_in_se ? "n/a" : `${fmt(s.difference_in_se, 1, true)} SE`,
-      removed: !s.variance_removed_ratio ? "n/a" : `${Math.round(100 * s.variance_removed_ratio)}%`,
+      // The file writes null when the standard error or the duplicate luck share is 0 (not
+      // defined); an exact 0 is a real "no difference" / "nothing removed" (sim/src/skill/compare.rs).
+      gap: s.difference_in_se == null ? "n/a" : `${fmt(s.difference_in_se, 1, true)} SE`,
+      removed: s.variance_removed_ratio == null ? "n/a" : `${Math.round(100 * s.variance_removed_ratio)}%`,
     })),
   };
 }
@@ -224,4 +224,13 @@ export function explainHtml(catalog, ids) {
   return picked
     .map((c) => `<details><summary>${esc(c.name)}</summary><p>${esc(c.meaning)}</p><p class="muted">${esc(c.formula ?? "")}</p></details>`)
     .join("");
+}
+
+// What the page does once the file given on the command line has been fetched (`served` is
+// `{ other }`, `{ error }` or `{}`): a file picked in the browser meanwhile (`picked`) wins and
+// is kept untouched, an error is shown as the comparison's status, a file becomes the second one.
+export function afterServed(picked, served) {
+  if (picked) return { other: picked, error: null };
+  if (served.error !== undefined) return { other: null, error: served.error };
+  return { other: served.other ?? null, error: null };
 }

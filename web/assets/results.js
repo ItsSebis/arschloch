@@ -1,7 +1,7 @@
 // The simulation-results page: fetches /api/results and draws it. The logic lives
 // in results_lib.js; this file only touches the DOM.
 import {
-  agreement, agreementHtml, compareHtml, compareTables, estimateHtml, estimateRows, explainHtml, explainIds,
+  afterServed, agreement, agreementHtml, compareHtml, compareTables, estimateHtml, estimateRows, explainHtml, explainIds,
   skillHtml, skillRows, strategyRows, tableHtml,
 } from "./results_lib.js";
 
@@ -10,6 +10,7 @@ const $ = (id) => document.getElementById(id);
 let current = null; // the first file, kept for comparing with a picked one
 let other = null; // the second file: { data, label } from the browser or the command line
 let pending = null; // a file picked before the first load finished
+const SERVED_LABEL = "given on the command line";
 
 function setStatus(text, ok = true) {
   $("status").textContent = text;
@@ -27,17 +28,17 @@ function drawCompare() {
   }
 }
 
-async function loadServedCompare() {
+// Fetches the file given on the command line. It only returns it (or the error text): a file
+// picked in the browser while this request was out must not be overwritten by the result.
+async function fetchServedCompare() {
   try {
     const response = await fetch("/api/compare", { cache: "no-store" });
-    if (response.status === 404) return; // no second file on the command line
+    if (response.status === 404) return {}; // no second file on the command line
     const data = await response.json();
     if (!response.ok) throw new Error(data.error ?? `HTTP ${response.status}`);
-    other = { data, label: "given on the command line" };
+    return { other: { data, label: SERVED_LABEL } };
   } catch (error) {
-    // The first file is fine: the failure belongs to the comparison, not to the page status.
-    $("compare").innerHTML = "";
-    $("compare-status").textContent = String(error.message ?? error);
+    return { error: String(error.message ?? error) };
   }
 }
 

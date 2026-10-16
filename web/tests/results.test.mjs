@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  agreement, agreementHtml, compareHtml, compareTables, estimateHtml, estimateRows, explainHtml, explainIds, esc,
+  afterServed, agreement, agreementHtml, compareHtml, compareTables, estimateHtml, estimateRows, explainHtml, explainIds, esc,
   placeColour, skillRows, strategyRows, tableHtml, verdictOf,
 } from "../assets/results_lib.js";
 
@@ -216,13 +216,18 @@ test("the comparison always says what it assumes, and the rating gets no verdict
   assert.ok(cmp.notes.every((n) => !/is empty/.test(n)));
 });
 
-test("the agreement shows n/a where the file wrote 0.0 for an undefined value", () => {
+test("the agreement shows n/a only where the file wrote null; an exact 0 is a value", () => {
   const d = withEstimate();
-  d.extended.skill.comparison.strategies[0].difference_in_se = 0;
-  d.extended.skill.comparison.strategies[0].variance_removed_ratio = 0;
+  d.extended.skill.comparison.strategies[0].difference_in_se = null;
+  d.extended.skill.comparison.strategies[0].variance_removed_ratio = null;
   const ag = agreement(d);
   assert.equal(ag.rows[0].gap, "n/a");
   assert.equal(ag.rows[0].removed, "n/a");
+  d.extended.skill.comparison.strategies[0].difference_in_se = 0;
+  d.extended.skill.comparison.strategies[0].variance_removed_ratio = 0;
+  const zero = agreement(d);
+  assert.notEqual(zero.rows[0].gap, "n/a");
+  assert.equal(zero.rows[0].removed, "0%");
   assert.ok(agreementHtml(ag).includes("Share of duplicate's luck removed"));
 });
 
@@ -235,4 +240,14 @@ test("a strategy named like an Object property is looked up as a name", () => {
   assert.deepEqual(score.rows.map((r) => r.name).slice(-1), ["constructor"]);
   assert.equal(score.rows.at(-1).diff, "–");
   assert.ok(cmp.notes.some((n) => /Only in the second file: constructor/.test(n)));
+});
+
+test("a file picked while the command-line file was loading is not overwritten by it", () => {
+  const picked = { data: { a: 1 }, label: "mine.json" };
+  const served = { other: { data: { b: 2 }, label: "given on the command line" } };
+  assert.equal(afterServed(picked, served).other, picked);
+  assert.equal(afterServed(picked, { error: "HTTP 500" }).error, null, "an error does not hide the pick");
+  assert.equal(afterServed(null, served).other, served.other);
+  assert.equal(afterServed(null, { error: "HTTP 500" }).error, "HTTP 500");
+  assert.equal(afterServed(null, {}).other, null);
 });

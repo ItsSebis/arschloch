@@ -12,6 +12,7 @@ use sim::training::{
 
 use crate::advisor::{self, AdvisorArgs};
 use crate::args::{DeckVariantArg, DuplicateRuleArg, StrategyArg};
+use crate::flat;
 use crate::train_args::{TrainArgs, DEFAULT_OPPONENTS};
 use crate::train_output::{
     render_set_run_banner, render_set_summary, SetContext, TerminalObserver,
@@ -242,6 +243,7 @@ fn next_set_trainer(
 fn run_set(args: &TrainArgs, mut set: SetFile, resuming: bool) -> anyhow::Result<()> {
     let started = std::time::Instant::now();
     let mut ends: Vec<(String, RunEnd)> = Vec::new();
+    let mut stopped_at = None;
     let first_unfinished = u32::try_from(set.finished_secs.len()).unwrap_or(u32::MAX) + 1;
     for index in first_unfinished..=set.total_runs {
         let out = args.out.join(run_dir_name(index));
@@ -271,6 +273,14 @@ fn run_set(args: &TrainArgs, mut set: SetFile, resuming: bool) -> anyhow::Result
             observer = observer.with_flat(mode);
         }
         let end = trainer.run(&mut observer)?;
+        let planned = trainer.config().generations;
+        if end.generations_completed < planned {
+            // Stopped by --when-flat: not finished, so it is not recorded and a set `--resume`
+            // continues this run; the later runs wait for it.
+            stopped_at = Some(planned);
+            ends.push((run_dir_name(index), end));
+            break;
+        }
         set.finished_secs.push(end.elapsed_secs);
         set.current_run = index.min(set.total_runs);
         set.write(&args.out)?;
@@ -278,7 +288,7 @@ fn run_set(args: &TrainArgs, mut set: SetFile, resuming: bool) -> anyhow::Result
     }
     println!(
         "\n{}",
-        render_set_summary(&ends, started.elapsed().as_secs_f64())
+        render_set_summary(&ends, started.elapsed().as_secs_f64(), stopped_at)
     );
     Ok(())
 }
@@ -300,6 +310,27 @@ fn advisor_args(args: &TrainArgs) -> AdvisorArgs {
     }
 }
 
+/// Runs the advisor and puts its plan into `args`; returns the advice text (saved as `advisor.txt`).
+fn apply_advice(args: &mut TrainArgs) -> anyhow::Result<String> {
+    let advice = advisor::advise(&advisor_args(args), true)?;
+    print!("{}", advice.text);
+    if args.when_flat.is_some() && advice.plan.generations < flat::MIN_GENERATIONS {
+        eprintln!(
+            "warning: --when-flat will not fire: the plan has only {} generations and nothing is judged before {}; give --time-budget more time",
+            advice.plan.generations,
+            flat::MIN_GENERATIONS
+        );
+    }
+    args.population = advice.plan.population;
+    args.generations = Some(advice.plan.generations);
+    args.matches_per_genome = advice.plan.matches_per_genome;
+    args.rounds = advice.plan.rounds;
+    args.hall_of_fame = advice.plan.hall_of_fame;
+    args.hall_interval = advice.plan.hall_interval;
+    args.opponent.clone_from(&advice.pool);
+    Ok(advice.text)
+}
+
 pub fn run(raw_args: impl Iterator<Item = String>) -> anyhow::Result<()> {
     let mut args = TrainArgs::parse_from(std::iter::once("cli train".to_owned()).chain(raw_args));
     if args.threads > 0 {
@@ -309,27 +340,16 @@ pub fn run(raw_args: impl Iterator<Item = String>) -> anyhow::Result<()> {
             .context("failed to configure thread pool")?;
     }
 
-    // --auto: the advisor decides, before anything is created.
-    let advice = if args.auto {
+    // --auto: everything cheap is checked before the probe (which takes minutes), so a typo
+    // or a busy port is reported at once; the advisor itself runs after the dashboard is up.
+    if args.auto {
         anyhow::ensure!(
             !args.out.join("checkpoint.json").exists(),
             "{} already holds a run; choose another directory",
             args.out.display()
         );
-        let advice = advisor::advise(&advisor_args(&args), true)?;
-        print!("{}", advice.text);
-        args.population = advice.plan.population;
-        args.generations = Some(advice.plan.generations);
-        args.matches_per_genome = advice.plan.matches_per_genome;
-        args.rounds = advice.plan.rounds;
-        args.hall_of_fame = advice.plan.hall_of_fame;
-        args.hall_interval = advice.plan.hall_interval;
-        args.opponent.clone_from(&advice.pool);
-        // What the advisor measured in its probe is the advice; nothing else stays running.
-        Some(advice.text)
-    } else {
-        None
-    };
+        checked_args(&args)?;
+    }
 
     // A set is recognised by its set file when resuming, by --runs when
     // starting; a plain run (`--runs 1`) is unchanged.
@@ -362,6 +382,13 @@ pub fn run(raw_args: impl Iterator<Item = String>) -> anyhow::Result<()> {
         None => None,
     };
 
+    // --auto: the advisor decides, before anything is created.
+    let advice = if args.auto {
+        Some(apply_advice(&mut args)?)
+    } else {
+        None
+    };
+
     if let Some(set) = existing_set {
         run_set(&args, set, true)?;
     } else if args.runs > 1 {
@@ -389,10 +416,10 @@ pub fn run(raw_args: impl Iterator<Item = String>) -> anyhow::Result<()> {
         let end = trainer.run(&mut observer)?;
         if end.generations_completed < trainer.config().generations {
             println!(
-                "stopped after {} of {} generations; `cli train --out {} --resume` continues it",
+                "stopped after {} of {} generations; {}",
                 end.generations_completed,
                 trainer.config().generations,
-                args.out.display()
+                flat::resume_hint(&args.out)
             );
         }
     }

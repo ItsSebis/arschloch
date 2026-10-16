@@ -298,7 +298,10 @@ and the features live only in the separate estimator batch):
 ```
 
 `extended.skill` and its `duplicate`, `estimate`, `comparison` parts exist
-only for the modes that compute them. Every catalogue entry's `json_path`
+only for the modes that compute them. In `comparison.strategies[]`,
+`difference_in_se` and `variance_removed_ratio` are `null` when they are not
+defined (both standard errors 0, or no duplicate luck share); files written
+before v0.7 hold `0.0` there. Every catalogue entry's `json_path`
 says where its value lives (`docs/STATISTICS.md` lists them), and a test
 checks that against a real run.
 

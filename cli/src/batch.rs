@@ -225,11 +225,16 @@ mod tests {
             comparison
                 .strategies
                 .iter()
-                .any(|s| s.difference_in_se.abs() > 1e-9),
+                .any(|s| s.difference_in_se.is_some_and(|gap| gap.abs() > 1e-9)),
             "an independent batch cannot reproduce the duplicate numbers exactly"
         );
         for s in &comparison.strategies {
-            assert!(s.difference_in_se.abs() < 4.5, "{}: {:?}", s.name, s);
+            assert!(
+                s.difference_in_se.unwrap().abs() < 4.5,
+                "{}: {:?}",
+                s.name,
+                s
+            );
         }
         assert!((comparison.mean_variance_removed_ratio - 1.0).abs() > 1e-9);
     }
