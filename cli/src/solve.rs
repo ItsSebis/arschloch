@@ -123,12 +123,13 @@ fn parse_table(
 }
 
 /// The seats that passed in this trick: seats other than ours that are still
-/// in the round, and only when a combo is on the table.
+/// in the round, only when a combo is on the table, and every seat that acted
+/// between the holder and us (a seat that is not out).
 fn parse_passed(
     text: &str,
     seat: SeatId,
     sizes: &[usize],
-    combo_on_table: bool,
+    holder: Option<SeatId>,
 ) -> Result<Vec<usize>, String> {
     let passed = seat_list(text, "passed")?;
     if let Some(bad) = passed
@@ -139,8 +140,24 @@ fn parse_passed(
             "passed: seat {bad} cannot have passed (not a seat, our own seat, or already out)"
         ));
     }
-    if !combo_on_table && !passed.is_empty() {
-        return Err("passed: nobody can have passed when we lead a fresh trick".to_owned());
+    let Some(holder) = holder else {
+        return if passed.is_empty() {
+            Ok(passed)
+        } else {
+            Err("passed: nobody can have passed when we lead a fresh trick".to_owned())
+        };
+    };
+    let n = sizes.len();
+    let between = (1..n)
+        .map(|k| (usize::from(holder) + k) % n)
+        .take_while(|&s| s != usize::from(seat));
+    if let Some(skipped) = between
+        .into_iter()
+        .find(|s| sizes[*s] > 0 && !passed.contains(s))
+    {
+        return Err(format!(
+            "passed: seat {skipped} acts between the holder (seat {holder}) and us (seat {seat}), so it must have passed (or be out)"
+        ));
     }
     Ok(passed)
 }
@@ -223,7 +240,7 @@ pub(crate) fn parse_position(text: &str) -> Result<Observation, String> {
         get("passed").unwrap_or(""),
         seat,
         &sizes,
-        on_table.is_some(),
+        on_table.map(|(holder, _)| holder),
     )?;
 
     let others: usize = (0..n)
@@ -285,6 +302,22 @@ pub(crate) fn render(report: &MoveReport, observation: &Observation) -> String {
             stats.best_place + 1,
             stats.worst_place + 1,
             stats.best_share * 100.0
+        );
+    }
+    let twin = |card: &Card| {
+        observation
+            .unseen
+            .iter()
+            .any(|u| u.rank == card.rank && u.suit == card.suit)
+    };
+    let known = observation
+        .hand
+        .iter()
+        .chain(observation.on_table.iter().flat_map(|(_, c)| c.cards()));
+    if known.into_iter().any(twin) {
+        out.push_str(
+            "note: identical cards of a double deck are told apart by deal order, which a position cannot show; \
+             here your copies count as dealt first (they win ties under `duplicate: first`, lose them under `last`).\n",
         );
     }
     out
@@ -352,9 +385,8 @@ mod tests {
             .contains("players"));
     }
 
-    #[test]
-    fn a_trick_in_progress_with_a_pass_parses() {
-        // Four players; seat 2 holds the combo on the table (a pair of 8s), seat 1 passed.
+    /// Four players, seat 2 holds a pair of 8s on the table, seat 0 is to move.
+    fn four_player_trick(passed: &str) -> String {
         let all: Vec<String> = standard_deck(DeckVariant::Single)
             .iter()
             .map(card_token)
@@ -362,21 +394,65 @@ mod tests {
         let mine = ["9C", "KD"];
         let table = ["8H", "8S"];
         let unseen = ["2D", "3D", "4D", "5D", "6D"]; // seats 1 (2 cards), 2 (1), 3 (2)
-        let played: Vec<&String> = all
+        let played: Vec<&str> = all
             .iter()
-            .filter(|t| !mine.contains(&t.as_str()))
-            .filter(|t| !table.contains(&t.as_str()))
-            .filter(|t| !unseen.contains(&t.as_str()))
+            .map(String::as_str)
+            .filter(|t| {
+                ![&mine[..], &table[..], &unseen[..]]
+                    .iter()
+                    .any(|set| set.contains(t))
+            })
             .collect();
-        let text = format!(
-            "players: 4\nseat: 0\nhand: {}\nsizes: 2 2 1 2\ntable: pair {} by 2\npassed: 1\nplayed: {}\n",
+        format!(
+            "players: 4\nseat: 0\nhand: {}\nsizes: 2 2 1 2\ntable: pair {} by 2\npassed: {passed}\nplayed: {}\n",
             mine.join(" "),
             table.join(" "),
-            played.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(" ")
+            played.join(" ")
+        )
+    }
+
+    #[test]
+    fn a_trick_in_progress_with_a_pass_parses() {
+        // Seat 3 acted between the holder (seat 2) and us, so it passed.
+        let observation = parse_position(&four_player_trick("3")).unwrap();
+        assert_eq!(observation.on_table.map(|(holder, _)| holder), Some(2));
+        assert_eq!(observation.in_trick, vec![true, true, true, false]);
+        assert_eq!(observation.unseen.len(), 5);
+    }
+
+    #[test]
+    fn a_seat_that_must_have_acted_but_did_not_pass_is_reported() {
+        // Seat 3 sits between the holder (seat 2) and us: it cannot still be in.
+        let error = parse_position(&four_player_trick("1")).unwrap_err();
+        assert!(
+            error.contains("seat 3") && error.contains("between"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn identical_cards_on_both_sides_of_a_double_deck_are_noted() {
+        let mut all: Vec<String> = Vec::new();
+        for card in standard_deck(DeckVariant::Double) {
+            all.push(card_token(&card));
+        }
+        // Keep one AC in hand and leave the other AC and 2D unseen.
+        let mut played = all.clone();
+        for token in ["AC", "AC", "2D"] {
+            let at = played.iter().position(|t| t == token).unwrap();
+            played.remove(at);
+        }
+        let text = format!(
+            "players: 3\ndeck: double\nseat: 0\nhand: AC\nsizes: 1 1 1\ntable: lead\nplayed: {}\n",
+            played.join(" ")
         );
         let observation = parse_position(&text).unwrap();
-        assert_eq!(observation.on_table.map(|(holder, _)| holder), Some(2));
-        assert_eq!(observation.in_trick, vec![true, false, true, true]);
-        assert_eq!(observation.unseen.len(), 5);
+        let report =
+            sim::solver::analyze(&observation, &sim::solver::SolverConfig::default()).unwrap();
+        assert!(render(&report, &observation).contains("identical cards"));
+        // No twin on the other side: no note.
+        let plain = parse_position(&endgame_text()).unwrap();
+        let report = sim::solver::analyze(&plain, &sim::solver::SolverConfig::default()).unwrap();
+        assert!(!render(&report, &plain).contains("identical cards"));
     }
 }

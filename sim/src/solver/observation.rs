@@ -70,12 +70,6 @@ impl Observation {
         })
     }
 
-    /// Seats that already emptied their hand.
-    #[must_use]
-    pub fn seats_out(&self) -> usize {
-        self.hand_sizes.iter().filter(|&&size| size == 0).count()
-    }
-
     /// The round with `deal` (hands by seat) in place, or `None` if the
     /// position is inconsistent (see [`Round::from_position`]).
     #[must_use]
@@ -151,7 +145,11 @@ mod tests {
             // order; seats already out come first in the rebuilt round.
             assert_eq!(
                 live_order[out_before..],
-                rebuilt_order[observation.seats_out()..]
+                rebuilt_order[observation
+                    .hand_sizes
+                    .iter()
+                    .filter(|&&size| size == 0)
+                    .count()..]
             );
             checked += 1;
         });

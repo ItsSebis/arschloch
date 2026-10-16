@@ -65,7 +65,7 @@ impl Walker<'_> {
         }
         let card = self.observation.unseen[index];
         for seat in 0..self.hands.len() {
-            if self.capacity[seat] == 0 {
+            if self.capacity[seat] == 0 || self.beats_single_ceiling(seat, card) {
                 continue;
             }
             self.capacity[seat] -= 1;
@@ -79,36 +79,33 @@ impl Walker<'_> {
         }
     }
 
-    /// No opponent holds a combo that beats its pass ceiling: for every
-    /// rank group of `g` cards and every size `s <= g`, the group's highest
-    /// card must not beat the ceiling at size `s`.
+    /// A card above the seat's lowest ceiling can never be in its hand: pruning
+    /// here keeps contradictory ceilings from costing a walk over every assignment.
+    fn beats_single_ceiling(&self, seat: usize, card: Card) -> bool {
+        let rule = self.observation.duplicate_rule;
+        self.observation.ceilings[seat]
+            .ceiling(1, rule)
+            .is_some_and(|ceiling| card.compare(&ceiling, rule) == Ordering::Greater)
+    }
+
+    /// No opponent holds a combo that beats its pass ceiling. Ceilings are
+    /// closed upwards (a larger size has the lower, stricter ceiling), so the
+    /// size of the whole rank group is the one to check.
     fn consistent(&self) -> bool {
         let rule = self.observation.duplicate_rule;
-        for (seat, hand) in self.hands.iter().enumerate() {
-            if seat == usize::from(self.observation.seat) || hand.is_empty() {
-                continue;
+        self.hands.iter().enumerate().all(|(seat, hand)| {
+            if seat == usize::from(self.observation.seat) {
+                return true;
             }
-            let ceilings = &self.observation.ceilings[seat];
-            for card in hand {
-                let group: Vec<&Card> = hand.iter().filter(|c| c.rank == card.rank).collect();
-                let top = group
-                    .iter()
-                    .copied()
-                    .max_by(|a, b| a.compare(b, rule))
-                    .expect("the group holds at least the card itself");
-                if top != card {
-                    continue; // look at each group once, via its highest card
-                }
-                for size in 1..=group.len() {
-                    if let Some(ceiling) = ceilings.ceiling(size, rule) {
-                        if top.compare(&ceiling, rule) == Ordering::Greater {
-                            return false;
-                        }
-                    }
-                }
-            }
-        }
-        true
+            let mut sorted = hand.clone();
+            sorted.sort_by(|a, b| a.compare(b, rule));
+            sorted.chunk_by(|a, b| a.rank == b.rank).all(|group| {
+                let top = &group[group.len() - 1];
+                self.observation.ceilings[seat]
+                    .ceiling(group.len(), rule)
+                    .is_none_or(|ceiling| top.compare(&ceiling, rule) != Ordering::Greater)
+            })
+        })
     }
 }
 
@@ -218,6 +215,58 @@ mod tests {
             DuplicateRule::FirstDealtWins,
         );
         assert_eq!(for_each_deal(&o, |_| true), 0);
+    }
+
+    #[test]
+    fn contradictory_ceilings_are_found_without_walking_every_assignment() {
+        // 18 unseen cards, 6 for each of three opponents: 17 million assignments.
+        // Every opponent passed on a 3 although every unseen card is higher, so
+        // none is consistent.
+        let ranks = [
+            Rank::Four,
+            Rank::Five,
+            Rank::Six,
+            Rank::Seven,
+            Rank::Eight,
+            Rank::Nine,
+            Rank::Ten,
+            Rank::Jack,
+            Rank::Queen,
+        ];
+        let unseen: Vec<Card> = (0..18u8)
+            .map(|i| {
+                let suit = if i % 2 == 0 {
+                    Suit::Hearts
+                } else {
+                    Suit::Spades
+                };
+                card(ranks[usize::from(i) / 2], suit, i + 1)
+            })
+            .collect();
+        let three = Combo::new(vec![card(Rank::Three, Suit::Hearts, 30)]).unwrap();
+        let o = Observation {
+            duplicate_rule: DuplicateRule::FirstDealtWins,
+            seat: 0,
+            player_count: 4,
+            hand: vec![card(Rank::Two, Suit::Clubs, 0)],
+            hand_sizes: vec![1, 6, 6, 6],
+            in_trick: vec![true; 4],
+            ceilings: read_pass_ceilings(
+                4,
+                &[],
+                &[(1, three, 0), (2, three, 0), (3, three, 0)],
+                DuplicateRule::FirstDealtWins,
+            ),
+            unseen,
+            on_table: None,
+        };
+        let started = std::time::Instant::now();
+        assert_eq!(for_each_deal(&o, |_| true), 0);
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(2),
+            "{:?}",
+            started.elapsed()
+        );
     }
 
     #[test]

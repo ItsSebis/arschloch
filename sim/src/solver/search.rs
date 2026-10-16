@@ -18,10 +18,10 @@ pub type Places = [u8; 6];
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BudgetExceeded;
 
-/// Memo entries kept per search: a position is about 150 bytes, so this
-/// bounds the memory of one decision to roughly 75 MB however large the
-/// node budget is.
-const MEMO_LIMIT: usize = 500_000;
+/// Memo entries per search, allocated once up front: 7/8 of 2^18 table
+/// slots, so the table never resizes. A slot is about 150 bytes: a fixed
+/// ~40 MB per decision in flight, however large the node budget is.
+const MEMO_LIMIT: usize = (1 << 18) / 8 * 7;
 
 /// Everything that decides how a deal continues, without any heap data.
 /// Cards are identified by their `deal_index` (unique within a round), as
@@ -82,7 +82,7 @@ impl Position {
 }
 
 pub struct Search {
-    remaining: u64,
+    budget: u64,
     used: u64,
     memo: HashMap<Position, Places>,
     memo_limit: usize,
@@ -92,9 +92,9 @@ impl Search {
     #[must_use]
     pub fn new(node_budget: u64) -> Self {
         Self {
-            remaining: node_budget,
+            budget: node_budget,
             used: 0,
-            memo: HashMap::new(),
+            memo: HashMap::with_capacity(MEMO_LIMIT),
             memo_limit: MEMO_LIMIT,
         }
     }
@@ -104,17 +104,21 @@ impl Search {
         self.used
     }
 
-    /// At most this many positions are remembered (the default keeps the
-    /// memory of one search bounded).
-    #[must_use]
-    pub fn with_memo_limit(mut self, limit: usize) -> Self {
+    /// Remembers at most `limit` positions (tests: a tiny memo must not change values).
+    #[cfg(test)]
+    fn with_memo_limit(mut self, limit: usize) -> Self {
         self.memo_limit = limit;
         self
     }
 
-    #[must_use]
-    pub fn memo_len(&self) -> usize {
+    #[cfg(test)]
+    fn memo_len(&self) -> usize {
         self.memo.len()
+    }
+
+    #[cfg(test)]
+    fn memo_capacity(&self) -> usize {
+        self.memo.capacity()
     }
 
     /// The outcome of each legal move of the seat to move (engine order).
@@ -149,10 +153,9 @@ impl Search {
         if let Some(&places) = self.memo.get(&position) {
             return Ok(places);
         }
-        if self.remaining == 0 {
+        if self.used >= self.budget {
             return Err(BudgetExceeded);
         }
-        self.remaining -= 1;
         self.used += 1;
         let mut best: Option<Places> = None;
         for mv in round.legal_moves() {
@@ -366,6 +369,37 @@ mod tests {
             checked += 1;
         });
         assert!(checked > 10, "only {checked} positions were small enough");
+    }
+
+    #[test]
+    fn the_memo_is_allocated_once_and_never_resizes() {
+        let hands = vec![
+            vec![
+                c(Rank::Three, Suit::Clubs, 0),
+                c(Rank::Four, Suit::Clubs, 1),
+                c(Rank::Five, Suit::Clubs, 2),
+                c(Rank::Six, Suit::Clubs, 3),
+            ],
+            vec![
+                c(Rank::Seven, Suit::Clubs, 4),
+                c(Rank::Eight, Suit::Clubs, 5),
+            ],
+            vec![c(Rank::Nine, Suit::Clubs, 6), c(Rank::Ten, Suit::Clubs, 7)],
+        ];
+        let round = Round::from_position(hands, RULE, 0, None, &[false; 3]).unwrap();
+        let mut search = Search::new(10_000_000);
+        let before = search.memo_capacity();
+        assert!(before >= MEMO_LIMIT, "{before}");
+        search.root_values(&round).unwrap();
+        assert!(
+            search.memo_len() > 100,
+            "the search must fill part of the memo"
+        );
+        assert_eq!(
+            search.memo_capacity(),
+            before,
+            "a resize would double the memory"
+        );
     }
 
     #[test]

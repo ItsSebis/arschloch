@@ -633,3 +633,31 @@ fn combo_holder_follows_the_trick() {
     assert_eq!(rebuilt.combo_holder(), Some(0));
     assert_eq!(rebuilt.player_count(), 3);
 }
+
+#[test]
+fn from_position_rejects_a_trick_in_which_a_seat_skipped_its_turn() {
+    let rule = DuplicateRule::FirstDealtWins;
+    let five = combo(vec![card(Rank::Five, Suit::Hearts)]);
+    let mut four = hands3();
+    four.push(vec![
+        card(Rank::Eight, Suit::Clubs),
+        card(Rank::Two, Suit::Clubs),
+    ]);
+    // Seat 2 holds the table and seat 0 is to move: seat 3 acted in between,
+    // so it must have passed (or be out).
+    assert!(Round::from_position(four.clone(), rule, 0, Some((2, five)), &[false; 4]).is_none());
+    assert!(Round::from_position(
+        four.clone(),
+        rule,
+        0,
+        Some((2, five)),
+        &[false, false, false, true]
+    )
+    .is_some());
+    // Seats after the one to move have not acted yet: no pass required.
+    assert!(Round::from_position(four.clone(), rule, 1, Some((0, five)), &[false; 4]).is_some());
+    // A seat that is out needs no pass.
+    let mut out = four;
+    out[3].clear();
+    assert!(Round::from_position(out, rule, 0, Some((2, five)), &[false; 4]).is_some());
+}

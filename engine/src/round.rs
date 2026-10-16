@@ -106,8 +106,9 @@ impl Round {
     /// a fresh trick). Returns `None` for an inconsistent position: not 3-6
     /// seats, `passed` of the wrong length, fewer than two seats still in,
     /// `turn` out of range, out, or having passed, a holder equal to `turn`
-    /// or having passed, a passed seat that is out, or passes on a fresh
-    /// trick.
+    /// or having passed, a passed seat that is out, passes on a fresh trick,
+    /// or a seat between the holder and `turn` that neither passed nor is out
+    /// (it would have had to act).
     #[must_use]
     pub fn from_position(
         hands: Vec<Vec<Card>>,
@@ -146,6 +147,19 @@ impl Round {
             }
             None
         };
+        // Seats between the holder and the seat to move have already acted in
+        // this trick: each passed or went out.
+        if let Some(holder) = holder {
+            let skipped = (1..n)
+                .map(|offset| (usize::from(holder) + offset) % n)
+                .take_while(|&seat| seat != turn_index);
+            if skipped
+                .into_iter()
+                .any(|seat| !passed[seat] && !hands[seat].is_empty())
+            {
+                return None;
+            }
+        }
         let mut passed_seats = [false; 6];
         passed_seats[..n].copy_from_slice(passed);
         let finishing_order = (0..n)

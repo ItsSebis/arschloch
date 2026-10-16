@@ -75,17 +75,18 @@ impl EndgameSolver {
         self.count(|s| s.eligible += 1);
         match analyze(&observation, &self.config) {
             Ok(report) => {
-                let best = report.best().mv;
-                let usable = legal_moves.contains(&best);
+                // The solver searches the engine's own moves, so this only
+                // guards against a bug; a mismatch must not reach the engine.
+                let best = Some(report.best().mv).filter(|mv| legal_moves.contains(mv));
                 self.count(|s| {
                     s.nodes += report.nodes;
-                    if usable {
+                    if best.is_some() {
                         s.solved += 1;
                     } else {
                         s.fell_back_other += 1;
                     }
                 });
-                usable.then_some(best)
+                best
             }
             Err(SolveError::BudgetExceeded) => {
                 self.count(|s| s.fell_back_budget += 1);

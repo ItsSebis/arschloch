@@ -35,13 +35,10 @@ impl MoveReport {
     /// Panics on an empty report (`analyze` never returns one).
     #[must_use]
     pub fn best(&self) -> &MoveStats {
-        let mut best = &self.moves[0];
-        for stats in &self.moves[1..] {
-            if stats.mean_place < best.mean_place {
-                best = stats;
-            }
-        }
-        best
+        self.moves
+            .iter()
+            .min_by(|a, b| a.mean_place.total_cmp(&b.mean_place))
+            .expect("analyze never returns an empty report")
     }
 
     /// `1 - 2 * place / (n - 1)`: +1 first out, -1 last.

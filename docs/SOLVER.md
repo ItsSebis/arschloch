@@ -39,7 +39,8 @@ seat: 0                 # the seat to move
 hand: 5C 9D KH          # our cards (2-10, J, Q, K, A, then D H S C)
 sizes: 3 2 2 2          # cards held by every seat in seat order (0 = already out)
 table: lead             # `lead`, or the combo on the table and who holds it: pair 8H 8S by 2
-passed: 1               # seats that passed in this trick (only with a combo on the table)
+passed: 3               # seats that passed in this trick (only with a combo on the table); every seat that acts
+                        # between the holder and us must be listed here (or be out)
 played: 2C 2H ...       # every card played so far this round, not counting `table`
 ```
 
@@ -74,5 +75,13 @@ Those are the lessons; `docs/baselines/solver/README.md` has the first results.
 
 - Cost grows quickly with the number of unseen cards; `max-unseen` and `budget` bound it. Measured defaults: 6 unseen cards, 2M nodes per decision (T=8 already takes minutes per 200 games). At T=6 the solver plays exactly about 11% of the decisions of a 4-player single-deck round.
 - It beats the strategy it falls back to clearly (+0.14 score head to head) but not the trained neat champion, whose strength lies in the part of the round the solver does not play; see the measurements.
-- The unseen cards are weighted equally; hand reading only removes impossible splits.
+- The unseen cards are weighted equally; hand reading only removes impossible splits. Pass ceilings are used as hard
+  facts: a seat that passed on purpose while holding a beating card (`adaptive`'s deception, `hold-back-pairs`) makes
+  the real split look impossible until that seat plays above its ceiling. The solver then solves the wrong splits, or
+  finds none and plays its fallback; this is counted in `SolverStats::fell_back_other`. A switch to ignore ceilings
+  (the spec's `use_pass_ceilings`) is not built.
+- A double deck has identical cards that are told apart by deal order, which a written-down position cannot show:
+  `cli solve` numbers your copies first and says so when it matters.
+- `endgame-solver:max-unseen=N` with a large N is bounded by the node budget per decision, not by N; the enumeration
+  of splits prunes contradictory pass ceilings early.
 - A later phase (the spec's phase B) will sample splits to search the early game as well.
