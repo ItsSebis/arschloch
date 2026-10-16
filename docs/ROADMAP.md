@@ -1,9 +1,9 @@
 # Roadmap
 
 Phase numbers are stable names (specs, commits and code comments refer to them), not
-an order. The sections below are ordered by status: **done** first, then **in
-progress**, then **planned**, in the order they are recommended to be done. The table
-is the overview; the sections hold the details.
+an order. **Done** phases come first, with what each one built; below them, under
+"Open work", is everything that was not done, in the order to do it. The table is the
+overview of the done phases.
 
 Each phase should leave the workspace building, tested, and documented before the
 next one starts. Phases are scoped to be reviewable in a single sitting; a phase that
@@ -29,18 +29,22 @@ grows beyond that should be split.
 | 15 | Rule change: the exchange gives your highest cards | done |
 | 17 | Run analysis tool (CLI and web) | done |
 | 19 | CPU performance and simplification | done |
-| 21 | Endgame solver and determinized search | done (phase B open) |
+| 21 | Endgame solver and determinized search | done |
 | 22 | Desktop GUI to configure and run simulations | done |
 | 11b | Web views for simulation results | done |
-| 18 | Training advisor: pick the opponents and settings for you | done, reduced |
-| 16 | Self-play and co-evolutionary training | idea |
-| 20 | GPU simulation port (RTX 4070) | planned, not started |
+| 18 | Training advisor: pick the opponents and settings for you | done |
 
-**Order of the open work, and why:**
+**Open work, in working order** (details below the done phases):
 
-1. **Phase 16, self-play:** research; the Phase 17 analysis is how to judge it.
-2. **Phase 20, the GPU port:** the largest and least certain; it only pays off for long
-   training runs.
+1. Pack the desktop window into the release archives (Phase 22)
+2. Desktop window: file pickers, progress, a solver editor, a training form (Phase 22)
+3. Results page: the luck-adjusted estimate, comparing two files (Phase 11b)
+4. Training advisor, the rest: `train --auto`, scoring against genomes, early stop, a web form (Phase 18)
+5. Settle the `hidden` input set with fresh seeds and longer runs; the casino bot's port (Phase 13)
+6. Simplification left over from Phase 19 (`session.rs`, legacy rule paths, file sizes)
+7. Endgame solver, phase B: the early game (Phase 21)
+8. Phase 16, self-play and co-evolutionary training (an idea)
+9. Phase 20, the GPU port (the largest and least certain)
 
 # Done
 
@@ -314,9 +318,9 @@ t = 3.68, 10 seeds each); the fitness variants (`risk`, `tanh`) and racing
 show no measurable gain and stay opt-in; one model for all tables
 (`--features all`, sizes 3-6, both decks) matches the specialists except at 3
 players. No default changed (`--features` is still `base`); making `hidden`
-the default waits for a confirmation run with fresh seeds. **Follow-up:** the
-casino repo's TypeScript NEAT bot only implements feature set v1, so `hidden`
-and `all` genomes need its feature port extended first.
+the default waits for a confirmation run with fresh seeds (open work, "Open work").
+The casino repo's TypeScript NEAT bot only implements feature set v1, so `hidden`
+and `all` genomes need its feature port extended first (also open work).
 
 From `docs/Notes.md`. These change what the evolved players are rewarded for
 and what they can see, so every item needs the Phase 10 discipline: a spec
@@ -443,8 +447,8 @@ hand with a throwaway script). Turn that into a tool so every run can answer
 
 ## Phase 19 — CPU performance and simplification (done)
 
-**Status:** built and merged (PR #6, released in v0.5.0); measurements in
-`docs/baselines/perf/README.md`.
+**Status:** the speed work is built and merged (PR #6, released in v0.5.0); measurements in
+`docs/baselines/perf/README.md`. Its simplification part is only partly done: what is left is open work (item 6).
 
 The cheaper road to faster training, done before any GPU work (Phase 20), and
 useful on its own. Reference points measured on the owner's Ryzen 7800X3D (8
@@ -535,22 +539,20 @@ plan: `docs/superpowers/plans/2026-10-16-endgame-solver.md`, user guide `docs/SO
 `docs/baselines/solver/README.md`). Result: the solver clearly beats the strategy it falls back to (+0.14 score head to
 head, luck-free) but plays exactly only the last ~11% of the decisions, so it does not catch the neat-v2 champion
 (+0.63 against -0.08 in the same table). The hand-off threshold defaults to 6 unseen cards (T=8 is too costly). A
-position memo made the search about 95x cheaper. Phase B below is the way to close the gap.
+position memo made the search about 95x cheaper. The early-game sampler (phase B) that would close the gap is open
+work, see "Open work".
 
 Goal: find the best overall strategy for real games, and learn from it. A
 search-based player that, from one seat's view, considers every distribution of
 the unseen cards the other players could hold and picks the move with the best
 expected finishing position (max^n, rational opponents).
 
-- **Phase A (done):** `Round::from_position` in `engine` (a pure
+- **Built:** `Round::from_position` in `engine` (a pure
   addition), an exact `EndgameSolver` strategy that solves once few cards are unseen
   and defers to a fallback before that, `endgame-solver[:OPTIONS]` as a strategy spec,
   `cli solve` (explain a written-down situation move by move) and `cli solver-gap`
   (where do Adaptive, endgame-denial and the NEAT champions disagree with the solver,
   and what does it cost), a measured hand-off threshold and a luck-free head-to-head.
-- **Phase B (not started, outline in the spec):** a depth-limited sampler for the early
-  game (sample deals, search to a depth, a leaf evaluator), built on phase A's
-  measurements.
 - Limits recorded in the spec: expected value over consistent deals, not a proof
   against a specific hidden hand; `PassRule::Final` only; no bluffing.
 
@@ -563,11 +565,9 @@ and starts `cli play` / `cli watch` and opens the browser for the parts that sta
 models, dashboards, run analysis, and the result charts of Phase 11b). Behaviour cannot drift from the command line:
 the window has no simulation code, and a test runs the real `cli` with the arguments the form builds.
 
-Left out on purpose, as the first version should stay small: file pickers (paths are typed), progress bars (the log
-shows the output), a solver position editor and a training form (reachable through "Any command" and
-`cli solve`/`cli train`), and the release archives (the window is not packaged yet; `cargo run --release -p gui`).
 It is not in the workspace's `default-members` because it pulls in a windowing stack (about 300 more crates in
-`Cargo.lock`); CI's `--workspace` runs include it.
+`Cargo.lock`); CI's `--workspace` runs include it, and it is not in the release archives (`cargo run --release -p gui`).
+What it lacks (file pickers, progress, a solver editor, a training form, packaging) is open work.
 
 ## Phase 11b — Web views for simulation results (done)
 
@@ -576,55 +576,87 @@ results file of a batch: the strategies best first with average place, mean scor
 standard error) and the share of rounds in every place as a stacked bar, the luck-adjusted score of a duplicate-deal
 run, and the explanation of every number from the statistics catalogue stored in the file. Reload the page after a new
 run. It reads the existing output only; the logic is a pure library tested in Node, the handler in Rust. The GUI
-(Phase 22) starts it for the last simulation. Not built: the luck/skill estimate view and comparing two result files.
+(Phase 22) starts it for the last simulation. The estimate view and comparing two result files are open work.
 
 ## Phase 18 — Training advisor: pick the opponents and settings for you (done, reduced)
 
-**Status:** a reduced version is built: `cli train-advisor` (`cli/src/advisor.rs`, user guide in `docs/TRAINING.md`,
-"Choosing settings"). It probes the machine with a reference player (`adaptive`) against the candidate opponents, drops
-opponents with no headroom, sizes matches per genome from the measured per-match noise, sizes population and
-generations from the measured speed and the time budget (presets `quick`, `thorough`, `overnight`), and prints each
-choice with its reason plus a `cli train` command that `cli train`'s own parser is tested to accept. **Not built, kept
-here as the open part of the idea:** `cli train --auto`, scoring candidates against a starting genome, a models
-folder or the hall of fame of earlier runs, using the duplicate-deal skill score to cut noise, stopping or advising
-during a run from the Phase 17 analysis, and the web form. The original plan follows.
+**Status:** built (reduced): `cli train-advisor` (`cli/src/advisor.rs`, user guide in `docs/TRAINING.md`, "Choosing
+settings"). It probes the machine with a reference player (`adaptive`) against the candidate opponents, drops opponents
+with no headroom (the reference wins almost every game, or almost never), sizes matches per genome from the measured
+per-match noise (a standard error of about 0.02 on one fitness measurement), sizes population and generations from the
+measured speed and the time budget (presets `quick`, `thorough`, `overnight`; a plan that cannot fit 20 generations is
+warned about), and prints each choice with its reason plus a `cli train` command that `cli train`'s own parser is
+tested to accept. The rest of the original idea is open work, see "Open work".
 
-Choosing the opponent pool and settings by hand (population, matches per
-genome, rounds, hall of fame, target species, opponents) is trial and error;
-the long runs show it matters (see Phase 17). A simple option that picks them.
+# Open work, in working order
 
-- **`cli train --auto`** (and a `cli train-advisor` that only prints the
-  recommendation): from the table (player count, deck, rules), an optional
-  starting genome or model folder, and a time budget (`--time-budget 30m`),
-  run a short probe and choose:
-  - the **opponent pool**: score the candidates (hand-written strategies, models
-    found in a models directory, the hall of fame of earlier runs) against the
-    starting genome, drop opponents that are too weak to teach anything (the
-    candidate already wins almost every game) or too strong to give signal, and
-    pick a mix with usable headroom; report the per-opponent score and standard
-    error behind each choice;
-  - **matches per genome** from the measured per-match variance, so the standard
-    error of a fitness measurement is small enough to see the improvements the
-    run is expected to make (using the duplicate-deal skill score where it
-    reduces the noise, Phase 12);
-  - population size and generations that fit the time budget on this machine
-    (measured rounds per second), rounds per match, hall-of-fame size and
-    interval, species target and threshold defaults;
-  - presets on top: `quick` (a few minutes, a sanity run), `thorough` and
-    `overnight`.
-- It prints the chosen settings and the reason for each in plain language, writes
-  them to the run's config, and they can all be overridden by flags. During the
-  run the Phase 17 analysis can stop it early or recommend a change once the
-  slope is flat.
-- **Web interface:** a "New training" form with the recommended values filled in
-  and the reasons next to them, plus the live recommendation panel; extends the
-  Phase 11 dashboard.
-- Depends on Phase 12 (statistics, skill score), Phase 13 (inputs and fitness
-  variants to choose between) and Phase 17 (the analysis).
+What the done phases above did not do, plus the two phases that were never started (8 and 9). The order is by size and
+risk: small polish first, the training workflow next, decisions that need measuring after that, the research and the
+GPU port last; items do not depend on each other unless said. Phase numbers in brackets say where the idea came from.
 
-# Planned, in recommended order
+## 1. Pack the desktop window into the release archives (Phase 22)
 
-## Phase 16 — Self-play and co-evolutionary training (idea)
+`arschloch-gui` next to `cli` in the Linux, Windows and macOS archives: the build step for it in
+`.github/workflows/release.yml` (macOS) and in `docs/RELEASING.md` (Linux and Windows by hand, cross-compiling the
+window with `cargo-xwin` is untested), the README of the archives, and a check of the window on a Mac and on Windows
+(it was only run on Linux). Small, but only worth doing together with a test of each platform's window.
+
+## 2. Desktop window, what it lacks (Phase 22)
+
+Each is independent and small: **file pickers** for the strategy files, the output file and the run folder (paths are
+typed today); **progress** (show a progress bar by reading the progress lines of the running command instead of only
+the log); a **solver position editor** (click a hand and a table, run `cli solve`, show the ranked moves; today
+`cli solve` takes a text file); a **training form** that fills in the advisor's recommendation (item 4). Heavy,
+chart-like views stay in the browser.
+
+## 3. Results page, what it lacks (Phase 11b)
+
+Show the luck-adjusted **estimate** (`--skill-score estimate` and `both`; the page only says it is there), **compare
+two results files** side by side, and list only the explanations that belong to the page (the catalogue also holds the
+run-analysis statistics). Small; logic in `web/assets/results_lib.js`, tested in Node.
+
+## 4. Training advisor, the rest (Phase 18)
+
+`cli train --auto` (run the recommended settings and write them into the run's config instead of printing a command);
+score the candidate opponents against a **starting genome**, a **models folder** and the **hall of fame** of earlier
+runs instead of the stand-in reference player (the advisor judges against `adaptive`, which is far stronger than an early
+network); use the **duplicate-deal skill score** where it cuts the noise (Phase 12); **advise or stop a running training**
+from the Phase 17 analysis once the slope is flat; and a **"New training" form** in the web interface with the
+recommended values and the reasons next to them. Depends on Phases 12, 13 and 17 (all done). Also worth fixing while
+there: the speed is measured over all candidates, not the chosen pool.
+
+## 5. Settle the `hidden` input set, and the casino bot (Phase 13)
+
+Phase 13 found `--features hidden` significantly better than `base` head to head (+0.048, t = 3.68, 10 seeds) but kept
+`base` as the default until a **confirmation with fresh seeds** (11 to 20, `docs/baselines/phase-13/run.sh all A2`) and
+**longer runs** (300 generations, more matches per genome; the advisor of item 4 sizes them). If it holds, make `hidden`
+the default and retrain the committed champion. The casino repo's TypeScript NEAT bot implements feature set v1 only, so
+its feature port has to learn the new inputs before a `hidden` or `all` genome can play there (outside this repository).
+Needs hours of compute; the result decides a default, so it is measured, not assumed.
+
+## 6. Simplification left over from Phase 19
+
+Done in Phase 19: the speed work and its measurements. Not done: `sim/src/session.rs` (1038 lines) still repeats the
+deal/exchange/role loop of `run_match`; `trainer.rs` (455) and `useful_passes.rs` (408) are over the 400-line guideline;
+duplicated helpers across strategies (`min_by` on size and top card, `highest_unseen`, `strength()`); and the legacy
+`--pass-rule free` / `--exchange-rule free` paths (flag plumbing in about 25 places, `choose_exchange_cards` in 9
+strategies) could move behind a `legacy-rules` feature, **only if** the old baselines are no longer wanted. Every change
+must leave the `docs/baselines/perf/bench.sh` checksums and the reference batch outputs byte-identical. Small leftovers
+of Phases 21 to 22: `StrategyName` in `sim` duplicates the strategy list of `cli`, `gap.rs` repeats the deal setup of
+`match_runner`, the card-bit helper exists twice.
+
+## 7. Endgame solver, phase B: the early game (Phase 21)
+
+The solver plays only the last ~11% of the decisions exactly, which is why the neat champion still beats it by a wide
+margin (+0.63 against -0.08). Phase B: **sample** consistent deals of the unseen cards instead of enumerating them, search
+to a **depth** with max^n and a **leaf evaluator** (the NEAT network or the Adaptive heuristics are candidates, which is
+itself an experiment), average per move. It reuses `Observation`, `deals` and `search`; the hand-off threshold and the
+samples per decision are the numbers to measure (`cli solver-gap` and the luck-free head to head of
+`docs/baselines/solver/README.md` are the yardsticks). Also open there: the `use_pass_ceilings` switch to measure how
+much dishonest passes hurt (pass ceilings are hard constraints today), and `--pass-rule free`. Gets its own spec first;
+the design outline is in `docs/superpowers/specs/2026-10-16-endgame-solver-design.md`.
+
+## 8. Phase 16 — Self-play and co-evolutionary training (idea)
 
 **Status:** not started, on purpose (decision of the overnight run of 2026-10-16): it is a research question that needs
 long training runs and a judgement of the results, not a feature to write unattended. The tools to judge it exist (Phase
@@ -650,7 +682,7 @@ own past champions, optionally mixed with fixed strategies.
   the stall seen in the long runs looked noise- and information-limited by hand analysis (the Phase 17 tool is more cautious: `docs/baselines/phase-17/README.md`) rather
   than opponent-limited, so this phase ranks below Phase 13's new inputs.
 
-## Phase 20 — GPU simulation port (RTX 4070) (planned, not started)
+## 9. Phase 20 — GPU simulation port (RTX 4070) (planned, not started)
 
 **Status:** not started, and not startable on the development machine of 2026-10-16: there is no NVIDIA driver or CUDA
 toolchain there (the RTX 4070 is on the owner's desktop). The first step is the G0 spike in the schedule below, measured
