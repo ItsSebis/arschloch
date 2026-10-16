@@ -54,6 +54,11 @@ impl Job {
         })
     }
 
+    #[cfg(test)]
+    fn id(&self) -> u32 {
+        self.child.id()
+    }
+
     pub fn is_running(&self) -> bool {
         !self.done
     }
@@ -70,24 +75,42 @@ impl Job {
             }
         };
         if closed && !self.done {
-            if let Ok(Some(status)) = self.child.try_wait() {
-                self.done = true;
-                out.push(if self.cancelled {
-                    "[cancelled]".to_owned()
-                } else {
-                    status.code().map_or_else(
-                        || "[finished: ended without an exit code]".to_owned(),
-                        |code| format!("[finished: exit code {code}]"),
-                    )
-                });
+            match self.child.try_wait() {
+                Ok(None) => {}
+                Ok(Some(status)) => {
+                    self.done = true;
+                    out.push(if self.cancelled {
+                        "[cancelled]".to_owned()
+                    } else {
+                        status.code().map_or_else(
+                            || "[finished: ended without an exit code]".to_owned(),
+                            |code| format!("[finished: exit code {code}]"),
+                        )
+                    });
+                }
+                Err(error) => {
+                    self.done = true;
+                    out.push(format!("[finished: cannot read the exit status: {error}]"));
+                }
             }
         }
         out
     }
 
     pub fn cancel(&mut self) {
-        self.cancelled = true;
+        // A job that has already ended keeps its own exit status.
+        if matches!(self.child.try_wait(), Ok(None)) {
+            self.cancelled = true;
+            let _ = self.child.kill();
+        }
+    }
+}
+
+/// Closing the window must not leave a server or a training run behind.
+impl Drop for Job {
+    fn drop(&mut self) {
         let _ = self.child.kill();
+        let _ = self.child.wait();
     }
 }
 
@@ -197,6 +220,38 @@ mod tests {
         let lines = drain(&mut job);
         assert!(!job.is_running());
         assert!(lines.last().unwrap().contains("cancelled"), "{lines:?}");
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn dropping_a_running_job_stops_its_process() {
+        let exe = std::env::current_exe().unwrap();
+        let args: Vec<String> = ["--ignored", "--exact", "job::tests::sleeper"]
+            .iter()
+            .map(|s| (*s).to_owned())
+            .collect();
+        let job = Job::spawn(&exe, &args).unwrap();
+        let proc = format!("/proc/{}", job.id());
+        assert!(std::path::Path::new(&proc).exists());
+        drop(job); // closing the window must not leave a server or a training behind
+        assert!(
+            !std::path::Path::new(&proc).exists(),
+            "the child is still running"
+        );
+    }
+
+    #[test]
+    fn cancelling_a_job_that_already_ended_keeps_its_exit_status() {
+        let exe = std::env::current_exe().unwrap();
+        let mut job = Job::spawn(&exe, &["--list".to_owned()]).unwrap();
+        std::thread::sleep(Duration::from_millis(500)); // it has exited, but was not polled yet
+        job.cancel();
+        let lines = drain(&mut job);
+        let last = lines.last().unwrap();
+        assert!(
+            last.contains("finished") && !last.contains("cancelled"),
+            "{lines:?}"
+        );
     }
 
     /// The child process of `a_running_job_can_be_cancelled`.

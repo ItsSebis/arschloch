@@ -303,6 +303,7 @@ fn extras_row(form: &mut Form, ui: &mut egui::Ui) {
             );
             ui.add(
                 egui::DragValue::new(&mut form.useful_pass_margin)
+                    .range(0.0..=f64::MAX)
                     .speed(0.01)
                     .prefix("margin "),
             );
@@ -343,10 +344,20 @@ fn open_in_browser(url: &str) {
     } else {
         std::process::Command::new("xdg-open")
     };
-    let _ = command.arg(url).spawn();
+    if let Ok(mut child) = command.arg(url).spawn() {
+        // Reap the launcher so it does not stay a zombie until the window closes.
+        std::thread::spawn(move || {
+            let _ = child.wait();
+        });
+    }
 }
 
 impl eframe::App for App {
+    /// Stops a running job (a server, a training) when the window closes.
+    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        self.job = None;
+    }
+
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         self.poll();
         if self.running() {

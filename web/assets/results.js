@@ -1,6 +1,6 @@
 // The simulation-results page: fetches /api/results and draws it. The logic lives
 // in results_lib.js; this file only touches the DOM.
-import { explainHtml, skillHtml, skillRows, strategyRows, tableHtml } from "./results_lib.js";
+import { explainHtml, skillHtml, skillNote, skillRows, strategyRows, tableHtml } from "./results_lib.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -17,7 +17,8 @@ async function load() {
     if (!response.ok) throw new Error(data.error ?? `HTTP ${response.status}`);
     const rows = strategyRows(data);
     const skill = skillRows(data);
-    $("summary").textContent = `${data.statistics?.matches_played ?? "?"} matches`;
+    const note = skillNote(data);
+    $("summary").textContent = `${data.statistics?.matches_played ?? "?"} matches${note ? ` · ${note}` : ""}`;
     $("strategies").innerHTML = tableHtml(rows);
     $("skill-card").hidden = skill.length === 0;
     $("skill").innerHTML = skillHtml(skill);

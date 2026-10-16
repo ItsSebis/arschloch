@@ -45,8 +45,13 @@ impl ResultsApp {
         let shown = self.file.display();
         match std::fs::read(&self.file) {
             Err(error) => Response::error(404, &format!("cannot read {shown}: {error}")),
-            Ok(bytes) => match serde_json::from_slice::<serde_json::Value>(&bytes) {
-                Ok(value) => Response::json(200, &value),
+            // Validate without building a tree, then serve the bytes as they are.
+            Ok(bytes) => match serde_json::from_slice::<serde::de::IgnoredAny>(&bytes) {
+                Ok(_) => Response {
+                    status: 200,
+                    content_type: "application/json; charset=utf-8",
+                    body: bytes,
+                },
                 Err(error) => Response::error(422, &format!("{shown} is not valid JSON: {error}")),
             },
         }
@@ -102,6 +107,16 @@ mod tests {
             second["statistics"]["matches_played"], 2,
             "a rerun shows up on reload"
         );
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn the_file_is_served_byte_for_byte_without_being_rebuilt_in_memory() {
+        let text = r#"{"z": 1, "a": [1, 2,  3]}"#; // key order and spacing survive only if nothing re-serialises it
+        let path = temp_file("bytes", text);
+        let response = ResultsApp::new(path.clone()).handle("GET", "/api/results");
+        assert_eq!(response.status, 200);
+        assert_eq!(String::from_utf8(response.body).unwrap(), text);
         let _ = std::fs::remove_file(path);
     }
 

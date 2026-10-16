@@ -1,7 +1,7 @@
 // Run with: node --test web/tests
 import assert from "node:assert/strict";
 import test from "node:test";
-import { explainHtml, esc, placeColour, skillRows, strategyRows, tableHtml } from "../assets/results_lib.js";
+import { explainHtml, esc, placeColour, skillNote, skillRows, strategyRows, tableHtml } from "../assets/results_lib.js";
 
 const stat = (value, std_error = 0.01) => ({ value, std_error, n: 10 });
 const data = {
@@ -70,4 +70,29 @@ test("the explanations come from the catalogue and are escaped", () => {
   assert.ok(html.includes("Mean finishing place, 1 is best."));
   assert.equal(esc(`<a href="x">&</a>`), "&lt;a href=&quot;x&quot;&gt;&amp;&lt;/a&gt;");
   assert.equal(explainHtml(undefined), "");
+});
+
+test("a file that is not the results of a plain run is refused in words, not shown empty", () => {
+  assert.throws(() => strategyRows({}), /by_strategy/);
+  assert.throws(() => strategyRows({ extended: {} }), /not the results of a plain/);
+});
+
+test("every inserted value is escaped, and missing numbers read as a dash", () => {
+  const hostile = structuredClone(data);
+  hostile.extended.by_strategy.LowestLegal.rounds = "<img src=x onerror=alert(1)>";
+  assert.ok(!tableHtml(strategyRows(hostile)).includes("<img"));
+  const missing = structuredClone(data);
+  delete missing.extended.by_strategy.LowestLegal.rounds;
+  assert.ok(!tableHtml(strategyRows(missing)).includes("undefined"));
+  const noLuck = structuredClone(data);
+  delete noLuck.extended.skill.duplicate.strategies[0].luck_share;
+  assert.ok(skillRows(noLuck).every((r) => !r.luck.includes("NaN")));
+});
+
+test("a luck-adjusted estimate that is in the file but not drawn is said so", () => {
+  assert.equal(skillNote(data), "", "duplicate results are all that is drawn");
+  const estimate = { extended: { skill: { mode: "estimate", estimate: { strategies: [] } } } };
+  assert.match(skillNote(estimate), /estimate/);
+  assert.match(skillNote({ extended: { skill: { mode: "both" } } }), /estimate/);
+  assert.equal(skillNote({ extended: {} }), "");
 });

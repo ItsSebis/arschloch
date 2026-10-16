@@ -200,6 +200,11 @@ mod tests {
             .map(|dir| dir.join(name))
             .filter(|p| p.exists())
         else {
+            // CI builds the whole workspace, so a missing binary there is a real failure.
+            assert!(
+                std::env::var_os("CI").is_none(),
+                "no `cli` binary next to the test binary"
+            );
             eprintln!(
                 "skipped: no `cli` binary next to the test binary (run `cargo build -p cli` first)"
             );

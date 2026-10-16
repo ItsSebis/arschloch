@@ -126,7 +126,11 @@ cli train-advisor --time-budget 30m            # or --preset quick|thorough|over
   covers what the estimate leaves out); a tight budget shrinks the population first, then the matches, so that at least 20
   generations fit. Long runs (60+ generations) get a hall of fame.
 
-The estimate uses the reference player's speed; a trained network is of similar cost but not identical, which is what the
+The plan counts what the trainer plays per generation (every genome's matches plus the re-evaluations of the champion
+candidates, the champion and each pool opponent) and warns when 20 generations do not fit the budget. The speed is
+measured over all candidates, not only the chosen pool, and the noise target (a standard error of 0.02 on one
+fitness measurement) is stricter than selection between genomes on the same matches needs, so it errs on the side
+of more matches. The estimate uses the reference player's speed; a trained network is of similar cost but not identical, which is what the
 unplanned 30% is for. The advisor does not start the run: copy the printed command (or run it from the desktop window's
 "Any command" tab). Not built: scoring against a starting genome, a models folder or the hall of fame of earlier runs;
 `train --auto`; recommendations while a run is going; a web form.

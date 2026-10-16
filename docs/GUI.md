@@ -33,7 +33,9 @@ Every line is also appended to `arschloch-gui.log` in the folder the window was 
 
 ## Limits
 
-One job at a time; no file pickers (paths are typed); the results of a simulation are read in the log and in the JSON
+One job at a time (closing the window stops it); no file pickers (paths are typed); the log file and the default
+`results.json` are written in the folder the window was started from (started from a file manager that may be a folder
+you cannot write to: start it from a terminal or give full paths); the results of a simulation are read in the log and in the JSON
 file, and the browser page `cli view` shows them as tables and bars. The window is not part of the release archives yet.
 
 ## For developers

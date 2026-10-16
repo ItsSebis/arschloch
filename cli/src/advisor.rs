@@ -77,6 +77,28 @@ pub struct RunPlan {
     pub budget_seconds: f64,
 }
 
+impl RunPlan {
+    /// Why this plan cannot do what the advice promises (at least `MIN_GENERATIONS`
+    /// within the budget), in words; `None` when it can.
+    pub fn problem(&self) -> Option<String> {
+        (self.generations < MIN_GENERATIONS || self.estimated_seconds > self.budget_seconds).then(|| {
+            format!(
+                "only {} generations fit and the plan needs about {:.0} s of the {:.0} s budget even at the smallest settings: give it more time",
+                self.generations, self.estimated_seconds, self.budget_seconds
+            )
+        })
+    }
+}
+
+/// The spread of one match's score over several opponents: the root of the mean
+/// variance (deviations of different opponents are not averaged directly).
+pub fn pooled_sd(sds: &[f64]) -> f64 {
+    if sds.is_empty() {
+        return 0.0;
+    }
+    (sds.iter().map(|sd| sd * sd).sum::<f64>() / sds.len() as f64).sqrt()
+}
+
 /// Population, generations and matches per genome that fit `budget` seconds at
 /// `rounds_per_sec`. The wanted `matches` and `max_population` shrink (population
 /// first) until at least `MIN_GENERATIONS` fit.
@@ -86,10 +108,13 @@ pub fn plan_run(
     rounds: usize,
     matches: usize,
     max_population: usize,
+    pool_len: usize,
 ) -> RunPlan {
-    // One generation: every genome's matches, the champion candidates' matches and one re-evaluation.
+    // One generation, as the trainer counts it: every genome's matches, plus one
+    // re-evaluation of each champion candidate, the champion and every pool opponent.
     let seconds_per_generation = |population: usize, matches: usize| {
-        ((population + CHAMPION_CANDIDATES) * matches + REEVAL_MATCHES) as f64 * rounds as f64
+        (population * matches + REEVAL_MATCHES * (CHAMPION_CANDIDATES + 1 + pool_len)) as f64
+            * rounds as f64
             / rounds_per_sec
     };
     let usable = budget * BUDGET_SHARE;
@@ -215,8 +240,8 @@ struct AdvisorArgs {
     /// The player the candidates are scored against (stands in for the model).
     #[arg(long, default_value = "adaptive")]
     reference: String,
-    /// Probe matches per candidate opponent.
-    #[arg(long, default_value_t = 40)]
+    /// Probe matches per candidate opponent (at least 2: the spread needs two).
+    #[arg(long, default_value_t = 40, value_parser = clap::builder::RangedI64ValueParser::<usize>::new().range(2..))]
     probe_matches: usize,
     #[arg(long, default_value_t = 0)]
     seed: u64,
@@ -227,8 +252,9 @@ struct AdvisorArgs {
 
 /// What the probe measured.
 struct Probe {
-    /// Per candidate: spec, the reference player's score against it, its standard error, the verdict.
-    rows: Vec<(String, f64, f64, Verdict)>,
+    /// Per candidate: spec, the reference player's score against it, its standard error, the
+    /// verdict, and the spread of one match's score against it.
+    rows: Vec<(String, f64, f64, Verdict, f64)>,
     rounds_per_sec: f64,
     /// Standard deviation of one match's score.
     sd_match: f64,
@@ -240,7 +266,7 @@ fn run_probe(
     reference: &Arc<dyn Strategy>,
     table: &TableSpec,
 ) -> anyhow::Result<Probe> {
-    let (mut rows, mut rounds, mut sd_sum) = (Vec::new(), 0usize, 0.0);
+    let (mut rows, mut rounds) = (Vec::new(), 0usize);
     let started = Instant::now();
     for (index, spec) in candidates.iter().enumerate() {
         let opponent = spec
@@ -252,13 +278,19 @@ fn run_probe(
             .collect();
         let score = evaluate(reference, table, Opponents::Only(&opponent), &seeds);
         rounds += score.matches * table.rounds;
-        sd_sum += score.std_error * (score.matches as f64).sqrt();
-        rows.push((spec.clone(), score.mean, score.std_error, judge(score.mean)));
+        let sd = score.std_error * (score.matches as f64).sqrt();
+        rows.push((
+            spec.clone(),
+            score.mean,
+            score.std_error,
+            judge(score.mean),
+            sd,
+        ));
     }
     Ok(Probe {
         rows,
         rounds_per_sec: rounds as f64 / started.elapsed().as_secs_f64().max(1e-9),
-        sd_match: sd_sum / candidates.len() as f64,
+        sd_match: 0.0,
     })
 }
 
@@ -280,7 +312,7 @@ fn render(
         out,
         "\nCandidate opponents (the reference player's score against each, +1 best .. -1 worst):"
     );
-    for (spec, mean, error, verdict) in &probe.rows {
+    for (spec, mean, error, verdict, _) in &probe.rows {
         let _ = writeln!(
             out,
             "  {spec:<44} {mean:+.3} +- {error:.3}  {}",
@@ -343,7 +375,7 @@ fn advise(args: &AdvisorArgs) -> anyhow::Result<String> {
         exchange_rule: ExchangeRule::Forced,
         rounds: 8,
     };
-    let probe = run_probe(args, &candidates, &reference, &table)?;
+    let mut probe = run_probe(args, &candidates, &reference, &table)?;
     let mut kept: Vec<_> = probe.rows.iter().filter(|r| r.3 == Verdict::Keep).collect();
     kept.sort_by(|a, b| a.1.total_cmp(&b.1)); // hardest first
     let mut pool: Vec<String> = kept.iter().take(POOL_SIZE).map(|r| r.0.clone()).collect();
@@ -357,9 +389,30 @@ fn advise(args: &AdvisorArgs) -> anyhow::Result<String> {
             .collect();
         warning = format!("Warning: no candidate had headroom against the reference player; keeping the first {POOL_SIZE}.\n\n");
     }
+    // The spread of the opponents that will actually be played, not of every candidate.
+    let pool_sds: Vec<f64> = probe
+        .rows
+        .iter()
+        .filter(|r| pool.contains(&r.0))
+        .map(|r| r.4)
+        .collect();
+    probe.sd_match = pooled_sd(&pool_sds);
     let matches = matches_for_error(probe.sd_match, TARGET_ERROR);
-    let plan = plan_run(budget, probe.rounds_per_sec, table.rounds, matches, 150);
-    let deck = format!("{:?}", args.deck_variant).to_lowercase();
+    let plan = plan_run(
+        budget,
+        probe.rounds_per_sec,
+        table.rounds,
+        matches,
+        150,
+        pool.len(),
+    );
+    if let Some(problem) = plan.problem() {
+        let _ = writeln!(warning, "Warning: {problem}.\n");
+    }
+    let deck = args
+        .deck_variant
+        .to_possible_value()
+        .map_or_else(String::new, |v| v.get_name().to_owned());
     let command = command_line(&plan, args.player_count, &deck, &pool, &args.out);
     Ok(warning + &render(args, &probe, &pool, &plan, &command))
 }
@@ -407,16 +460,65 @@ mod tests {
     #[test]
     fn the_budget_decides_generations_and_a_tight_one_shrinks_the_population() {
         // 1000 rounds/s, 100 matches x 8 rounds per genome.
-        let roomy = plan_run(36_000.0, 1000.0, 8, 100, 150);
+        let roomy = plan_run(36_000.0, 1000.0, 8, 100, 150, 4);
         assert_eq!(roomy.population, 150);
         assert!(roomy.generations >= 100, "{roomy:?}");
-        let tight = plan_run(300.0, 1000.0, 8, 100, 150);
+        let tight = plan_run(900.0, 1000.0, 8, 100, 150, 4);
         assert!(tight.population < 150, "{tight:?}");
         assert!(tight.generations >= MIN_GENERATIONS, "{tight:?}");
         // The plan fits the time it was given.
         for plan in [roomy, tight] {
             assert!(plan.estimated_seconds <= plan.budget_seconds, "{plan:?}");
         }
+    }
+
+    #[test]
+    fn the_cost_model_counts_what_the_trainer_plays() {
+        // The trainer plays population x matches plus reeval (200) matches for each of the
+        // champion candidates (5), the champion itself and every pool opponent.
+        let plan = plan_run(3600.0, 1000.0, 8, 100, 150, 4);
+        let per_generation =
+            (plan.population * plan.matches_per_genome + 200 * (5 + 1 + 4)) as f64 * 8.0 / 1000.0;
+        let expected = f64::from(plan.generations) * per_generation;
+        assert!((plan.estimated_seconds - expected).abs() < 1e-6, "{plan:?}");
+        // A bigger pool costs more per generation, so fewer generations fit.
+        let bigger_pool = plan_run(3600.0, 1000.0, 8, 100, 150, 8);
+        assert!(bigger_pool.generations <= plan.generations);
+    }
+
+    #[test]
+    fn a_plan_that_cannot_fit_says_so() {
+        let hopeless = plan_run(10.0, 1000.0, 8, 100, 150, 4);
+        let problem = hopeless
+            .problem()
+            .expect("10 seconds cannot train anything");
+        assert!(
+            problem.contains("generations") && problem.contains("budget"),
+            "{problem}"
+        );
+        assert!(plan_run(36_000.0, 1000.0, 8, 100, 150, 4)
+            .problem()
+            .is_none());
+    }
+
+    #[test]
+    fn the_spread_is_pooled_as_a_variance_not_an_average_of_deviations() {
+        // Two opponents with spreads 0.1 and 0.5: the pooled spread is the root of the mean variance.
+        let pooled = pooled_sd(&[0.1, 0.5]);
+        assert!((pooled - (0.13_f64).sqrt()).abs() < 1e-12, "{pooled}");
+        assert!(pooled > 0.3, "larger than the plain average 0.3");
+        assert!(pooled_sd(&[]).abs() < 1e-12);
+    }
+
+    #[test]
+    fn a_probe_needs_at_least_two_matches() {
+        for bad in ["0", "1"] {
+            assert!(
+                AdvisorArgs::try_parse_from(["cli train-advisor", "--probe-matches", bad]).is_err(),
+                "{bad}"
+            );
+        }
+        assert!(AdvisorArgs::try_parse_from(["cli train-advisor", "--probe-matches", "2"]).is_ok());
     }
 
     #[test]
