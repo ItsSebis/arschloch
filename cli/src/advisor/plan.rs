@@ -161,13 +161,16 @@ pub fn command_line(
     opponents: &[String],
     out: &str,
 ) -> String {
-    // A folder with spaces is quoted so the line can be pasted into a shell and
-    // split again by the desktop window.
-    let out = if out.contains(char::is_whitespace) {
-        format!("\"{out}\"")
-    } else {
-        out.to_owned()
+    // A folder (or a `neat:PATH` opponent) with spaces is quoted so the line can
+    // be pasted into a shell and split again by the desktop window.
+    let quote = |word: &str| {
+        if word.contains(char::is_whitespace) {
+            format!("\"{word}\"")
+        } else {
+            word.to_owned()
+        }
     };
+    let out = quote(out);
     let mut line = format!(
         "cli train --out {out} --player-count {players} --deck-variant {deck} --population {} --generations {} \
          --matches-per-genome {} --rounds {}",
@@ -181,7 +184,7 @@ pub fn command_line(
         );
     }
     for opponent in opponents {
-        let _ = write!(line, " --opponent {opponent}");
+        let _ = write!(line, " --opponent {}", quote(opponent));
     }
     line
 }

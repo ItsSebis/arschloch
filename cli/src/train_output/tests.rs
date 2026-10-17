@@ -150,6 +150,13 @@ fn the_summary_names_the_best_generation_and_how_to_play_it() {
         text.contains(&format!("neat:{}", played.display())),
         "{text}"
     );
+    // A run folder with spaces gives a spec that pastes into a shell as one word.
+    let spaced = render_summary(&end, std::path::Path::new("my runs/a"));
+    let played = std::path::Path::new("my runs/a").join("best.json");
+    assert!(
+        spaced.contains(&format!("--strategy \"neat:{}\" ", played.display())),
+        "{spaced}"
+    );
     let none = RunEnd {
         best_generation: None,
         best_reeval: None,

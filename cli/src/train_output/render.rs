@@ -166,12 +166,16 @@ pub fn render_summary(end: &RunEnd, out: &std::path::Path) -> String {
     // inflated by selection (the re-evaluation score is, a little).
     let confirmed = end.best_heldout.as_ref().or(end.best_reeval.as_ref());
     if let (Some(generation), Some(score)) = (end.best_generation, confirmed) {
+        // A run folder with spaces is quoted so the line can be pasted into a shell.
+        let mut spec = format!("neat:{}", out.join("best.json").display());
+        if spec.contains(char::is_whitespace) {
+            spec = format!("\"{spec}\"");
+        }
         let _ = write!(
             text,
-            "\nbest champion: generation {generation}, score {:+.3} ±{:.3} against the pool (held-out matches)\nplay it: cli --player-count 4 --matches 1000 --strategy neat:{} --strategy lowest-legal --strategy lowest-legal --strategy lowest-legal",
+            "\nbest champion: generation {generation}, score {:+.3} ±{:.3} against the pool (held-out matches)\nplay it: cli --player-count 4 --matches 1000 --strategy {spec} --strategy lowest-legal --strategy lowest-legal --strategy lowest-legal",
             score.mean,
             score.std_error,
-            out.join("best.json").display()
         );
     }
     text

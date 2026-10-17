@@ -151,6 +151,18 @@ fn a_run_folder_with_spaces_is_quoted() {
         command.starts_with("cli train --out \"my runs/a b\" --player-count 4 "),
         "{command}"
     );
+    // A genome path with spaces as an opponent stays one word as well.
+    let command = command_line(
+        &plan,
+        4,
+        "single",
+        &["neat:my runs/best.json".into()],
+        "runs/auto",
+    );
+    assert!(
+        command.ends_with(" --opponent \"neat:my runs/best.json\""),
+        "{command}"
+    );
 }
 
 #[test]
