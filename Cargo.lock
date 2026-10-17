@@ -351,7 +351,7 @@ checksum = "1c133bc6a41be0d194c306b5506d15e6feeea7b1d6604bd3f8310dfb2ca96486"
 
 [[package]]
 name = "cli"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -695,7 +695,7 @@ dependencies = [
 
 [[package]]
 name = "engine"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "rand",
  "serde",
@@ -1022,7 +1022,7 @@ dependencies = [
 
 [[package]]
 name = "gui"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "eframe",
  "serde",
@@ -1421,7 +1421,7 @@ dependencies = [
 
 [[package]]
 name = "neat"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "rand",
  "serde",
@@ -2231,7 +2231,7 @@ checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
 
 [[package]]
 name = "sim"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "engine",
  "neat",
@@ -2752,7 +2752,7 @@ dependencies = [
 
 [[package]]
 name = "web"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "neat",
  "rand",

@@ -326,7 +326,7 @@ How to read these statistics. Every number comes from simulated play, so it is a
 
 **Meaning.** How closely the cheap estimator follows the duplicate result. High agreement means the cheap estimator can replace the expensive duplicate mode.
 
-**Formula.** Kendall rank correlation (tau, rank_agreement, from -1 for reversed to +1 for identical order) of the strategies ordered by skill_score_estimate and by round-1 skill_score_duplicate, together with the mean share of the duplicate round-1 luck share the estimator recovers (mean_variance_removed_ratio, estimator luck share divided by duplicate luck share, which is at least 0 and can exceed 1 when the estimator's luck share is larger than the duplicate round-1 one); reported only when both modes ran.
+**Formula.** Kendall rank correlation (tau, rank_agreement, from -1 for reversed to +1 for identical order) of the strategies ordered by skill_score_estimate and by round-1 skill_score_duplicate, together with the mean share of the duplicate round-1 luck share the estimator recovers (mean_variance_removed_ratio, estimator luck share divided by duplicate luck share, which is at least 0 and can exceed 1 when the estimator's luck share is larger than the duplicate round-1 one; averaged over the strategies where it is defined, a strategy whose duplicate luck share is 0 is left out); reported only when both modes ran.
 
 **Reading it.** Rank agreement near 1 and a removed ratio near 1 mean the estimator gives the same ordering and removes a similar amount of luck, so duplicate deals can be skipped. Low values mean the estimator is not trustworthy for this game.
 
@@ -396,7 +396,7 @@ How to read these statistics. Every number comes from simulated play, so it is a
 
 **Meaning.** How far the cheap estimator's skill score lies from the duplicate result for one strategy, measured in combined standard errors.
 
-**Formula.** (skill_score_estimate - skill_score_duplicate_round1) / sqrt(se_estimate^2 + se_duplicate^2); 0 if both standard errors are 0.
+**Formula.** (skill_score_estimate - skill_score_duplicate_round1) / sqrt(se_estimate^2 + se_duplicate^2); null (not defined) if both standard errors are 0.
 
 **Reading it.** Within about +-2 means the two agree up to noise; consistently large gaps for several strategies mean the estimator is biased for this game. The sign says whether the estimator is higher (+) or lower (-).
 
@@ -424,7 +424,7 @@ How to read these statistics. Every number comes from simulated play, so it is a
 
 **Meaning.** The generation whose champion the trainer kept as the best, chosen on the fixed re-evaluation set and confirmed on held-out matches.
 
-**Formula.** Taken from the run_end event (best_generation); null when the run has no run_end event (it was stopped or is still running).
+**Formula.** Taken from the run_end event (best_generation); null when the run has no run_end event (it was stopped or is still running). The stop-early verdict then uses the generation with the best re-evaluation mean in the events instead, so a run still training is judged like the finished one (`cli train --when-flat`).
 
 **Reading it.** A best generation far before the end of the run means later generations added nothing the selection could see. Compare with the stall generation: the best generation is a single maximum, so it is usually later than the start of the plateau.
 

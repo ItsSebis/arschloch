@@ -1,0 +1,36 @@
+4 players, Single deck, 1500 games, seed 3, solver T=6 budget 2000000
+decisions with a choice: 70945; solved: 7430 (10.5%); over budget: 546; nodes per solved decision: mean 12778, max 1999630
+
+strategy                            solved   differ   share places lost each
+Adaptive(counting,reading)+Solver(T=0,S=16,D=1,adaptive)    3336      186    5.6%          0.0385
+Adaptive(counting,reading)             714       54    7.6%          0.0579
+Adaptive(counting,reading)+Solver(T=0,S=64,D=1,adaptive)    2548      167    6.6%          0.0504
+Neat(champion)                         832       82    9.9%          0.0727
+
+costliest decisions of Adaptive(counting,reading)+Solver(T=0,S=16,D=1,adaptive):
+  seat 3, hand [JC 8H 2C], on 5C by seat 0, 3 unseen: Adaptive(counting,reading)+Solver(T=0,S=16,D=1,adaptive) plays pass, solver prefers 8H (costs 1.50 places)
+  seat 2, hand [8D 5D 7H 9S], on 9D by seat 0, 5 unseen: Adaptive(counting,reading)+Solver(T=0,S=16,D=1,adaptive) plays pass, solver prefers 9S (costs 1.33 places)
+  seat 1, hand [8D 9C 6C 6S], on 4D by seat 0, 6 unseen: Adaptive(counting,reading)+Solver(T=0,S=16,D=1,adaptive) plays pass, solver prefers 8D (costs 1.17 places)
+  seat 2, hand [5H 4S 5S], on 3H by seat 1, 6 unseen: Adaptive(counting,reading)+Solver(T=0,S=16,D=1,adaptive) plays pass, solver prefers 5H (costs 1.04 places)
+  seat 0, hand [2D 8H AC 6D KD AS 7D], on JD by seat 3, 3 unseen: Adaptive(counting,reading)+Solver(T=0,S=16,D=1,adaptive) plays pass, solver prefers KD (costs 1.00 places)
+
+costliest decisions of Adaptive(counting,reading):
+  seat 0, hand [2C 3D 3S 3C 3H], leading, 3 unseen: Adaptive(counting,reading) plays 3D 3H 3S, solver prefers 3D 3H 3S 3C (costs 2.00 places)
+  seat 2, hand [9S QH 6S 8D 6C], on 4S by seat 1, 5 unseen: Adaptive(counting,reading) plays QH, solver prefers 8D (costs 1.56 places)
+  seat 0, hand [4D 9C 3H], leading, 3 unseen: Adaptive(counting,reading) plays 9C, solver prefers 3H (costs 1.33 places)
+  seat 0, hand [JD 2H], leading, 6 unseen: Adaptive(counting,reading) plays JD, solver prefers 2H (costs 1.20 places)
+  seat 1, hand [9D JD 8C], leading, 6 unseen: Adaptive(counting,reading) plays JD, solver prefers 8C (costs 1.16 places)
+
+costliest decisions of Adaptive(counting,reading)+Solver(T=0,S=64,D=1,adaptive):
+  seat 1, hand [7D 4S 8C 2C 9S 2S], on 5C by seat 2, 4 unseen: Adaptive(counting,reading)+Solver(T=0,S=64,D=1,adaptive) plays pass, solver prefers 7D (costs 2.50 places)
+  seat 1, hand [7S JD], on 6H by seat 0, 6 unseen: Adaptive(counting,reading)+Solver(T=0,S=64,D=1,adaptive) plays pass, solver prefers 7S (costs 2.00 places)
+  seat 1, hand [7D QS 7C], on 9S by seat 3, 6 unseen: Adaptive(counting,reading)+Solver(T=0,S=64,D=1,adaptive) plays pass, solver prefers QS (costs 2.00 places)
+  seat 1, hand [8D 10C 10S 8C], on 3C by seat 0, 6 unseen: Adaptive(counting,reading)+Solver(T=0,S=64,D=1,adaptive) plays pass, solver prefers 8C (costs 1.70 places)
+  seat 2, hand [4H 9S 8D 8C 10H 9H 9C 5C], on 8H by seat 0, 4 unseen: Adaptive(counting,reading)+Solver(T=0,S=64,D=1,adaptive) plays pass, solver prefers 8C (costs 1.20 places)
+
+costliest decisions of Neat(champion):
+  seat 0, hand [4C 4H 2C], leading, 3 unseen: Neat(champion) plays 2C, solver prefers 4H 4C (costs 1.67 places)
+  seat 1, hand [8C 8S 3D 8H], leading, 5 unseen: Neat(champion) plays 3D, solver prefers 8H 8S 8C (costs 1.60 places)
+  seat 3, hand [7S 3H 7C], leading, 5 unseen: Neat(champion) plays 3H, solver prefers 7S 7C (costs 1.33 places)
+  seat 2, hand [3H 10S 2S 3D], leading, 4 unseen: Neat(champion) plays 2S, solver prefers 3D 3H (costs 1.33 places)
+  seat 0, hand [3D JD], leading, 5 unseen: Neat(champion) plays 3D, solver prefers JD (costs 1.15 places)

@@ -10,7 +10,9 @@ use sim::training::{
     Trainer,
 };
 
+use crate::advisor::{self, AdvisorArgs};
 use crate::args::{DeckVariantArg, DuplicateRuleArg, StrategyArg};
+use crate::flat;
 use crate::train_args::{TrainArgs, DEFAULT_OPPONENTS};
 use crate::train_output::{
     render_set_run_banner, render_set_summary, SetContext, TerminalObserver,
@@ -19,10 +21,17 @@ use crate::train_output::{
 /// Resolves a stored `neat:@RELATIVE` spec (a frozen copy inside the run
 /// directory) to a loadable `neat:PATH`; every other spec is unchanged.
 fn resolve_spec(spec: &str, out: &Path) -> String {
-    match spec.trim().strip_prefix("neat:@") {
-        Some(relative) => format!("neat:{}", out.join(relative).display()),
+    let (base, toggle) = split_toggle(spec.trim());
+    match base.strip_prefix("neat:@") {
+        Some(relative) => format!("neat:{}{toggle}", out.join(relative).display()),
         None => spec.to_owned(),
     }
+}
+
+/// A spec split into the strategy and its `+solver[:N]` toggle (empty when there is none),
+/// so the genome path of `neat:PATH+solver` is not confused with the toggle.
+fn split_toggle(spec: &str) -> (&str, &str) {
+    sim::split_solver_suffix(spec).map_or((spec, ""), |(base, _)| spec.split_at(base.len()))
 }
 
 /// Builds the opponent pool from `--strategy`-style specs (frozen
@@ -54,7 +63,8 @@ fn build_opponents(specs: &[String], out: &Path) -> anyhow::Result<Vec<Opponent>
 fn freeze_neat_specs(specs: &[String], out: &Path) -> anyhow::Result<Vec<String>> {
     let mut frozen = Vec::with_capacity(specs.len());
     for (index, spec) in specs.iter().enumerate() {
-        let Some(path) = spec.trim().strip_prefix("neat:") else {
+        let (base, toggle) = split_toggle(spec.trim());
+        let Some(path) = base.strip_prefix("neat:") else {
             frozen.push(spec.clone());
             continue;
         };
@@ -72,7 +82,7 @@ fn freeze_neat_specs(specs: &[String], out: &Path) -> anyhow::Result<Vec<String>
                     target.display()
                 )
             })?;
-        frozen.push(format!("neat:@{relative}"));
+        frozen.push(format!("neat:@{relative}{toggle}"));
     }
     Ok(frozen)
 }
@@ -241,6 +251,7 @@ fn next_set_trainer(
 fn run_set(args: &TrainArgs, mut set: SetFile, resuming: bool) -> anyhow::Result<()> {
     let started = std::time::Instant::now();
     let mut ends: Vec<(String, RunEnd)> = Vec::new();
+    let mut stopped_at = None;
     let first_unfinished = u32::try_from(set.finished_secs.len()).unwrap_or(u32::MAX) + 1;
     for index in first_unfinished..=set.total_runs {
         let out = args.out.join(run_dir_name(index));
@@ -266,7 +277,18 @@ fn run_set(args: &TrainArgs, mut set: SetFile, resuming: bool) -> anyhow::Result
             finished_secs: set.finished_secs.clone(),
         });
         let mut observer = observer;
+        if let Some(mode) = args.when_flat {
+            observer = observer.with_flat(mode);
+        }
         let end = trainer.run(&mut observer)?;
+        let planned = trainer.config().generations;
+        if end.generations_completed < planned {
+            // Stopped by --when-flat: not finished, so it is not recorded and a set `--resume`
+            // continues this run; the later runs wait for it.
+            stopped_at = Some(planned);
+            ends.push((run_dir_name(index), end));
+            break;
+        }
         set.finished_secs.push(end.elapsed_secs);
         set.current_run = index.min(set.total_runs);
         set.write(&args.out)?;
@@ -274,18 +296,67 @@ fn run_set(args: &TrainArgs, mut set: SetFile, resuming: bool) -> anyhow::Result
     }
     println!(
         "\n{}",
-        render_set_summary(&ends, started.elapsed().as_secs_f64())
+        render_set_summary(&ends, started.elapsed().as_secs_f64(), stopped_at)
     );
     Ok(())
 }
 
+/// The advisor's arguments from the `--auto` ones of `cli train`.
+fn advisor_args(args: &TrainArgs) -> AdvisorArgs {
+    AdvisorArgs {
+        player_count: args.player_count,
+        deck_variant: args.deck_variant,
+        time_budget: args.time_budget.clone(),
+        preset: args.preset.unwrap_or(advisor::Preset::Thorough),
+        opponent: args.opponent.clone(),
+        reference: args.reference.clone(),
+        reference_models: args.reference_models.clone(),
+        reference_hall: args.reference_hall.clone(),
+        probe_matches: args.probe_matches.unwrap_or(40),
+        seed: args.seed,
+        out: args.out.display().to_string(),
+    }
+}
+
+/// Runs the advisor and puts its plan into `args`; returns the advice text (saved as `advisor.txt`).
+fn apply_advice(args: &mut TrainArgs) -> anyhow::Result<String> {
+    let advice = advisor::advise(&advisor_args(args), true)?;
+    print!("{}", advice.text);
+    if args.when_flat.is_some() && advice.plan.generations < flat::MIN_GENERATIONS {
+        eprintln!(
+            "warning: --when-flat will not fire: the plan has only {} generations and nothing is judged before {}; give --time-budget more time",
+            advice.plan.generations,
+            flat::MIN_GENERATIONS
+        );
+    }
+    args.population = advice.plan.population;
+    args.generations = Some(advice.plan.generations);
+    args.matches_per_genome = advice.plan.matches_per_genome;
+    args.rounds = advice.plan.rounds;
+    args.hall_of_fame = advice.plan.hall_of_fame;
+    args.hall_interval = advice.plan.hall_interval;
+    args.opponent.clone_from(&advice.pool);
+    Ok(advice.text)
+}
+
 pub fn run(raw_args: impl Iterator<Item = String>) -> anyhow::Result<()> {
-    let args = TrainArgs::parse_from(std::iter::once("cli train".to_owned()).chain(raw_args));
+    let mut args = TrainArgs::parse_from(std::iter::once("cli train".to_owned()).chain(raw_args));
     if args.threads > 0 {
         rayon::ThreadPoolBuilder::new()
             .num_threads(args.threads)
             .build_global()
             .context("failed to configure thread pool")?;
+    }
+
+    // --auto: everything cheap is checked before the probe (which takes minutes), so a typo
+    // or a busy port is reported at once; the advisor itself runs after the dashboard is up.
+    if args.auto {
+        anyhow::ensure!(
+            !args.out.join("checkpoint.json").exists(),
+            "{} already holds a run; choose another directory",
+            args.out.display()
+        );
+        checked_args(&args)?;
     }
 
     // A set is recognised by its set file when resuming, by --runs when
@@ -319,6 +390,13 @@ pub fn run(raw_args: impl Iterator<Item = String>) -> anyhow::Result<()> {
         None => None,
     };
 
+    // --auto: the advisor decides, before anything is created.
+    let advice = if args.auto {
+        Some(apply_advice(&mut args)?)
+    } else {
+        None
+    };
+
     if let Some(set) = existing_set {
         run_set(&args, set, true)?;
     } else if args.runs > 1 {
@@ -335,8 +413,23 @@ pub fn run(raw_args: impl Iterator<Item = String>) -> anyhow::Result<()> {
         } else {
             new_trainer(&args, &args.out)?
         };
+        if let Some(text) = &advice {
+            std::fs::write(args.out.join("advisor.txt"), text)
+                .with_context(|| format!("cannot write advisor.txt in {}", args.out.display()))?;
+        }
         let mut observer = TerminalObserver::new(args.out.clone(), args.quiet);
-        trainer.run(&mut observer)?;
+        if let Some(mode) = args.when_flat {
+            observer = observer.with_flat(mode);
+        }
+        let end = trainer.run(&mut observer)?;
+        if end.generations_completed < trainer.config().generations {
+            println!(
+                "stopped after {} of {} generations; {}",
+                end.generations_completed,
+                trainer.config().generations,
+                flat::resume_hint(&args.out)
+            );
+        }
     }
     if let Some(dashboard) = dashboard {
         // The dashboard lives in this process: exiting now would leave the
@@ -388,5 +481,30 @@ mod tests {
             .unwrap()
             .to_string();
         assert!(error.contains("duplicates `LowestLegal`"), "{error}");
+    }
+
+    #[test]
+    fn the_solver_toggle_survives_freezing_and_resolving_a_genome_spec() {
+        let dir = std::env::temp_dir().join(format!("arschloch-freeze-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let genome = dir.join("g.json");
+        std::fs::write(&genome, "{}").unwrap();
+        let out = dir.join("run");
+        let specs = vec![
+            format!("neat:{}+solver:8", genome.display()),
+            "adaptive+solver".to_owned(),
+        ];
+        let frozen = freeze_neat_specs(&specs, &out).unwrap();
+        assert_eq!(
+            frozen,
+            vec!["neat:@opponents/0-g.json+solver:8", "adaptive+solver"]
+        );
+        assert!(out.join("opponents/0-g.json").exists());
+        assert_eq!(
+            resolve_spec(&frozen[0], &out),
+            format!("neat:{}+solver:8", out.join("opponents/0-g.json").display())
+        );
+        assert_eq!(resolve_spec(&frozen[1], &out), "adaptive+solver");
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }

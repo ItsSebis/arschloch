@@ -1,0 +1,9 @@
+adaptive+solver|adaptive|
+adaptive:reading,tempo+solver:8|adaptive:reading,tempo|:8
+adaptive|-|
+neat:a+solver.json|-|
+neat:a+solver.json+solver|neat:a+solver.json|
+neat:a+solver:b|neat:a|:b
++solver||
+x+solver:|x|:
+x+solvers|-|

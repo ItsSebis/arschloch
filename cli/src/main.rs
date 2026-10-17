@@ -8,6 +8,7 @@ mod args;
 mod batch;
 mod evaluate;
 mod extended_summary;
+mod flat;
 mod output;
 mod play;
 mod solve;

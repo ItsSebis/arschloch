@@ -58,7 +58,7 @@ function setStatus(ok) {
 }
 
 // -------------------------------------------------------------------- setup
-const DEFAULT_OPPONENTS = ["model:champion-v2", "endgame-denial", "adaptive:reading,tempo,bully", "lowest-legal", "card-counter"];
+const DEFAULT_OPPONENTS = ["model:champion-v3", "endgame-denial", "adaptive:reading,tempo,bully", "lowest-legal", "card-counter"];
 
 function optionsFor(selectedId) {
   const group = (kind, title) => {
@@ -66,6 +66,15 @@ function optionsFor(selectedId) {
     return `<optgroup label="${title}">${entries.map((e) => `<option value="${esc(e.id)}"${e.id === selectedId ? " selected" : ""}>${esc(e.label)}</option>`).join("")}</optgroup>`;
   };
   return group("model", "Trained models") + group("strategy", "Hand-written strategies");
+}
+
+// An opponent id may end in "+solver" (the endgame solver finishes the round). Only when
+// the id minus the suffix is in the catalog: a model file "champ+solver.json" is itself
+// the catalog id "model:champ+solver".
+function splitSolver(id) {
+  const has = (wanted) => state.catalog.some((e) => e.id === wanted);
+  const base = id.slice(0, -"+solver".length);
+  return !has(id) && id.endsWith("+solver") && has(base) ? [base, true] : [id, false];
 }
 
 function renderSetup() {
@@ -76,9 +85,10 @@ function renderSetup() {
   $("seat").innerHTML = `<option value="">random</option>${Array.from({ length: state.players }, (_, i) => `<option value="${i}">seat ${i + 1}</option>`).join("")}`;
   $("seat").value = remembered.human_seat !== undefined && remembered.human_seat < state.players ? String(remembered.human_seat) : "";
   $("opponents").innerHTML = Array.from({ length: state.players - 1 }, (_, i) => {
-    const wanted = remembered.opponents?.[i] ?? DEFAULT_OPPONENTS[i % DEFAULT_OPPONENTS.length];
+    const [wanted, solver] = splitSolver(remembered.opponents?.[i] ?? DEFAULT_OPPONENTS[i % DEFAULT_OPPONENTS.length]);
     const id = state.catalog.some((e) => e.id === wanted) ? wanted : state.catalog[0]?.id;
-    return `<select data-opponent="${i}" aria-label="Opponent ${i + 1}">${optionsFor(id)}</select>`;
+    return `<span class="opp"><select data-opponent="${i}" aria-label="Opponent ${i + 1}">${optionsFor(id)}</select>
+      <label class="muted" title="The endgame solver plays the last cards of every round (6 or fewer unseen), this opponent the rest"><input type="checkbox" data-solver="${i}"${solver ? " checked" : ""}> solver</label></span>`;
   }).join("");
   $("rule").hidden = $("deck").value !== "double";
 }
@@ -93,7 +103,7 @@ function readSetup() {
     exchange_rule: $("exchangerule").value,
     rounds: Number($("rounds").value),
     ...(seat === "" ? {} : { human_seat: Number(seat) }),
-    opponents: [...document.querySelectorAll("[data-opponent]")].map((s) => s.value),
+    opponents: [...document.querySelectorAll("[data-opponent]")].map((s, i) => s.value + (document.querySelector(`[data-solver="${i}"]`)?.checked ? "+solver" : "")),
   };
 }
 
@@ -471,7 +481,7 @@ async function loadRecords() {
     const recent = data.recent.map((r) => `<tr><td>${new Date(r.finished_unix * 1000).toLocaleString()}</td><td>${r.player_count}p vs ${r.opponents.map(esc).join(", ")}</td><td>${formatScore(r.score)}</td></tr>`).join("");
     box.innerHTML = `<h2>Your record</h2>
       ${data.write_error ? `<p class="bad">${esc(data.write_error)} — new games are not being saved.</p>` : ""}
-      <p class="muted">${data.total_games} finished game${data.total_games === 1 ? "" : "s"}. Score: +1 = always President, 0 = even, −1 = always last. For reference the built-in champion scores about +0.6 against the hand-written strategies (docs/baselines/neat-v2).</p>
+      <p class="muted">${data.total_games} finished game${data.total_games === 1 ? "" : "s"}. Score: +1 = always President, 0 = even, −1 = always last. For reference the built-in champion scores about +0.7 against the hand-written strategies (docs/baselines/neat-v3).</p>
       <h3>By opponent</h3><table class="t"><thead><tr><th>Opponent</th><th>Games</th><th>Mean score</th><th></th></tr></thead><tbody>${opp}</tbody></table>
       <h3>By table</h3><table class="t"><thead><tr><th>Players</th><th>Opponents</th><th>Games</th><th>Mean</th><th>President</th><th>Last</th></tr></thead><tbody>${tables}</tbody></table>
       <h3>Recent games</h3><table class="t"><tbody>${recent}</tbody></table>`;

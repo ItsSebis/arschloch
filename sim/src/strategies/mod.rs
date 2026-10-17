@@ -52,3 +52,22 @@ pub(crate) fn lowest_play<'a>(
         })
         .map(|(_, _, mv)| mv)
 }
+
+/// The highest play among `moves`: most cards first, then the highest top
+/// card; the last of equals. `None` without a play. The mirror of `lowest_play`.
+pub(crate) fn highest_play<'a>(
+    moves: impl IntoIterator<Item = &'a Move>,
+    duplicate_rule: DuplicateRule,
+) -> Option<&'a Move> {
+    moves
+        .into_iter()
+        .filter_map(|mv| match mv {
+            Move::Play(combo) => Some((combo.size(), combo.top_card(duplicate_rule), mv)),
+            Move::Pass => None,
+        })
+        .max_by(|a, b| {
+            a.0.cmp(&b.0)
+                .then_with(|| a.1.compare(&b.1, duplicate_rule))
+        })
+        .map(|(_, _, mv)| mv)
+}

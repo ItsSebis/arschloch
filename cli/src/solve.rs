@@ -17,6 +17,7 @@ pub fn run(args: impl Iterator<Item = String>) -> anyhow::Result<()> {
     let mut config = SolverConfig {
         max_unseen: 12,
         node_budget: 50_000_000,
+        ..SolverConfig::default()
     };
     let mut args = args;
     while let Some(arg) = args.next() {

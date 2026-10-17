@@ -1,0 +1,39 @@
+
+Strategy                 President       Vize            ViceArschloch   Arschloch       
+LowestLegal              4350            4167            4390            5093            
+LowestLegal+Solver(T=6)  1650            1833            1610            907             
+
+Voluntary pass rate: 2.29%
+
+Voluntary pass rate by strategy:
+  LowestLegal              0.00%
+  LowestLegal+Solver(T=6)  9.24%
+
+President retention (stayed President the very next round):
+  LowestLegal              63.84% (2232/3496)
+  LowestLegal+Solver(T=6)  63.65% (830/1304)
+
+First-round placement variance (lower = more skill-driven, higher = more luck-driven):
+  LowestLegal              1.29
+  LowestLegal+Solver(T=6)  1.11
+
+
+Average place (1 = best), mean score (+1 best .. -1 worst), strength rating (Elo-like points, field mean 0), share of rounds as President; ± = standard error over matches:
+Strategy                 avg rank ±SE  mean score ±SE  strength rating ±SE  President % [95% Wilson]
+LowestLegal              2.57 ±0.01    -0.045 ±0.005   -24 ±3               24.2% [23.5, 24.8]
+LowestLegal+Solver(T=6)  2.30 ±0.02    +0.136 ±0.015   +24 ±3               27.5% [26.4, 28.6]
+
+By seat (position bias; a fair table gives every seat the same numbers):
+Seat    avg rank ±SE  mean score ±SE
+seat 0  2.50 ±0.02    +0.003 ±0.016
+seat 1  2.48 ±0.02    +0.015 ±0.017
+seat 2  2.46 ±0.03    +0.027 ±0.017
+seat 3  2.57 ±0.02    -0.045 ±0.017
+
+Luck-adjusted score (--skill-score duplicate; score +1 best .. -1 worst, ± = standard error):
+Strategy                 plain score ±SE  skill (duplicate) ±SE  skill (estimate) ±SE  variance reduction M  luck share
+LowestLegal+Solver(T=6)  +0.136 ±0.015    +0.136 ±0.007          -                     4.82                  79%
+LowestLegal              -0.045 ±0.005    -0.045 ±0.002          -                     4.82                  79%
+Duplicate: 300 groups of 4 matches, 5 rounds per match; plain score, duplicate skill, M and luck share cover all rounds.
+Duplicate deals cancel the luck of the deal in round 1; later rounds are luck-reduced, not luck-free.
+In duplicate mode the plain score equals the duplicate skill value by construction (the mean of the group means is the mean of the matches); its ±SE is what an ordinary run of the same size would show, not an independent estimate.

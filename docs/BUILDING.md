@@ -92,7 +92,9 @@ cargo run -p cli -- \
   a seat-position bias in how cards are dealt (see `docs/RULES.md`,
   "Players & Deck"). Must be repeated exactly `--player-count` times.
   Each value is a spec, `SPEC := FIXED | "adaptive" | "adaptive:"
-  OPTIONS | "neat:" PATH | "endgame-solver" | "endgame-solver:" OPTIONS`
+  OPTIONS | "neat:" PATH | "endgame-solver" | "endgame-solver:" OPTIONS`,
+  optionally followed by `"+solver"` or `"+solver:" N` (any strategy, with the
+  endgame solver playing the last cards; `docs/SOLVER.md`)
   (`neat:` is a trained genome file, see `docs/TRAINING.md`; `endgame-solver`
   plays the last few cards exactly with options `max-unseen=N`, `budget=N`
   and `fallback=NAME`, see `docs/SOLVER.md`):
@@ -298,7 +300,10 @@ and the features live only in the separate estimator batch):
 ```
 
 `extended.skill` and its `duplicate`, `estimate`, `comparison` parts exist
-only for the modes that compute them. Every catalogue entry's `json_path`
+only for the modes that compute them. In `comparison.strategies[]`,
+`difference_in_se` and `variance_removed_ratio` are `null` when they are not
+defined (both standard errors 0, or no duplicate luck share); files written
+before v0.7 hold `0.0` there. Every catalogue entry's `json_path`
 says where its value lives (`docs/STATISTICS.md` lists them), and a test
 checks that against a real run.
 
@@ -321,7 +326,8 @@ cargo install cargo-xwin
 cargo xwin build --release --target x86_64-pc-windows-msvc -p cli
 ```
 
-The `.exe` lands at `target/x86_64-pc-windows-msvc/release/cli.exe`.
+The `.exe` lands at `target/x86_64-pc-windows-msvc/release/cli.exe`. The desktop window cross-compiles the same way
+(`-p cli -p gui`, giving `arschloch-gui.exe`; see `docs/RELEASING.md`).
 
 The first `cargo xwin build` downloads and caches the Windows SDK and CRT
 headers (a few hundred MB, under `~/.cache/cargo-xwin`); later builds

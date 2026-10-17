@@ -2,6 +2,7 @@
 //! built on top of `engine`'s single-round primitives. See
 //! docs/ARCHITECTURE.md, "sim".
 
+mod card_bits;
 pub mod duplicate;
 pub mod extended_stats;
 pub mod hand_features;
@@ -33,8 +34,10 @@ pub use match_runner::{
     deal_round_seed, play_out, run_batch, run_batch_with, run_match, run_match_with, PlayCounters,
     RunOptions,
 };
-pub use solver::config::{SolverSpec, StrategyName};
-pub use solver::SolverConfig;
+pub use solver::config::{
+    parse_solver_toggle, split_solver_suffix, SolverSpec, SolverToggle, StrategyName, SOLVER_SUFFIX,
+};
+pub use solver::{CeilingMode, LeafSpec, SamplerConfig, SolverConfig};
 pub use statistics::{aggregate, RoleRetention, Statistics};
 pub use strategies::{
     Adaptive, AdaptiveConfig, CardCounter, DenialMode, EndgameDenial, EndgameSolver, FeatureGroups,

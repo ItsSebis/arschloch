@@ -6,15 +6,26 @@ use crate::routes::Response;
 use crate::server::{Handler, HttpRequest};
 
 /// Serves one `results.json`, re-read on every request so a rerun shows up
-/// after a reload.
+/// after a reload, and optionally a second one to compare it with.
 pub struct ResultsApp {
     file: PathBuf,
+    compare: Option<PathBuf>,
 }
 
 impl ResultsApp {
     #[must_use]
     pub fn new(file: PathBuf) -> Self {
-        Self { file }
+        Self {
+            file,
+            compare: None,
+        }
+    }
+
+    /// Also serve a second results file (`/api/compare`) for the side-by-side view.
+    #[must_use]
+    pub fn with_compare(mut self, file: PathBuf) -> Self {
+        self.compare = Some(file);
+        self
     }
 
     #[must_use]
@@ -36,25 +47,29 @@ impl ResultsApp {
                 "text/css; charset=utf-8",
                 include_str!("../assets/style.css"),
             ),
-            "/api/results" => self.results(),
+            "/api/results" => serve_json(&self.file),
+            "/api/compare" => match &self.compare {
+                Some(file) => serve_json(file),
+                None => Response::error(404, "no second results file was given"),
+            },
             _ => Response::error(404, "not found"),
         }
     }
+}
 
-    fn results(&self) -> Response {
-        let shown = self.file.display();
-        match std::fs::read(&self.file) {
-            Err(error) => Response::error(404, &format!("cannot read {shown}: {error}")),
-            // Validate without building a tree, then serve the bytes as they are.
-            Ok(bytes) => match serde_json::from_slice::<serde::de::IgnoredAny>(&bytes) {
-                Ok(_) => Response {
-                    status: 200,
-                    content_type: "application/json; charset=utf-8",
-                    body: bytes,
-                },
-                Err(error) => Response::error(422, &format!("{shown} is not valid JSON: {error}")),
+fn serve_json(file: &std::path::Path) -> Response {
+    let shown = file.display();
+    match std::fs::read(file) {
+        Err(error) => Response::error(404, &format!("cannot read {shown}: {error}")),
+        // Validate without building a tree, then serve the bytes as they are.
+        Ok(bytes) => match serde_json::from_slice::<serde::de::IgnoredAny>(&bytes) {
+            Ok(_) => Response {
+                status: 200,
+                content_type: "application/json; charset=utf-8",
+                body: bytes,
             },
-        }
+            Err(error) => Response::error(422, &format!("{shown} is not valid JSON: {error}")),
+        },
     }
 }
 
@@ -134,6 +149,19 @@ mod tests {
         assert!(String::from_utf8(broken.body)
             .unwrap()
             .contains("not valid JSON"));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn a_second_file_is_served_only_when_given() {
+        let none = ResultsApp::new("unused.json".into());
+        assert_eq!(none.handle("GET", "/api/compare").status, 404);
+        let path = temp_file("compare", r#"{"statistics":{"matches_played":7}}"#);
+        let app = ResultsApp::new("unused.json".into()).with_compare(path.clone());
+        let response = app.handle("GET", "/api/compare");
+        assert_eq!(response.status, 200);
+        let value: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+        assert_eq!(value["statistics"]["matches_played"], 7);
         let _ = std::fs::remove_file(path);
     }
 

@@ -273,3 +273,16 @@ thread counts).
 At most 3%, below the 5% bar, and mimalloc is C code (the workspace has
 none, for easy cross-compiling). The hot path no longer allocates (steps 4
 and 5), so there is little left for an allocator to speed up. Not kept.
+
+## Training rows after `hidden` became the default (Phase 13b follow-up, 2026-10-17)
+
+`cli train` defaults to `--features hidden`, so the `bench.sh` training row (pop 60 x 4 gen, seed 7, 1 thread) now
+trains 28-input genomes and its checksum changed on purpose; a second row pins `--features base`. Every non-training
+row is byte-identical to the checksums above.
+
+| row | seconds | checksum |
+|---|---:|---|
+| train, default (`hidden`) | 4.57 | `ba1bbb61873ad49b` (was `85d7c401da1bb195` for the old default) |
+| train, `--features base` | 3.43 | `85d7c401da1bb195` (unchanged) |
+
+Hidden training costs about 1.3x the time of base in this setting.

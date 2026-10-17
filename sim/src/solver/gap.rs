@@ -5,16 +5,13 @@
 
 use std::sync::Arc;
 
-use engine::{
-    deal, lowest_card_holder, standard_deck, DeckVariant, DuplicateRule, Move, Round, SeatId,
-};
-use rand::seq::SliceRandom;
+use engine::{deal, lowest_card_holder, DeckVariant, DuplicateRule, Move, Round, SeatId};
 use rand::SeedableRng;
 
 use super::notation::{cards_text, move_text};
 use super::{analyze, MoveReport, Observation, SolveError, SolverConfig};
 use crate::hand_reading::PassTracker;
-use crate::match_runner::turn_context_for;
+use crate::match_runner::{shuffled_numbered_deck, turn_context_for};
 use crate::strategy::{ContextNeeds, Strategy};
 
 #[derive(Debug, Clone, Copy)]
@@ -110,11 +107,7 @@ pub fn run_gap(strategies: &[Arc<dyn Strategy>], config: &GapConfig) -> (Vec<Gap
         let game_seed = config.seed.wrapping_add(game as u64);
         let mut deal_rng = rand::rngs::StdRng::seed_from_u64(game_seed);
         let mut play_rng = rand::rngs::StdRng::seed_from_u64(game_seed ^ 0xA5A5_5A5A_A5A5_5A5A);
-        let mut deck = standard_deck(config.deck);
-        deck.shuffle(&mut deal_rng);
-        for (index, card) in deck.iter_mut().enumerate() {
-            card.deal_index = u8::try_from(index).expect("decks have at most 104 cards");
-        }
+        let deck = shuffled_numbered_deck(config.deck, &mut deal_rng);
         let hands = deal(deck, config.players).expect("3-6 players");
         let round_deck: Vec<_> = hands.iter().flatten().copied().collect();
         let leader =
@@ -198,6 +191,7 @@ mod tests {
             solver: SolverConfig {
                 max_unseen: 4,
                 node_budget: 100_000,
+                ..SolverConfig::default()
             },
         }
     }
@@ -253,7 +247,7 @@ mod tests {
             ..SolverSpec::default()
         };
         let table: Vec<Arc<dyn Strategy>> = (0..4)
-            .map(|_| Arc::new(EndgameSolver::new(spec)) as Arc<dyn Strategy>)
+            .map(|_| Arc::new(EndgameSolver::new(spec.clone())) as Arc<dyn Strategy>)
             .collect();
         let (rows, stats) = run_gap(&table, &config(20));
         assert!(stats.solvable > 0);

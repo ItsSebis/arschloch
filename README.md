@@ -70,18 +70,31 @@ duplicate-card rule, thread count, and cross-compiling a Windows `.exe`).
   fallback strategy (`adaptive` by default) before that. Also `cli solve` to
   analyse a written-down situation and `cli solver-gap` to see where other
   strategies deviate; see `docs/SOLVER.md`.
+- `SPEC+solver[:N]` — the endgame solver as a toggle on any strategy spec
+  (`adaptive+solver`, `neat:champion.json+solver:8`): the strategy plays until
+  at most N (default 6) cards are unseen, the solver plays the rest of the
+  round. Works in every spec position, the desktop window and the play page.
+  With `samples=N` (`adaptive+solver:samples=16`) a sampler plays the early game
+  as well: it searches N sampled splits of the unseen cards and plays each move
+  out; with the neat-v2 champion as its play-out policy
+  (`...+solver:samples=16,leaf=neat:PATH,ceilings=off`) it beats the champion
+  head to head. See `docs/SOLVER.md` and `docs/baselines/solver-phase-b/README.md`.
 
 ### Choosing training settings
 
 `cli train-advisor --time-budget 30m` probes this machine and the candidate opponents and prints recommended `cli train`
-settings with the reason for each, ending in a command to run. See `docs/TRAINING.md`.
+settings with the reason for each, ending in a command to run; `cli train --auto --out DIR` runs the training with them, and
+`--when-flat stop` ends a run whose curve has gone flat. See `docs/TRAINING.md`.
 
 ### The desktop window
 
-`cargo run --release -p gui` opens a small window to configure and run simulations and to read an activity log; play,
+`cargo run --release -p gui` (in the release archives: `arschloch-gui`, next to `cli`) opens a small window to
+configure and run simulations, to analyse a position with the solver (click the cards), to ask the training advisor for
+settings and start the training, and to read an activity log with a progress bar and file pickers; play,
 dashboards and the run analysis stay in the browser and are started from it. `cli view results.json` shows the results
 of a simulation as tables and bars in the browser (strategies best first, places as stacked bars, the luck-adjusted
-score when there is one, an explanation of every number). See `docs/GUI.md`.
+score and the cheap estimate when there are some, an explanation of the numbers shown; `cli view A.json B.json` compares
+two files). See `docs/GUI.md`.
 
 ### The stdout summary
 

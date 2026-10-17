@@ -1,5 +1,5 @@
-//! `cli view FILE`: the `results.json` of a simulation batch as a page in the
-//! browser (Phase 11b).
+//! `cli view FILE [COMPARE]`: the `results.json` of a simulation batch as a page in
+//! the browser, optionally next to a second file (Phase 11b).
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -17,6 +17,10 @@ pub struct ViewArgs {
     /// A results file written by a plain `cli` run (`--output`).
     pub file: PathBuf,
 
+    /// A second results file to show side by side with the first (a file can
+    /// also be picked in the page).
+    pub compare: Option<PathBuf>,
+
     /// Port to serve on, on 127.0.0.1 only.
     #[arg(long, default_value_t = 8100)]
     pub port: u16,
@@ -29,13 +33,21 @@ pub fn run(raw_args: impl Iterator<Item = String>) -> anyhow::Result<()> {
         "{} is not a file (expected the results.json of a `cli` run)",
         args.file.display()
     );
-    let server = web::Server::start(Arc::new(web::ResultsApp::new(args.file)), args.port)
-        .with_context(|| {
-            format!(
-                "cannot start the page on port {} (is it in use? pick another with --port)",
-                args.port
-            )
-        })?;
+    let mut app = web::ResultsApp::new(args.file);
+    if let Some(compare) = args.compare {
+        anyhow::ensure!(
+            compare.is_file(),
+            "{} is not a file (expected the results.json of a `cli` run)",
+            compare.display()
+        );
+        app = app.with_compare(compare);
+    }
+    let server = web::Server::start(Arc::new(app), args.port).with_context(|| {
+        format!(
+            "cannot start the page on port {} (is it in use? pick another with --port)",
+            args.port
+        )
+    })?;
     println!("results: {}  (Ctrl-C to stop)", server.url());
     server.wait();
     Ok(())
@@ -50,6 +62,7 @@ mod tests {
         let args = ViewArgs::try_parse_from(["cli view", "results.json"]).unwrap();
         assert_eq!(args.file, PathBuf::from("results.json"));
         assert_eq!(args.port, 8100);
+        assert_eq!(args.compare, None);
         assert!(ViewArgs::try_parse_from(["cli view"]).is_err());
         assert_eq!(
             ViewArgs::try_parse_from(["cli view", "r.json", "--port", "9000"])
@@ -57,6 +70,12 @@ mod tests {
                 .port,
             9000
         );
+    }
+
+    #[test]
+    fn a_second_file_to_compare_is_optional() {
+        let args = ViewArgs::try_parse_from(["cli view", "a.json", "b.json"]).unwrap();
+        assert_eq!(args.compare, Some(PathBuf::from("b.json")));
     }
 
     #[test]

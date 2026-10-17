@@ -480,6 +480,13 @@ pub fn analyse(run: &RunData) -> RunAnalysis {
         skipped_lines: run.skipped_lines,
         verdict: Vec::new(),
     };
-    analysis.verdict = verdict::verdict_for(&analysis);
+    // Without a run_end (a run still training, or stopped) the best generation is the best
+    // re-evaluation mean in the events, so the stop-early guard works the same mid-run as on
+    // the finished run; the reported `best_generation` stays null.
+    let mut judged = analysis.clone();
+    if judged.best_generation.is_none() {
+        judged.best_generation = argmax(&means).map(|i| gens[i].generation);
+    }
+    analysis.verdict = verdict::verdict_for(&judged);
     analysis
 }

@@ -12,7 +12,7 @@ mkdir -p "$OUT"
 # Run before the pass rule existed: `free` is what they were measured under.
 PASS_RULE=${PASS_RULE:-free}
 EXCHANGE_RULE=${EXCHANGE_RULE:-free}
-COMMON=(--pass-rule "$PASS_RULE" --exchange-rule "$EXCHANGE_RULE" --population 100 --generations 60 --matches-per-genome 40 --reeval-matches 100 --rounds 6 --quiet)
+COMMON=(--pass-rule "$PASS_RULE" --exchange-rule "$EXCHANGE_RULE" --population 100 --generations 60 --matches-per-genome 40 --reeval-matches 100 --rounds 6 --features base --quiet)
 
 run() { # name seed extra-args...
   local name=$1 seed=$2; shift 2

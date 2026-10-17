@@ -9,7 +9,10 @@ use clap::Parser;
 
 /// One batch-run configuration, as parsed from the command line.
 #[derive(Parser, Debug)]
-#[command(about = "Simulate Arschloch matches and report role/statistics output")]
+#[command(
+    version,
+    about = "Simulate Arschloch matches and report role/statistics output"
+)]
 pub struct Args {
     /// Table size (3-6 seats).
     #[arg(long, value_parser = clap::value_parser!(u8).range(3..=6))]
@@ -68,7 +71,14 @@ pub struct Args {
     /// reported in results as `Neat(<file name without extension>)`, or
     /// `endgame-solver[:OPTIONS]`, exact play once few cards are unseen
     /// (`max-unseen=N`, `budget=N`, `fallback=NAME`; see docs/SOLVER.md),
-    /// reported as `EndgameSolver(<fallback>,T=<max-unseen>)`. For
+    /// reported as `EndgameSolver(<fallback>,T=<max-unseen>)`, or
+    /// `SPEC+solver[:N]` for any of the above (`adaptive+solver`,
+    /// `neat:PATH+solver:8`): that strategy plays until at most N (default 6)
+    /// cards are unseen and the solver plays the rest of the round, reported
+    /// as `<name>+Solver(T=N)`. Both solver forms also take `samples=N`
+    /// (`depth=D`, `leaf=adaptive|cards|neat:PATH`, `rollouts=N`): a sampler
+    /// that searches sampled deals plays the early game as well, and
+    /// `ceilings=hard|soft|off` (how pass ceilings restrict the deals). For
     /// example, a three-seat table: `--strategy lowest-legal --strategy
     /// adaptive:counting --strategy adaptive:reading,deception=0.2`.
     #[arg(long = "strategy", required = true, value_name = "SPEC")]
@@ -219,6 +229,10 @@ pub enum StrategyArg {
     Adaptive(sim::AdaptiveConfig),
     Neat(NeatSpec),
     Solver(sim::SolverSpec),
+    /// `BASE+solver[:OPTIONS]`: any other spec, with the endgame solver taking over once
+    /// few cards are unseen and, with `samples=N`, the early-game sampler before that
+    /// (`sim::EndgameSolver::wrapping_with_sampler`).
+    WithSolver(Box<StrategyArg>, sim::SolverToggle),
 }
 
 /// A `neat:PATH` spec. The genome file is loaded and checked while the
@@ -241,6 +255,17 @@ impl std::str::FromStr for StrategyArg {
 
     fn from_str(spec: &str) -> Result<Self, String> {
         let spec = spec.trim();
+        if let Some((base, rest)) = sim::split_solver_suffix(spec) {
+            let config = sim::parse_solver_toggle(rest)?;
+            let base = base.parse::<Self>()?;
+            return match base {
+                Self::Solver(_) => Err("`endgame-solver` already is the solver; `+solver` goes \
+                     behind another strategy (or use `endgame-solver:fallback=NAME`)"
+                    .to_owned()),
+                Self::WithSolver(..) => Err("`+solver` can be given only once".to_owned()),
+                base => Ok(Self::WithSolver(Box::new(base), config)),
+            };
+        }
         let (head, options) = match spec.split_once(':') {
             Some((h, o)) => (h.trim(), Some(o)),
             None => (spec, None),
@@ -278,7 +303,7 @@ impl std::str::FromStr for StrategyArg {
             .map(Self::Fixed)
             .map_err(|_| {
                 format!(
-                    "unknown strategy `{head}`; expected one of: {}, adaptive[:OPTIONS], neat:PATH, endgame-solver[:OPTIONS]",
+                    "unknown strategy `{head}`; expected one of: {}, adaptive[:OPTIONS], neat:PATH, endgame-solver[:OPTIONS] (any of them may end in +solver[:N])",
                     fixed_strategy_names(),
                 )
             })
@@ -311,6 +336,11 @@ impl StrategyArg {
             Self::Adaptive(config) => Arc::new(sim::Adaptive::new(config)),
             Self::Neat(spec) => spec.strategy,
             Self::Solver(spec) => Arc::new(sim::EndgameSolver::new(spec)),
+            Self::WithSolver(base, toggle) => Arc::new(sim::EndgameSolver::wrapping_with_sampler(
+                base.build(),
+                toggle.solver,
+                toggle.sampler,
+            )),
         }
     }
 }

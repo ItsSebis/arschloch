@@ -426,7 +426,11 @@ mod tests {
             .iter()
             .filter_map(|path| {
                 let file = GenomeFile::load(path).ok()?;
-                assert_eq!(file.feature_names, FEATURE_NAMES, "{}", path.display());
+                // The oracle is the v1 implementation: genomes of the larger
+                // feature sets (neat-v3 and later) have their own tests.
+                if file.feature_names != FEATURE_NAMES {
+                    return None;
+                }
                 Some((
                     path.display().to_string(),
                     NeatStrategy::new("b", &file.genome).unwrap(),

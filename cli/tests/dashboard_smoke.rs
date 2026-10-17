@@ -138,7 +138,7 @@ fn train_serve_shows_the_run_and_stays_up_after_it_finishes() {
     let genome = json(&get(&address, "/api/genome/best"));
     assert_eq!(
         genome["feature_names"].as_array().unwrap().len(),
-        sim::FEATURE_COUNT
+        sim::FeatureSet::Hidden.len(), // the default feature set
     );
     let page = get(&address, "/");
     assert!(page.contains("<title>NEAT training</title>"));

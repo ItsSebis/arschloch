@@ -14,6 +14,7 @@ use rand::seq::SliceRandom;
 use rand::SeedableRng;
 use rayon::prelude::*;
 
+use crate::card_bits::card_bit;
 use crate::hand_features::HandFeatures;
 use crate::hand_reading::{PassCeilings, PassTracker};
 use crate::match_config::MatchConfig;
@@ -76,11 +77,6 @@ pub(crate) fn turn_context_for<'a>(
     // the deck; decks hold at most 104 cards), so "seen" is a bit per
     // index; the unseen cards keep the deck's order.
     let unseen_cards: Vec<Card> = if needs.contains(ContextNeeds::UNSEEN) {
-        let bit = |card: &Card| {
-            1u128
-                .checked_shl(u32::from(card.deal_index))
-                .expect("deal indices of a round's deck are below 128")
-        };
         let mut seen = 0u128;
         for card in round.hand(seat).iter().chain(
             round
@@ -88,10 +84,14 @@ pub(crate) fn turn_context_for<'a>(
                 .iter()
                 .flat_map(|(_, combo)| combo.cards()),
         ) {
-            seen |= bit(card);
+            seen |= card_bit(*card);
         }
         let mut unseen = Vec::with_capacity(round_deck.len());
-        unseen.extend(round_deck.iter().filter(|card| seen & bit(card) == 0));
+        unseen.extend(
+            round_deck
+                .iter()
+                .filter(|card| seen & card_bit(**card) == 0),
+        );
         unseen
     } else {
         Vec::new()
@@ -253,6 +253,21 @@ pub(crate) fn play_out_observed(
     }
 }
 
+/// A standard deck shuffled by `rng`, every card numbered by its position
+/// (`Card::deal_index`, which the unseen-card bitmasks rely on). Shared by
+/// `run_match` and the interactive `Session`.
+pub(crate) fn shuffled_numbered_deck(
+    deck_variant: DeckVariant,
+    rng: &mut rand::rngs::StdRng,
+) -> Vec<Card> {
+    let mut deck = standard_deck(deck_variant);
+    deck.shuffle(rng);
+    for (index, card) in deck.iter_mut().enumerate() {
+        card.deal_index = u8::try_from(index).expect("deck sizes (52/104) fit in u8");
+    }
+    deck
+}
+
 /// Round `round_index`'s numbered, shuffled deck: from the play stream
 /// `rng`, or from the round's own generator when `options.deal_seed` is set.
 pub(crate) fn shuffled_deck(
@@ -261,19 +276,14 @@ pub(crate) fn shuffled_deck(
     round_index: usize,
     rng: &mut rand::rngs::StdRng,
 ) -> Vec<Card> {
-    let mut deck = standard_deck(config.deck_variant);
     match options.deal_seed {
         Some(deal_seed) => {
             let mut deal_rng =
                 rand::rngs::StdRng::seed_from_u64(deal_round_seed(deal_seed, round_index));
-            deck.shuffle(&mut deal_rng);
+            shuffled_numbered_deck(config.deck_variant, &mut deal_rng)
         }
-        None => deck.shuffle(rng),
+        None => shuffled_numbered_deck(config.deck_variant, rng),
     }
-    for (index, card) in deck.iter_mut().enumerate() {
-        card.deal_index = u8::try_from(index).expect("deck sizes (52/104) fit in u8");
-    }
-    deck
 }
 
 /// Simulates one full match (`config.rounds` rounds, role carry-over

@@ -1,0 +1,1053 @@
+{
+  "deck_variant": "Single",
+  "duplicate_rule": "FirstDealtWins",
+  "exchange_rule": "forced",
+  "matches": 2000,
+  "pass_rule": "final",
+  "player_count": 4,
+  "results": [
+    {
+      "cells": [
+        {
+          "avg_rank": 2.5317000000000003,
+          "avg_rank_std_error": 0.01314244714497568,
+          "matches": 2000,
+          "mean": -0.021133333333333344,
+          "opponent": "Neat(champion)",
+          "placements": [
+            4857,
+            4881,
+            5033,
+            5229
+          ],
+          "spread": 0.747616987500951,
+          "std_error": 0.008761631429983787
+        },
+        {
+          "avg_rank": 2.5317000000000003,
+          "avg_rank_std_error": 0.01314244714497568,
+          "matches": 2000,
+          "mean": -0.021133333333333344,
+          "opponent": "mixed (all opponents)",
+          "placements": [
+            4857,
+            4881,
+            5033,
+            5229
+          ],
+          "spread": 0.747616987500951,
+          "std_error": 0.008761631429983787
+        }
+      ],
+      "genome": "/tmp/claude-1000/-home-sebi-Documents-Code-arschloch/d4dabbea-31e7-4303-a456-53cbaba01a2e/scratchpad/e5/p13/A0/seed11/best.json"
+    },
+    {
+      "cells": [
+        {
+          "avg_rank": 2.492,
+          "avg_rank_std_error": 0.013275018382530673,
+          "matches": 2000,
+          "mean": 0.005333333333333389,
+          "opponent": "Neat(champion)",
+          "placements": [
+            5212,
+            4980,
+            4564,
+            5244
+          ],
+          "spread": 0.7588107654598573,
+          "std_error": 0.008850012255020448
+        },
+        {
+          "avg_rank": 2.492,
+          "avg_rank_std_error": 0.013275018382530673,
+          "matches": 2000,
+          "mean": 0.005333333333333389,
+          "opponent": "mixed (all opponents)",
+          "placements": [
+            5212,
+            4980,
+            4564,
+            5244
+          ],
+          "spread": 0.7588107654598573,
+          "std_error": 0.008850012255020448
+        }
+      ],
+      "genome": "/tmp/claude-1000/-home-sebi-Documents-Code-arschloch/d4dabbea-31e7-4303-a456-53cbaba01a2e/scratchpad/e5/p13/A0/seed12/best.json"
+    },
+    {
+      "cells": [
+        {
+          "avg_rank": 2.4282000000000004,
+          "avg_rank_std_error": 0.012459132995417373,
+          "matches": 2000,
+          "mean": 0.047866666666666564,
+          "opponent": "Neat(champion)",
+          "placements": [
+            4774,
+            6051,
+            5012,
+            4163
+          ],
+          "spread": 0.7113507526764331,
+          "std_error": 0.008306088663611582
+        },
+        {
+          "avg_rank": 2.4282000000000004,
+          "avg_rank_std_error": 0.012459132995417373,
+          "matches": 2000,
+          "mean": 0.047866666666666564,
+          "opponent": "mixed (all opponents)",
+          "placements": [
+            4774,
+            6051,
+            5012,
+            4163
+          ],
+          "spread": 0.7113507526764331,
+          "std_error": 0.008306088663611582
+        }
+      ],
+      "genome": "/tmp/claude-1000/-home-sebi-Documents-Code-arschloch/d4dabbea-31e7-4303-a456-53cbaba01a2e/scratchpad/e5/p13/A0/seed13/best.json"
+    },
+    {
+      "cells": [
+        {
+          "avg_rank": 2.55015,
+          "avg_rank_std_error": 0.013323240713938925,
+          "matches": 2000,
+          "mean": -0.0334333333333333,
+          "opponent": "Neat(champion)",
+          "placements": [
+            4766,
+            4884,
+            4931,
+            5419
+          ],
+          "spread": 0.7501066524168393,
+          "std_error": 0.008882160475959284
+        },
+        {
+          "avg_rank": 2.55015,
+          "avg_rank_std_error": 0.013323240713938925,
+          "matches": 2000,
+          "mean": -0.0334333333333333,
+          "opponent": "mixed (all opponents)",
+          "placements": [
+            4766,
+            4884,
+            4931,
+            5419
+          ],
+          "spread": 0.7501066524168393,
+          "std_error": 0.008882160475959284
+        }
+      ],
+      "genome": "/tmp/claude-1000/-home-sebi-Documents-Code-arschloch/d4dabbea-31e7-4303-a456-53cbaba01a2e/scratchpad/e5/p13/A0/seed14/best.json"
+    },
+    {
+      "cells": [
+        {
+          "avg_rank": 2.49615,
+          "avg_rank_std_error": 0.013002292819317677,
+          "matches": 2000,
+          "mean": 0.002566666666666719,
+          "opponent": "Neat(champion)",
+          "placements": [
+            4942,
+            5152,
+            4947,
+            4959
+          ],
+          "spread": 0.7423940784905116,
+          "std_error": 0.008668195212878451
+        },
+        {
+          "avg_rank": 2.49615,
+          "avg_rank_std_error": 0.013002292819317677,
+          "matches": 2000,
+          "mean": 0.002566666666666719,
+          "opponent": "mixed (all opponents)",
+          "placements": [
+            4942,
+            5152,
+            4947,
+            4959
+          ],
+          "spread": 0.7423940784905116,
+          "std_error": 0.008668195212878451
+        }
+      ],
+      "genome": "/tmp/claude-1000/-home-sebi-Documents-Code-arschloch/d4dabbea-31e7-4303-a456-53cbaba01a2e/scratchpad/e5/p13/A0/seed15/best.json"
+    },
+    {
+      "cells": [
+        {
+          "avg_rank": 2.48815,
+          "avg_rank_std_error": 0.01300507034495928,
+          "matches": 2000,
+          "mean": 0.007900000000000053,
+          "opponent": "Neat(champion)",
+          "placements": [
+            4902,
+            5417,
+            4697,
+            4984
+          ],
+          "spread": 0.7419073250001548,
+          "std_error": 0.00867004689663952
+        },
+        {
+          "avg_rank": 2.48815,
+          "avg_rank_std_error": 0.01300507034495928,
+          "matches": 2000,
+          "mean": 0.007900000000000053,
+          "opponent": "mixed (all opponents)",
+          "placements": [
+            4902,
+            5417,
+            4697,
+            4984
+          ],
+          "spread": 0.7419073250001548,
+          "std_error": 0.00867004689663952
+        }
+      ],
+      "genome": "/tmp/claude-1000/-home-sebi-Documents-Code-arschloch/d4dabbea-31e7-4303-a456-53cbaba01a2e/scratchpad/e5/p13/A0/seed16/best.json"
+    },
+    {
+      "cells": [
+        {
+          "avg_rank": 2.49355,
+          "avg_rank_std_error": 0.012875347996967736,
+          "matches": 2000,
+          "mean": 0.004300000000000056,
+          "opponent": "Neat(champion)",
+          "placements": [
+            4773,
+            5303,
+            5204,
+            4720
+          ],
+          "spread": 0.7300710460100566,
+          "std_error": 0.008583565331311825
+        },
+        {
+          "avg_rank": 2.49355,
+          "avg_rank_std_error": 0.012875347996967736,
+          "matches": 2000,
+          "mean": 0.004300000000000056,
+          "opponent": "mixed (all opponents)",
+          "placements": [
+            4773,
+            5303,
+            5204,
+            4720
+          ],
+          "spread": 0.7300710460100566,
+          "std_error": 0.008583565331311825
+        }
+      ],
+      "genome": "/tmp/claude-1000/-home-sebi-Documents-Code-arschloch/d4dabbea-31e7-4303-a456-53cbaba01a2e/scratchpad/e5/p13/A0/seed17/best.json"
+    },
+    {
+      "cells": [
+        {
+          "avg_rank": 2.557,
+          "avg_rank_std_error": 0.013442687712152828,
+          "matches": 2000,
+          "mean": -0.03799999999999993,
+          "opponent": "Neat(champion)",
+          "placements": [
+            4857,
+            4745,
+            4799,
+            5599
+          ],
+          "spread": 0.7578774453842922,
+          "std_error": 0.008961791808101886
+        },
+        {
+          "avg_rank": 2.557,
+          "avg_rank_std_error": 0.013442687712152828,
+          "matches": 2000,
+          "mean": -0.03799999999999993,
+          "opponent": "mixed (all opponents)",
+          "placements": [
+            4857,
+            4745,
+            4799,
+            5599
+          ],
+          "spread": 0.7578774453842922,
+          "std_error": 0.008961791808101886
+        }
+      ],
+      "genome": "/tmp/claude-1000/-home-sebi-Documents-Code-arschloch/d4dabbea-31e7-4303-a456-53cbaba01a2e/scratchpad/e5/p13/A0/seed18/best.json"
+    },
+    {
+      "cells": [
+        {
+          "avg_rank": 2.4615,
+          "avg_rank_std_error": 0.013296889810753405,
+          "matches": 2000,
+          "mean": 0.025666666666666716,
+          "opponent": "Neat(champion)",
+          "placements": [
+            5021,
+            5349,
+            5009,
+            4621
+          ],
+          "spread": 0.7341564320134119,
+          "std_error": 0.008864593207168937
+        },
+        {
+          "avg_rank": 2.4615,
+          "avg_rank_std_error": 0.013296889810753405,
+          "matches": 2000,
+          "mean": 0.025666666666666716,
+          "opponent": "mixed (all opponents)",
+          "placements": [
+            5021,
+            5349,
+            5009,
+            4621
+          ],
+          "spread": 0.7341564320134119,
+          "std_error": 0.008864593207168937
+        }
+      ],
+      "genome": "/tmp/claude-1000/-home-sebi-Documents-Code-arschloch/d4dabbea-31e7-4303-a456-53cbaba01a2e/scratchpad/e5/p13/A0/seed19/best.json"
+    },
+    {
+      "cells": [
+        {
+          "avg_rank": 2.54595,
+          "avg_rank_std_error": 0.01318801579580171,
+          "matches": 2000,
+          "mean": -0.030633333333333356,
+          "opponent": "Neat(champion)",
+          "placements": [
+            4770,
+            4870,
+            5031,
+            5329
+          ],
+          "spread": 0.7476744976555243,
+          "std_error": 0.008792010530534473
+        },
+        {
+          "avg_rank": 2.54595,
+          "avg_rank_std_error": 0.01318801579580171,
+          "matches": 2000,
+          "mean": -0.030633333333333356,
+          "opponent": "mixed (all opponents)",
+          "placements": [
+            4770,
+            4870,
+            5031,
+            5329
+          ],
+          "spread": 0.7476744976555243,
+          "std_error": 0.008792010530534473
+        }
+      ],
+      "genome": "/tmp/claude-1000/-home-sebi-Documents-Code-arschloch/d4dabbea-31e7-4303-a456-53cbaba01a2e/scratchpad/e5/p13/A0/seed20/best.json"
+    }
+  ],
+  "rounds": 10,
+  "seed": 99,
+  "statistics_catalog": [
+    {
+      "caveats": "Raw counts depend on how many rounds were played; compare shares, not totals. Single results are noisy and carry no error bars, see avg_rank and mean_role_score for numbers with standard errors.",
+      "formula": "For every round of every match, each seat adds one to the count for its strategy's name and the role the seat finished with.",
+      "id": "role_counts_by_strategy",
+      "json_path": "statistics.role_counts_by_strategy.<strategy>.<role>",
+      "meaning": "How often each strategy ended a round in each role (President, Vize, ..., Arschloch).",
+      "name": "Role counts",
+      "range": "0..rounds",
+      "reading": "A strategy that is strong finishes in the top roles more often, so look at the share of President and Vize against the share of Arschloch. With equal strengths every role is about equally common (1/players each). Counts that are far from equal for identical strategies are suspicious and point at a seating or luck effect.",
+      "scope": "per_strategy",
+      "since_phase": 1,
+      "unit": "rounds"
+    },
+    {
+      "caveats": "Forced passes (no legal play) are excluded from the numerator, so the rate is not the same as the overall pass frequency. Depends on the pass rule in use. There is no confidence interval for this global rate; per-strategy intervals are available as voluntary_pass_rate_intervals.",
+      "formula": "sum of voluntary passes divided by sum of all passes over every match and seat; 0 if nobody ever passed.",
+      "id": "voluntary_pass_rate",
+      "json_path": "statistics.voluntary_pass_rate",
+      "meaning": "How often players passed although they could have played a card. Passing when a legal play exists is a deliberate tactical choice.",
+      "name": "Voluntary pass rate",
+      "range": "0..1",
+      "reading": "Higher means more waiting and holding back. Typical values depend on the strategies; a greedy field is near 0, a patient field is clearly above it. Exactly 0 or 1 in a mixed field would be suspicious.",
+      "scope": "global",
+      "since_phase": 2,
+      "unit": "share"
+    },
+    {
+      "caveats": "Strategies that rarely pass have few samples, so the rate is noisy. Seats using the same strategy type share one bucket.",
+      "formula": "For each strategy name: its voluntary passes divided by all its passes, over every match and seat it played.",
+      "id": "voluntary_pass_rate_by_strategy",
+      "json_path": "statistics.voluntary_pass_rate_by_strategy.<strategy>",
+      "meaning": "The voluntary pass rate separately for each strategy: how patient or aggressive each one is.",
+      "name": "Voluntary pass rate by strategy",
+      "range": "0..1",
+      "reading": "Compare strategies with each other: a high value means the strategy often keeps cards back. It describes style, not strength; a strong strategy can be patient or aggressive.",
+      "scope": "per_strategy",
+      "since_phase": 2,
+      "unit": "share"
+    },
+    {
+      "caveats": "Strategies that only played single-round matches have no entry. Counts for rare roles are small, use retention_interval for a 95% interval. Retention mixes skill and the advantage the exchange hands to the previous winner.",
+      "formula": "For each strategy and role: of the round transitions where the strategy held the role and another round followed (held), the number where it held the same role again (retained_next_round); retention = retained_next_round / held.",
+      "id": "role_retention_by_strategy",
+      "json_path": "statistics.role_retention_by_strategy.<strategy>.<role>.{held,retained_next_round}",
+      "meaning": "How often a strategy keeps the same role in the next round. The role from one round carries into the next through the card exchange, so this shows whether being on top tends to last.",
+      "name": "Role retention",
+      "range": "0..1",
+      "reading": "A high President retention means the strategy defends its lead. By chance alone retention is about 1/players. A value much higher than that for President or Arschloch shows the exchange snowballs (the winner keeps the best cards); for a weak strategy high Arschloch retention is expected.",
+      "scope": "per_strategy",
+      "since_phase": 2,
+      "unit": "share"
+    },
+    {
+      "caveats": "Needs repeated identical seatings, so small batches give null. It counts all variation, including the strategy's own random choices, so it overstates pure card luck. luck_share and skill_score_duplicate measure luck more directly.",
+      "formula": "Variance of the first-round placement (0 = the table's best role) across matches with the same seating (same strategy names per seat), computed per seat series and averaged. It is null when no seating appeared in at least 2 matches.",
+      "id": "first_round_placement_variance_by_strategy",
+      "json_path": "statistics.first_round_placement_variance_by_strategy.<strategy>",
+      "meaning": "How much a strategy's first-round result varies between matches that seated it identically. Since only the shuffle differs between those matches, this is a rough signal of how much luck the deal contributes.",
+      "name": "First-round placement variance",
+      "range": "0..unbounded",
+      "reading": "A strategy whose result barely depends on the deal has a small variance; a large variance means the result is dominated by luck. Compare with the variance of a uniformly random placement, which is the ceiling.",
+      "scope": "per_strategy",
+      "since_phase": 4,
+      "unit": "places squared"
+    },
+    {
+      "caveats": "Says nothing about the number of rounds per match; rounds are what most statistics count.",
+      "formula": "The number of MatchResult records aggregated.",
+      "id": "matches_played",
+      "json_path": "statistics.matches_played",
+      "meaning": "How many simulated matches the other numbers are based on.",
+      "name": "Matches played",
+      "range": "0..unbounded",
+      "reading": "More matches means smaller standard errors; the error shrinks with the square root of the count (four times the matches halves it).",
+      "scope": "global",
+      "since_phase": 2,
+      "unit": "matches"
+    },
+    {
+      "caveats": "Averages per match, because the rounds of one match are not independent (roles carry over). Places are not equally spaced in value; mean_role_score weights them linearly.",
+      "formula": "Mean of the finishing place over every round of every match (place = index of the role in the table's role order, plus one). std_error = sample standard deviation of the series divided by the square root of the number of series, where a series is one strategy name in one match: the mean place of that name over its rounds, averaged over the seats it occupies in the match (so a name in two seats of a table counts once per match, not twice, because the seats of one name are negatively correlated). For a single-name batch n = number of matches. The value itself is weighted by rounds (every round of every seat counts once). Per-seat rows have one series per match.",
+      "id": "avg_rank",
+      "json_path": "extended.by_strategy.<strategy>.avg_rank.{value,std_error}; extended.by_seat.[].avg_rank.{value,std_error}",
+      "meaning": "The average place a strategy finishes in, where 1 is the best (President) and the number of players is the worst (Arschloch). Reported per strategy and per seat, with a standard error.",
+      "name": "Average finishing place",
+      "range": "1..players",
+      "reading": "Lower is better. The average over a fair field is (players + 1) / 2, for example 2.5 at four players. A strategy more than about two standard errors away from that is credibly better or worse than average. Per seat values that differ from each other for equal strategies reveal a seating bias.",
+      "scope": "per_strategy",
+      "since_phase": 12,
+      "unit": "place"
+    },
+    {
+      "caveats": "A distribution over many places needs many rounds to be smooth; small batches look jagged. No error bars.",
+      "formula": "count of rounds finishing in place p divided by all rounds of the strategy, times 100. The percentages of one strategy sum to 100.",
+      "id": "rank_distribution",
+      "json_path": "extended.by_strategy.<strategy>.rank_distribution",
+      "meaning": "For each finishing place, the percentage of rounds in which a strategy finished there.",
+      "name": "Rank distribution",
+      "range": "0..100",
+      "reading": "Shows the shape behind the average: two strategies with equal average place can differ in how often they win outright versus finish last. A fair field puts 100/players percent on each place.",
+      "scope": "per_strategy",
+      "since_phase": 12,
+      "unit": "percent of rounds"
+    },
+    {
+      "caveats": "Treats the gap between places as equal, which is a modelling choice. Depends on who the opponents are; use strength_rating to adjust for that.",
+      "formula": "Each finishing role maps linearly from +1 (best) to -1 (worst) with role_score(role, n) = 1 - 2 * place_index / (n - 1). The statistic is the mean over all rounds; std_error is computed over the same per-(match, strategy name) series as avg_rank (a name that holds several seats is averaged over them within the match). This is also the fitness used in NEAT training.",
+      "id": "mean_role_score",
+      "json_path": "extended.by_strategy.<strategy>.mean_role_score.{value,std_error}; extended.by_seat.[].mean_role_score.{value,std_error}",
+      "meaning": "A single number for how well a strategy does: +1 means it is always President, -1 means it is always last, 0 is the middle. Reported per strategy and per seat, with a standard error.",
+      "name": "Mean role score",
+      "range": "-1..+1",
+      "reading": "Higher is better. A fair field averages exactly 0 (the scores of one table always sum to 0), so scores are relative to the opponents. Values near 0.1 are a small edge, above 0.3 is a clear one.",
+      "scope": "per_strategy",
+      "since_phase": 12,
+      "unit": "score"
+    },
+    {
+      "caveats": "Only meaningful relative to this field: adding a weak opponent changes the others' numbers. A strategy that beat everyone in every game would have an unbounded rating, but each strategy additionally plays one virtual average opponent (half a win, half a loss), which keeps every rating finite; nothing is clipped, and a very large value just means a very one-sided record. The bootstrap standard error is an estimate and needs many matches; with --bootstrap-resamples 0 (or 1) there is none and std_error is null, not 0.",
+      "formula": "Bradley-Terry model fitted by the MM algorithm on every pair at every table in every round (who finished above whom), pooled by strategy name; strengths are converted to Elo-like points (400 * log10 of the strength ratio, centred at 0). std_error comes from 200 bootstrap resamples of matches (null when resampling is switched off).",
+      "id": "strength_rating",
+      "json_path": "extended.by_strategy.<strategy>.strength_rating.{value,std_error}",
+      "meaning": "How strong a strategy is relative to this particular field, adjusted for the opponents: finishing above a strong opponent counts for more than finishing above a weak one. The ratings average 0 over the field.",
+      "name": "Strength rating",
+      "range": "-unbounded..+unbounded",
+      "reading": "Higher is better; 0 is the field average, a difference of 100 points means the stronger strategy finishes above the weaker one in about 64 percent of their meetings. Compare ratings within one run only.",
+      "scope": "per_strategy",
+      "since_phase": 12,
+      "unit": "Elo-like points"
+    },
+    {
+      "caveats": "Assumes independent trials; consecutive rounds of one match are correlated, so the true uncertainty is somewhat larger than shown. Unlike the plain normal interval it stays inside 0..1 even for rare events.",
+      "formula": "The Wilson score interval at 95 percent confidence: for k successes in n trials and z = 1.96, centre = (p + z^2/(2n)) / (1 + z^2/n), half-width = z * sqrt(p(1-p)/n + z^2/(4n^2)) / (1 + z^2/n), with p = k / n.",
+      "id": "retention_interval",
+      "json_path": "extended.role_retention_intervals.<strategy>.<role>.{low,high}",
+      "meaning": "A range in which the true value of a rate (such as role retention; the voluntary pass rate has its own entry, voluntary_pass_rate_intervals) very likely lies, given how few or many cases it was measured on.",
+      "name": "Wilson confidence interval",
+      "range": "0..1",
+      "reading": "Read it as the plausible range. If two intervals do not overlap, the rates probably differ. A wide interval means too few observations, run more matches.",
+      "scope": "per_strategy",
+      "since_phase": 12,
+      "unit": "share"
+    },
+    {
+      "caveats": "Assumes independent passes; passes within one match are correlated, so the true uncertainty is somewhat larger. Only given per strategy: the global voluntary_pass_rate has no interval. Strategies that never passed have no interval.",
+      "formula": "The Wilson score interval (see retention_interval) for k = the strategy's voluntary passes out of n = all its passes over every match and seat it played.",
+      "id": "voluntary_pass_rate_intervals",
+      "json_path": "extended.voluntary_pass_rate_intervals.<strategy>.{low,high}",
+      "meaning": "A 95 percent confidence interval for each strategy's voluntary pass rate (the per-strategy version of voluntary_pass_rate_by_strategy).",
+      "name": "Voluntary pass rate interval",
+      "range": "0..1",
+      "reading": "A wide interval means the strategy passed rarely, so its rate is poorly known. Two strategies whose intervals do not overlap probably differ in patience.",
+      "scope": "per_strategy",
+      "since_phase": 12,
+      "unit": "share"
+    },
+    {
+      "caveats": "Estimated by rollouts, so noisy with small K or a small sample; deterministic for a fixed seed. The rollout opponents play their normal strategies, so the verdict is relative to them. Only two alternatives (weakest and strongest legal play) are compared, not every legal play. Off by default because it costs time.",
+      "formula": "For a sample of voluntary passes the round is replayed K times from that exact state, once with the pass and once with each of the weakest and strongest legal play; a pass is useful if the average finishing place after passing is strictly better than after the best alternative. Share = useful passes / sampled voluntary passes.",
+      "id": "useful_pass_share",
+      "json_path": "extended.by_strategy.<name>.useful_pass_share",
+      "meaning": "Of the times a strategy passed on purpose, how often the pass was actually the better choice than the best card it could have played.",
+      "name": "Useful pass share",
+      "range": "0..1",
+      "reading": "Higher means the strategy passes for good reasons. A share near 0 means its passes cost it places; near 1 means passing is a real skill of this strategy. Compare with voluntary_pass_rate: many passes with a low useful share is wasteful.",
+      "scope": "per_strategy",
+      "since_phase": 12,
+      "unit": "share"
+    },
+    {
+      "caveats": "Same caveats as useful_pass_share: sampled, rollout noise, compares only the weakest and strongest legal play. Because the best alternative is chosen after the fact, a pass that is truly neutral still shows a slightly negative value.",
+      "formula": "Mean over sampled voluntary passes of (expected place after the best alternative minus expected place after passing), each estimated from K same-seed rollouts. Positive means passing was better.",
+      "id": "useful_pass_gain",
+      "json_path": "extended.by_strategy.<name>.useful_pass_gain",
+      "meaning": "On average, how many finishing places a voluntary pass gains or loses compared with the best alternative play.",
+      "name": "Useful pass gain",
+      "range": "-players..+players",
+      "reading": "Above 0 means the passes pay off on average; below 0 means the strategy would do better to just play. Gains are small, hundredths of a place are already notable.",
+      "scope": "per_strategy",
+      "since_phase": 12,
+      "unit": "places"
+    },
+    {
+      "caveats": "Only round 1 is perfectly luck-free. Later rounds are luck-reduced, not luck-free, because the carried-over roles and exchanged cards depend partly on skill in earlier rounds and the rounds diverge between seatings. Needs a number of matches that is a multiple of the number of strategies. The deal comes from a separate random stream, so results differ from ordinary runs with the same seed. In the summary the plain score column equals the duplicate skill value by construction (the mean of the group means is the mean of the matches); its standard error is the counterfactual SE of an ordinary run of the same size, not an independent estimate (see plain_mean_role_score).",
+      "formula": "Groups of k matches (k = number of strategies) share one deal seed with the strategy assignment rotated through all seats. For strategy s in group g, x(s,g) is the mean role score over its k seatings; the skill score is the mean of x(s,g) over groups and the standard error is the standard deviation of x(s,g) over groups divided by the square root of the number of groups.",
+      "id": "skill_score_duplicate",
+      "json_path": "extended.skill.duplicate.strategies.[].skill_score_duplicate.{value,std_error}; extended.skill.duplicate.strategies.[].skill_score_duplicate_round1.{value,std_error}",
+      "meaning": "A luck-free skill measure: the same deals are replayed with the strategies rotated through every seat, so every strategy plays every hand once. The score is a strategy's mean role score over all those hands, plus or minus a standard error.",
+      "name": "Skill score (duplicate deals)",
+      "range": "-1..+1",
+      "reading": "Higher is better; 0 is the field average and a fair field sums to 0. The standard error is much smaller than for ordinary games of the same size, so smaller differences are detectable. This is the reference the cheap estimator is compared with.",
+      "scope": "per_strategy",
+      "since_phase": 12,
+      "unit": "score"
+    },
+    {
+      "caveats": "It can only remove the luck its features capture: luck that comes from how hands combine during play stays in. Uses round 1 only. With a single strategy name at the table there is nothing to adjust against, so the estimate is skipped (n/a). The regression is linear and may be biased if the true hand effect is not. Costs almost nothing extra and works on ordinary runs.",
+      "formula": "Least squares regression of the round-1 role score of every seat on hand features (cards of Queen or higher, pairs, triples, quads, lowest card strength, mean card strength, and hand size, because the uneven deal at 3, 5 and 6 players gives the first seats an extra card) plus a constant per strategy. Adjusted score = actual score minus beta times (features minus their mean); the estimate is the mean adjusted score per strategy with a standard error (seats of one name in a match are averaged first). The regression coefficients are reported under estimator_features.",
+      "id": "skill_score_estimate",
+      "json_path": "extended.skill.estimate.strategies.[].skill_score_estimate.{value,std_error}",
+      "meaning": "An inexpensive luck adjustment for ordinary runs: it predicts each seat's first-round result from the quality of the dealt hand and subtracts the part explained by luck.",
+      "name": "Skill score (cheap estimate)",
+      "range": "-1..+1",
+      "reading": "Read like skill_score_duplicate: higher is better, 0 is average. It should land close to the duplicate result; estimator_agreement says how close. When both modes run, the estimate comes from a separate ordinary batch with different deals, so its standard error is honest and it differs from the duplicate value by noise. A big difference between the plain mean role score and this one means the strategy was helped or hurt by its hands.",
+      "scope": "per_strategy",
+      "since_phase": 12,
+      "unit": "score"
+    },
+    {
+      "caveats": "Computed per strategy from the same deals, so the rows are similar; it describes this field and rule set rather than one strategy's quality. It rests on variance_reduction, which needs several duplicate groups to be stable. It counts only the luck that duplicate deals remove, so luck that arises during play (who happens to get which exchange cards in later rounds) is not included and the true luck share is somewhat higher.",
+      "formula": "luck_share = 1 - 1 / variance_reduction, clamped to 0..1.",
+      "id": "luck_share",
+      "json_path": "extended.skill.duplicate.strategies.[].luck_share; extended.skill.duplicate.strategies.[].luck_share_round1; extended.skill.estimate.strategies.[].luck_share",
+      "meaning": "How much of the spread of single-game results is down to card luck rather than play: 0 means skill decides everything, 1 means pure luck.",
+      "name": "Luck share",
+      "range": "0..1",
+      "reading": "A card game with a lot of luck shows a high value. If it is large, many games are needed to separate two strategies, and duplicate deals pay off. Values near 0 would mean the deal hardly matters.",
+      "scope": "per_strategy",
+      "since_phase": 12,
+      "unit": "share"
+    },
+    {
+      "caveats": "Estimated from the same sample, so itself noisy with few groups. Values below 1 can occur by chance.",
+      "formula": "Var(single-match score) / (k * Var(group mean)), where the single-match score is a strategy's mean role score in one match, k is the number of matches per group (number of strategies) and the group mean is x(s,g) as in skill_score_duplicate. Computed for each strategy; the cheap estimator reports its own factor (the variance of the strategy's round-1 scores before and after the adjustment).",
+      "id": "variance_reduction",
+      "json_path": "extended.skill.duplicate.strategies.[].variance_reduction; extended.skill.duplicate.strategies.[].variance_reduction_round1; extended.skill.estimate.strategies.[].variance_reduction",
+      "meaning": "How many ordinary games one duplicate game is worth: a value of 5 means a duplicate group gives the accuracy of five times as many ordinary games.",
+      "name": "Variance reduction",
+      "range": "0..unbounded",
+      "reading": "Larger is better; 1 means no benefit. The factor is already per match (the k matches of a group are accounted for in the formula), so any value above 1 means a duplicate or adjusted match is worth more than an ordinary one and the format pays off.",
+      "scope": "per_strategy",
+      "since_phase": 12,
+      "unit": "factor"
+    },
+    {
+      "caveats": "With few strategies the rank correlation has few possible values and is easy to get by chance (three strategies give only a handful of orderings). Only available in the mode that runs both, which plays about twice the matches: the duplicate groups and a separate ordinary batch (different deals) for the estimator. The estimate and the duplicate value therefore differ by sampling noise; gaps within about two standard errors are expected, perfect agreement would be suspicious.",
+      "formula": "Kendall rank correlation (tau, rank_agreement, from -1 for reversed to +1 for identical order) of the strategies ordered by skill_score_estimate and by round-1 skill_score_duplicate, together with the mean share of the duplicate round-1 luck share the estimator recovers (mean_variance_removed_ratio, estimator luck share divided by duplicate luck share, which is at least 0 and can exceed 1 when the estimator's luck share is larger than the duplicate round-1 one); reported only when both modes ran.",
+      "id": "estimator_agreement",
+      "json_path": "extended.skill.comparison.{rank_agreement,mean_variance_removed_ratio,verdict}",
+      "meaning": "How closely the cheap estimator follows the duplicate result. High agreement means the cheap estimator can replace the expensive duplicate mode.",
+      "name": "Estimator agreement",
+      "range": "rank_agreement -1..+1; mean_variance_removed_ratio 0..unbounded",
+      "reading": "Rank agreement near 1 and a removed ratio near 1 mean the estimator gives the same ordering and removes a similar amount of luck, so duplicate deals can be skipped. Low values mean the estimator is not trustworthy for this game.",
+      "scope": "global",
+      "since_phase": 12,
+      "unit": "correlation / ratio"
+    },
+    {
+      "caveats": "In duplicate mode do not compare it with the duplicate skill value as if they were two independent measurements: the values are equal and only the error bars differ.",
+      "formula": "Mean role score over all rounds of the duplicate matches (plain_mean_role_score), or over round 1 only (the _round1 variants, also used by the estimator). In duplicate mode the all-rounds plain score equals the duplicate skill value by construction (the mean of the group means is the mean of the matches); its standard error is the counterfactual SE of an ordinary run of the same size (sd over matches / sqrt(matches)), not an independent estimate.",
+      "id": "plain_mean_role_score",
+      "json_path": "extended.skill.duplicate.strategies.[].plain_mean_role_score.{value,std_error}; extended.skill.duplicate.strategies.[].plain_mean_role_score_round1.{value,std_error}; extended.skill.estimate.strategies.[].plain_mean_role_score_round1.{value,std_error}",
+      "meaning": "The unadjusted mean role score next to the luck-adjusted skill scores, so you can see what the adjustment changed. It is the same number as mean_role_score, restricted to the matches and rounds the skill score covers.",
+      "name": "Plain mean role score",
+      "range": "-1..+1",
+      "reading": "Compare it with skill_score_duplicate or skill_score_estimate: the standard error shrinks while the value stays about the same, which is the point of the adjustment. A large shift in the estimator means the hands favoured or hurt that strategy.",
+      "scope": "per_strategy",
+      "since_phase": 12,
+      "unit": "score"
+    },
+    {
+      "caveats": "Only the part of luck the features capture; it is not the luck share. Rows for different strategies come from the same regression, so they differ only through each strategy's own results.",
+      "formula": "Var(beta . x) / Var(y) over the strategy's seat observations, where y is the round-1 role score, x the hand features and beta the estimator's feature coefficients; clamped to 0..1.",
+      "id": "variance_explained",
+      "json_path": "extended.skill.estimate.strategies.[].variance_explained",
+      "meaning": "How much of a strategy's round-1 seat-to-seat variation in role score the quality of the dealt hand accounts for.",
+      "name": "Variance explained by the hands",
+      "range": "0..1",
+      "reading": "High means the deal decides much of the first-round result for this strategy; low means the hand features barely matter (or the strategy dominates its field regardless of cards).",
+      "scope": "per_strategy",
+      "since_phase": 12,
+      "unit": "share"
+    },
+    {
+      "caveats": "In-sample: it is computed on the same matches the regression was fitted on, so it is slightly optimistic with few matches.",
+      "formula": "Partial R^2 = 1 - SSR(full model) / SSR(strategy fixed effects only), where SSR is the residual sum of squares of the round-1 role score; clamped to 0..1.",
+      "id": "feature_r2",
+      "json_path": "extended.skill.estimate.feature_r2",
+      "meaning": "How much extra first-round variation the hand features explain beyond knowing which strategy sat in the seat: the overall quality of the cheap estimator's regression.",
+      "name": "Feature R-squared",
+      "range": "0..1",
+      "reading": "Higher means the hands explain more of the luck, so the estimator removes more variance. Values around 0.1-0.3 are typical for this game; near 0 would mean the estimator does nothing.",
+      "scope": "global",
+      "since_phase": 12,
+      "unit": "share"
+    },
+    {
+      "caveats": "When all hands have the same size hand_size is constant and its coefficient is arbitrary (it cannot be told apart from the strategy fixed effects) but harmless, because it never changes an adjustment. Coefficients are noisy with few matches.",
+      "formula": "feature_names lists the features in order (high_cards, pairs, triples, quads, lowest_strength, mean_strength, hand_size); feature_coefficients holds one least-squares coefficient per feature, with the strategy fixed effects held separately. mean_strength is the mean (not the sum) of the card strengths of the hand; hand_size is the number of dealt cards. match_count is the number of matches with recorded hands.",
+      "id": "estimator_features",
+      "json_path": "extended.skill.estimate.{match_count,feature_names,feature_coefficients}",
+      "meaning": "The hand features the cheap estimator uses and how strongly each one moves the round-1 role score (the regression coefficients), plus how many matches the regression saw.",
+      "name": "Estimator features and coefficients",
+      "range": "-unbounded..+unbounded",
+      "reading": "A positive coefficient means a larger value of that feature helps the seat. Features are correlated, so read the coefficients together rather than one by one.",
+      "scope": "global",
+      "since_phase": 12,
+      "unit": "score per feature unit"
+    },
+    {
+      "caveats": "In the both mode the two measurements use different deals, so a gap of a fraction of a standard error is expected; exactly 0 everywhere would be suspicious. With several strategies a few gaps beyond 2 happen by chance.",
+      "formula": "(skill_score_estimate - skill_score_duplicate_round1) / sqrt(se_estimate^2 + se_duplicate^2); null (not defined) if both standard errors are 0.",
+      "id": "difference_in_se",
+      "json_path": "extended.skill.comparison.strategies.[].{difference_in_se,variance_removed_ratio,skill_score_duplicate_round1,skill_score_estimate}",
+      "meaning": "How far the cheap estimator's skill score lies from the duplicate result for one strategy, measured in combined standard errors.",
+      "name": "Estimator gap in standard errors",
+      "range": "-unbounded..+unbounded",
+      "reading": "Within about +-2 means the two agree up to noise; consistently large gaps for several strategies mean the estimator is biased for this game. The sign says whether the estimator is higher (+) or lower (-).",
+      "scope": "per_strategy",
+      "since_phase": 12,
+      "unit": "standard errors"
+    },
+    {
+      "caveats": "A resumed run counts the generations of every part that is in the file (a generation that was run twice counts once). The stall and peak generations are generation numbers, not positions in this count; stall_index and peak_index are the positions.",
+      "formula": "The number of generation events read from the run's events.jsonl (lines that are not events are not counted, see analysis_skipped_lines).",
+      "id": "analysis_generations",
+      "json_path": "analysis.generations",
+      "meaning": "How many generation events the analysis is based on.",
+      "name": "Generations analysed",
+      "range": "1..unbounded",
+      "reading": "Everything else is a statement about this many points. Under about 30 generations the intervals are wide and the verdict is a rough hint only.",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "generations"
+    },
+    {
+      "caveats": "It is the maximum of a noisy curve and therefore partly luck, see analysis_curse_reeval_minus_heldout. Not a measure of when the model was actually strongest.",
+      "formula": "Taken from the run_end event (best_generation); null when the run has no run_end event (it was stopped or is still running). The stop-early verdict then uses the generation with the best re-evaluation mean in the events instead, so a run still training is judged like the finished one (`cli train --when-flat`).",
+      "id": "analysis_best_generation",
+      "json_path": "analysis.best_generation",
+      "meaning": "The generation whose champion the trainer kept as the best, chosen on the fixed re-evaluation set and confirmed on held-out matches.",
+      "name": "Best generation",
+      "range": "0..generations",
+      "reading": "A best generation far before the end of the run means later generations added nothing the selection could see. Compare with the stall generation: the best generation is a single maximum, so it is usually later than the start of the plateau.",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "generation number"
+    },
+    {
+      "caveats": "Selected as the maximum over many generations, so it is biased upwards (winner's curse). The standard error covers only the matches of this one measurement.",
+      "formula": "mean and std_error of the best champion's mean role score over the fixed re-evaluation matches, from the run_end event (best_reeval); null without run_end.",
+      "id": "analysis_final_reeval",
+      "json_path": "analysis.final_reeval.{mean,std_error}",
+      "meaning": "The best champion's score on the fixed re-evaluation set it was selected on, with its standard error.",
+      "name": "Final re-evaluation",
+      "range": "-1..+1",
+      "reading": "Higher is better, 0 is the level of the pool. It is the score the trainer picked the champion by, so it is the optimistic one; use analysis_final_heldout for an unbiased figure.",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "score"
+    },
+    {
+      "caveats": "Only one champion is confirmed this way, with the matches of one measurement: its standard error is not small. Absent in runs from before held-out confirmation existed.",
+      "formula": "mean and std_error of the best champion's mean role score over the held-out confirmation matches, from the run_end event (best_heldout); null for runs without held-out confirmation.",
+      "id": "analysis_final_heldout",
+      "json_path": "analysis.final_heldout.{mean,std_error}",
+      "meaning": "The best champion's score on fresh matches it was not selected on, with its standard error.",
+      "name": "Final held-out score",
+      "range": "-1..+1",
+      "reading": "Higher is better. This is the honest estimate of the best model's level against the pool. A value clearly below the final re-evaluation shows the selection effect.",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "score"
+    },
+    {
+      "caveats": "The window of 10 generations is fixed. A short run is smoothed over a large part of itself.",
+      "formula": "The per-generation series is the champion's fixed-set re-evaluation score (the mean role score of the best genome of each generation against the fixed opponent pool on the same fixed matches). It is smoothed with a trailing mean over the last 10 generations (shorter at the start); peak_smoothed is the maximum of the smoothed series, peak_index the position of its first maximum and peak_generation the generation number there. final_smoothed is the smoothed value at the last generation, last_generation the number of the last generation.",
+      "id": "analysis_peak_smoothed",
+      "json_path": "analysis.peak_smoothed; analysis.peak_index; analysis.peak_generation; analysis.final_smoothed; analysis.last_generation",
+      "meaning": "The highest value of the champion re-evaluation curve after smoothing, the level the stall generation is measured against, and where it is reached.",
+      "name": "Peak of the smoothed curve",
+      "range": "-1..+1",
+      "reading": "Higher is better. The smoothed peak is lower than the best single generation because single maxima are partly luck. A peak in the last 5 percent of the run means the curve was still rising at the end (verdict still_improving); a final_smoothed more than one single-evaluation error below the peak means the run ended worse than it was (verdict declining).",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "score"
+    },
+    {
+      "caveats": "A band of one single-evaluation standard error is generous: the smoothed curve has less noise than one evaluation, so a real but slow improvement can hide inside the band and the stall is reported too early. A stall at the last generation says nothing about progress on its own (a falling curve gets it too): still_improving is decided by the position of the smoothed peak and the last-third trend, not by the stall.",
+      "formula": "Smooth the champion re-evaluation series with a trailing mean over 10 generations. stall_index is the first position i such that every smoothed value from i to the end is at least peak_smoothed - single_se, where single_se is analysis_noise_single_se (the mean standard error of one re-evaluation); stall_generation is the generation number at that position (generation numbers need not start at 0 or be gap free). If the last smoothed value itself is below that band no such position exists: stall_index is then the last position and stall_fallback is true (the fallback of docs/baselines/phase-13/analyse.py, whose index equals stall_index).",
+      "id": "analysis_stall_generation",
+      "json_path": "analysis.stall_generation; analysis.stall_index; analysis.stall_fallback",
+      "meaning": "The point from which the champion stopped getting better in a way the measurement can see: the first generation from which the smoothed re-evaluation score stays within one standard error of its peak.",
+      "name": "Stall generation",
+      "range": "first..last generation number",
+      "reading": "The generation after which the smoothed curve never leaves one noise unit of its peak. A stall in the first 60 percent of the run (by position) without a later best generation or a rising end means a long tail added nothing (verdict stop_early). stall_fallback true means the run ended below its peak, not that it was still improving: see the verdict declining.",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "generation number"
+    },
+    {
+      "caveats": "It covers the dealing luck of the evaluation matches only, not the luck of which genome the evolution happened to produce.",
+      "formula": "Mean over generations of the standard error of the champion's re-evaluation mean (std_error of champion.reeval).",
+      "id": "analysis_noise_single_se",
+      "json_path": "analysis.noise.single_se",
+      "meaning": "How accurately one champion re-evaluation measures the score: the typical standard error of a single generation's number.",
+      "name": "Noise: one evaluation",
+      "range": "0..1",
+      "reading": "Compare with the changes between generations and with the trend over the run: improvements smaller than this per generation cannot be seen in single evaluations. More --reeval-matches or duplicate-deal scoring make it smaller.",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "score"
+    },
+    {
+      "caveats": "Differences of a rising curve include the rise, so a fast steady climb also raises it; read it together with the trend.",
+      "formula": "Sample standard deviation (n - 1 divisor) of the differences re-evaluation mean(g+1) - re-evaluation mean(g) over consecutive generations; null below two differences (three generations).",
+      "id": "analysis_noise_change_sd",
+      "json_path": "analysis.noise.change_sd",
+      "meaning": "How much the champion's re-evaluation score jumps from one generation to the next.",
+      "name": "Noise: generation-to-generation change",
+      "range": "0..unbounded",
+      "reading": "If it is more than twice the single-evaluation standard error, the curve moves by more than the measurement noise explains, which is the sign of selection noise (a different champion each generation) rather than steady progress. The noise_limited verdict uses this comparison (strictly greater, and only with a single-evaluation standard error above 0).",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "score"
+    },
+    {
+      "caveats": "Generations are not independent (the champion of one generation is related to the next). The interval is corrected for lag-1 autocorrelation of the residuals (the correction of an AR(1) process, estimated from the data; approximate, and noisy for few points), which widens it but may still be too narrow for strongly structured curves. A straight line is a rough description of a curve that rises fast and then flattens.",
+      "formula": "Ordinary least-squares slope of the champion's fixed-set re-evaluation score (the mean role score of the best genome of each generation against the fixed opponent pool on the same fixed matches) on the generation number, times 100. The 95 percent interval is slope +- t * standard error of the slope, with the t quantile for n - 2 degrees of freedom (table up to 30, then interpolated linearly in 1/df between 30, 40, 60, 120 and the normal 1.96 at infinity), and the standard error is corrected for lag-1 autocorrelation: with r the lag-1 autocorrelation of the residuals of the fit, when r > 0 it is multiplied by sqrt((1 + r) / (1 - r)), at most 5. Null below three generations.",
+      "id": "analysis_trend_overall",
+      "json_path": "analysis.trend.overall.{value,low,high}",
+      "meaning": "How fast the champion's re-evaluation score changed on average over the whole run, with a 95 percent interval.",
+      "name": "Trend over the whole run",
+      "range": "-unbounded..+unbounded",
+      "reading": "Positive is improving. If the interval contains 0 the run shows no trend it can tell from luck. Early progress usually makes the whole-run trend positive even when the end is flat, so look at the last third as well.",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "score per 100 generations"
+    },
+    {
+      "caveats": "Fewer points than the whole run, so a wide interval; the interval is corrected for autocorrelation, approximately. Flat is not the same as proven zero.",
+      "formula": "As analysis_trend_overall (including the interval corrected for lag-1 autocorrelation), over the last third of the generations (the last max(1, n div 3) of them). A trend counts as rising when the whole interval is above 0, falling when it is below 0 and flat when it contains 0. Null with fewer than three generations in the third, so runs shorter than nine generations have none.",
+      "id": "analysis_trend_last_third",
+      "json_path": "analysis.trend.last_third.{value,low,high}",
+      "meaning": "The same trend, fitted only to the last third of the run: is the champion still getting better at the end?",
+      "name": "Trend over the last third",
+      "range": "-unbounded..+unbounded",
+      "reading": "The key number of the verdicts: flat means the run has reached its plateau, rising means it should be continued, falling means it got worse (verdict declining). A flat interval that is very wide says only that the data cannot tell.",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "score per 100 generations"
+    },
+    {
+      "caveats": "A selection effect, not a defect of the model: it exists whenever a maximum is selected from a noisy series, and it is expected to be positive on average. A single run's gap is itself noisy; look at the gaps of several seeds.",
+      "formula": "best_reeval.mean - best_heldout.mean from the run_end event (value); in_heldout_se is the same divided by the held-out standard error, in_combined_se divided by sqrt(se_reeval^2 + se_heldout^2), the standard error of the difference of the two measurements (each null when that error is 0). Null without run_end or without a held-out score.",
+      "id": "analysis_curse_reeval_minus_heldout",
+      "json_path": "analysis.curse.reeval_minus_heldout.{value,in_heldout_se,in_combined_se}",
+      "meaning": "How much better the best champion looked on the matches it was selected on than on fresh matches. A positive gap is the selection effect: picking the maximum of many noisy numbers picks some luck with it.",
+      "name": "Winner's curse: re-evaluation minus held-out",
+      "range": "-unbounded..+unbounded",
+      "reading": "Around 0 means the best generation is as good as it looked. A gap of two combined standard errors or more means a large part of the best generation's lead is luck, so it is not evidence of progress. The noise_limited verdict uses in_combined_se >= 2 (the held-out standard error alone is not used: with a maximum selected from many generations a gap of one is almost always there).",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "score"
+    },
+    {
+      "caveats": "Depends on the fitness variant and the training opponents: with racing, the fitness-sharing or skill-weighted variants the two numbers do not measure the same thing exactly.",
+      "formula": "Mean over generations of champion.train_fitness - champion.reeval.mean. The training fitness comes from the few matches the genome played in training, the re-evaluation from the fixed set.",
+      "id": "analysis_curse_train_minus_reeval",
+      "json_path": "analysis.curse.train_minus_reeval",
+      "meaning": "How much higher the champion's training fitness is than its re-evaluation score, on average: how optimistic the numbers the evolution selects on are.",
+      "name": "Training fitness minus re-evaluation",
+      "range": "-unbounded..+unbounded",
+      "reading": "Close to 0 means training fitness is a fair guide. A large positive value means the champion of each generation is picked on luck, which is the reason for the fixed re-evaluation set and for more matches per genome.",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "score"
+    },
+    {
+      "caveats": "Averages of noisy numbers; use the trend and its class for statements about direction. The pool of an old run may change between parts, so only generations that report the opponent count.",
+      "formula": "For each opponent name, the mean of champion.opponents[name].score.mean over the generations of the first third and of the last third of the run (the last max(1, n div 3) generations, like analysis_trend_last_third) that carry that opponent. Null when no generation of the window carries it.",
+      "id": "analysis_opponent_means",
+      "json_path": "analysis.opponents.[].{name,first_third_mean,last_third_mean}",
+      "meaning": "The champion's score against one fixed opponent alone, averaged over the first and over the last third of the run: the same windows as the champion's own last-third trend.",
+      "name": "Per opponent: first and last third",
+      "range": "-1..+1",
+      "reading": "A last-third mean far above the first third means the champion learned to beat that opponent. The difference between opponents shows where the remaining headroom is (a score near +1 leaves little).",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "score"
+    },
+    {
+      "caveats": "Flat means not distinguishable from 0, not that the champion cannot improve. A score already near +1 cannot rise: such an opponent is flat because it is beaten, which says it has nothing left to teach.",
+      "formula": "last_third_slope: the slope with its 95 percent interval (value, low, high), computed as analysis_trend_last_third (interval corrected for lag-1 autocorrelation) over the generations of the last third of the run that report this opponent; null below three points. overall_slope: the same over every generation that reports it. class is taken from last_third_slope: rising if its interval is above 0, falling if below 0, flat if it contains 0; null if there is no slope.",
+      "id": "analysis_opponent_trend",
+      "json_path": "analysis.opponents.[].last_third_slope.{value,low,high}; analysis.opponents.[].overall_slope.{value,low,high}; analysis.opponents.[].class",
+      "meaning": "How the champion's score against one opponent changed over the run, and whether that change is rising, flat or falling.",
+      "name": "Per opponent: trends and class",
+      "range": "-unbounded..+unbounded",
+      "reading": "The class describes the same window as the champion's last-third trend, so the verdict pool_limited (rising against some opponents and flat against others while the champion is flat) says what the last third measured. overall_slope is the whole-run slope for comparison: an opponent that rose early and is flat now is flat here.",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "score per 100 generations"
+    },
+    {
+      "caveats": "Counts the champion of each generation, not the whole population. Means over up to three generations make a node gained or lost in a single generation count less; a short run (third under six generations) uses fewer generations per mean.",
+      "formula": "first/last_hidden_nodes and first/last_connections: the hidden nodes and enabled connections of the champion in the first and last generation. third_start_nodes and third_end_nodes: the mean hidden-node count of the first and of the last third_window generations of the last third (third_window = the third's length div 2, between 1 and 3). without_gain is true if third_end_nodes > third_start_nodes and the last-third trend interval contains 0.",
+      "id": "analysis_growth",
+      "json_path": "analysis.growth.{first_hidden_nodes,last_hidden_nodes,first_connections,last_connections,third_start_nodes,third_end_nodes,third_window,without_gain}",
+      "meaning": "How large the champion's network was in the first and the last generation, and whether it kept growing without getting better.",
+      "name": "Network growth",
+      "range": "0..unbounded",
+      "reading": "Growth together with a rising score is the normal case. without_gain means complexity is added that does not pay; see the verdict growth_without_gain.",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "nodes, connections"
+    },
+    {
+      "caveats": "Depends on the binning of the fitness histogram, which spans the generation's own fitness range, so a single outlier genome also shifts the shares. Equal fitness is also a sign of fitness saturating at a ceiling.",
+      "formula": "For each generation of the last third: genomes in the top bin of the fitness histogram divided by all genomes in the histogram; the mean of that share over those generations. Null without histograms.",
+      "id": "analysis_population_top_bin_share",
+      "json_path": "analysis.population.top_bin_share",
+      "meaning": "How much of the population sits in the best fitness bin: a high value means nearly all genomes are equally good and the evolution has little variety left.",
+      "name": "Population convergence",
+      "range": "0..1",
+      "reading": "Low values (about 10 percent) mean a spread population. 50 percent or more triggers the converged verdict.",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "share"
+    },
+    {
+      "caveats": "Descriptive only: no verdict rule uses these numbers. They say little when the threshold is not adapted.",
+      "formula": "species_first / species_last: the number of species in the first and last generation. threshold_first / threshold_last: the compatibility distance below which two genomes count as one species, as adjusted by the trainer to reach its target species count.",
+      "id": "analysis_population_species",
+      "json_path": "analysis.population.{species_first,species_last,threshold_first,threshold_last}",
+      "meaning": "The number of species and the compatibility threshold in the first and the last generation.",
+      "name": "Species and compatibility threshold",
+      "range": "species 1..population",
+      "reading": "A threshold that fell a long way (for example 0.5 to 0.1) means the population became very similar and the trainer had to make the species finer to keep the target count; one that rose means genomes diverged.",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "species, distance"
+    },
+    {
+      "caveats": "The share counts matches, not time, and uses the configured population and matches per genome of the start event, so it is off for runs whose settings changed on resume.",
+      "formula": "generations: generations with racing data. extra_matches: sum over those generations of raced_final (or raced if larger) times the extra matches per raced genome. extra_share: extra_matches / (extra_matches + generations * population_size * matches_per_genome); null without the run's start event. mean_shift: mean over generations of the mean fitness change of the raced genomes between before and after pooling.",
+      "id": "analysis_racing",
+      "json_path": "analysis.racing.{generations,extra_matches,extra_share,mean_shift}",
+      "meaning": "What racing (extra matches for the leading genomes) cost and how much it shifted the fitness values, summed over the run. Present only for runs with racing.",
+      "name": "Racing totals",
+      "range": "0..unbounded",
+      "reading": "extra_share is the price of racing in simulation work. A clearly negative mean_shift means the leaders' first numbers were too high, which is the selection effect racing exists to cancel.",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "matches, share, score"
+    },
+    {
+      "caveats": "The event line and the checkpoint are written after the stage timers stop, so a small part of the wall-clock time is in no stage.",
+      "formula": "Sum over generations of each field of the generation's stage timings (training_evaluation, champion_selection, speciation_and_reproduction, reevaluation_mixed, reevaluation_per_opponent, hall_of_fame, confirmation, decision_sample, checkpoint_and_files). Null for runs from before timings were recorded.",
+      "id": "analysis_timings",
+      "json_path": "analysis.timings.{training_evaluation,champion_selection,speciation_and_reproduction,reevaluation_mixed,reevaluation_per_opponent,hall_of_fame,confirmation,decision_sample,checkpoint_and_files}",
+      "meaning": "Where the run spent its time, summed over the run: training evaluation, champion selection, reproduction, the re-evaluations, hall of fame, confirmation, decision sample and files.",
+      "name": "Seconds per stage",
+      "range": "0..unbounded",
+      "reading": "Shows which stage to shrink to speed a run up; with threads the stage times are wall-clock seconds, so they add up to about the run time.",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "seconds"
+    },
+    {
+      "caveats": "Skipped lines are not analysed, so a damaged file makes the analysis a statement about the part that could be read.",
+      "formula": "The number of non-empty lines of the file that did not parse as a start, generation or run_end event.",
+      "id": "analysis_skipped_lines",
+      "json_path": "analysis.skipped_lines",
+      "meaning": "How many lines of the events file could not be read as events (an unfinished last line, other record types, damage).",
+      "name": "Skipped lines",
+      "range": "0..unbounded",
+      "reading": "0 for a clean file. One skipped line at the end of a file of a stopped run is normal (the line was being written). Many mean the file is damaged or from an incompatible version.",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "lines"
+    },
+    {
+      "caveats": "A rising last third over a short run can be a recovery from a bad stretch; the intervals of short runs are wide, a fired rule is a hint. A verdict is a heuristic with fixed thresholds, not a statistical test.",
+      "formula": "Fires when the peak of the smoothed curve is in the last 5 percent of the run (peak_index >= 0.95 * the last index, more than one generation) or the last-third trend interval lies entirely above 0, and in both cases only if the run did not end below its peak (analysis_verdict_declining does not apply: the last-third interval is not strictly below 0 and stall_fallback is false). While it fires, noise_limited, pool_limited, model_limited, growth_without_gain and stop_early do not. The rules are independent except as described here; several can fire and they are listed in the order of importance. Each message quotes the numbers that made the rule fire.",
+      "id": "analysis_verdict_still_improving",
+      "json_path": "analysis.verdict.[].{code,message}",
+      "meaning": "The run was still getting better when it ended.",
+      "name": "Verdict: still improving",
+      "range": "present or absent",
+      "reading": "Train longer (--resume or --from): the plateau has not been reached. A run that stalls at its last generation only because its curve fell is not called still improving.",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "verdict"
+    },
+    {
+      "caveats": "The final smoothed value covers the last 10 generations, so a recent dip of a few generations does not trigger it. A decline of one noise unit is within what a single evaluation can show: the band is the generous one of the stall rule. A verdict is a heuristic with fixed thresholds, not a statistical test.",
+      "formula": "Fires when the last-third trend interval lies entirely below 0, or the final smoothed value is below peak_smoothed - single_se (stall_fallback is true). The message names the peak generation, the peak and the final smoothed value. The rules are independent except as described here; several can fire and they are listed in the order of importance. Each message quotes the numbers that made the rule fire.",
+      "id": "analysis_verdict_declining",
+      "json_path": "analysis.verdict.[].{code,message}",
+      "meaning": "The run ended worse than its smoothed peak: the final champion is not the best one.",
+      "name": "Verdict: declining",
+      "range": "present or absent",
+      "reading": "Use the genome of the best generation (the trainer keeps it as best.json) or stop earlier; training longer from this population is unlikely to help. The best generation of a falling run is usually well before its end.",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "verdict"
+    },
+    {
+      "caveats": "Both thresholds are fixed heuristics, not a test; a run can be both noisy and limited in other ways. The message says the trend is not distinguishable from zero, not that there is none. A verdict is a heuristic with fixed thresholds, not a statistical test.",
+      "formula": "Fires when still_improving did not fire, the last-third trend interval contains 0, single_se is above 0 and either the change standard deviation is more than 2 times the single-evaluation standard error (analysis_noise_change_sd > 2 * analysis_noise_single_se) or the winner's-curse gap is at least 2 combined standard errors (analysis_curse_reeval_minus_heldout.in_combined_se >= 2). The rules are independent except as described here; several can fire and they are listed in the order of importance. Each message quotes the numbers that made the rule fire.",
+      "id": "analysis_verdict_noise_limited",
+      "json_path": "analysis.verdict.[].{code,message}",
+      "meaning": "The last-third trend cannot be told from zero given the noise: what progress remains is not distinguishable from noise.",
+      "name": "Verdict: noise limited",
+      "range": "present or absent",
+      "reading": "More --matches-per-genome, the duplicate-deal skill fitness, several seeds and a winner chosen on fresh matches (the Phase 13 recommendation). Without noise_limited a flat curve is attributed to the model (model_limited) or to the pool.",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "verdict"
+    },
+    {
+      "caveats": "With few generations most opponent intervals contain 0 and the rule rarely fires; a rising class needs a whole interval above 0. A verdict is a heuristic with fixed thresholds, not a statistical test.",
+      "formula": "Fires when still_improving did not fire, the last-third trend interval contains 0 and at least one opponent's last-third trend is rising and at least one other opponent's is flat (analysis_opponent_trend classes, which are computed on the last third). The rules are independent except as described here; several can fire and they are listed in the order of importance. Each message quotes the numbers that made the rule fire.",
+      "id": "analysis_verdict_pool_limited",
+      "json_path": "analysis.verdict.[].{code,message}",
+      "meaning": "The opponents no longer teach against some of the pool.",
+      "name": "Verdict: pool limited",
+      "range": "present or absent",
+      "reading": "Harder or additional opponents. Flat opponents that are already beaten by a wide margin have nothing left to teach, which is the case this rule is for.",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "verdict"
+    },
+    {
+      "caveats": "It is the residual explanation: flat, not noisy and no opponent rising. A poorly measured run lands here too when its noise happens to be just below the noise_limited thresholds. A verdict is a heuristic with fixed thresholds, not a statistical test.",
+      "formula": "Fires when still_improving did not fire, the last-third trend interval contains 0, no opponent's last-third trend is rising and noise_limited did not fire. The rules are independent except as described here; several can fire and they are listed in the order of importance. Each message quotes the numbers that made the rule fire.",
+      "id": "analysis_verdict_model_limited",
+      "json_path": "analysis.verdict.[].{code,message}",
+      "meaning": "Flat everywhere, above the noise: the model's inputs or the fitness cap what it can learn.",
+      "name": "Verdict: model limited",
+      "range": "present or absent",
+      "reading": "New inputs (--features hidden) or a different fitness. The Phase 13 measurement found that hidden-information inputs beat the base set.",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "verdict"
+    },
+    {
+      "caveats": "Compares two means of up to three champions' node counts; a steady one-node gain is enough. A verdict is a heuristic with fixed thresholds, not a statistical test.",
+      "formula": "Fires when still_improving did not fire and analysis_growth.without_gain is true: the mean hidden-node count over the last generations of the last third is above that over its first generations (third_end_nodes > third_start_nodes) and the last-third trend interval contains 0. The rules are independent except as described here; several can fire and they are listed in the order of importance. Each message quotes the numbers that made the rule fire.",
+      "id": "analysis_verdict_growth_without_gain",
+      "json_path": "analysis.verdict.[].{code,message}",
+      "meaning": "The network keeps growing while the score no longer rises.",
+      "name": "Verdict: growth without gain",
+      "range": "present or absent",
+      "reading": "A stagnation limit or complexity penalty so the structure stops growing, or a shorter run.",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "verdict"
+    },
+    {
+      "caveats": "Depends on the fitness histogram binning; a fitness that saturates at a ceiling also shows it. A verdict is a heuristic with fixed thresholds, not a statistical test.",
+      "formula": "Fires when analysis_population_top_bin_share (mean over the last third) is at least 0.5. The rules are independent, several can fire; they are listed in the order of importance. Each message quotes the numbers that made the rule fire.",
+      "id": "analysis_verdict_converged",
+      "json_path": "analysis.verdict.[].{code,message}",
+      "meaning": "The population is nearly uniform: half or more of the genomes sit in the top fitness bin.",
+      "name": "Verdict: converged",
+      "range": "present or absent",
+      "reading": "Raise the mutation rates or the species target to restore variety.",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "verdict"
+    },
+    {
+      "caveats": "The stall rule uses a generous band (one single-evaluation standard error), see analysis_stall_generation; it can name a stall that is too early on a slow climb, which is why a later best generation or a rising point estimate suppresses it. A verdict is a heuristic with fixed thresholds, not a statistical test.",
+      "formula": "Fires when still_improving did not fire, the run has more than one generation, the stall position is at most 0.6 times the last position (stall_index <= 0.6 * (generations - 1)), the last-third trend point estimate is not above 0 and the best generation (from run_end) is not later than the stall generation. The rules are independent except as described here; several can fire and they are listed in the order of importance. Each message quotes the numbers that made the rule fire.",
+      "id": "analysis_verdict_stop_early",
+      "json_path": "analysis.verdict.[].{code,message}",
+      "meaning": "A long tail of generations added nothing.",
+      "name": "Verdict: stop early",
+      "range": "present or absent",
+      "reading": "Stop earlier next time; after the stall generation the smoothed score stayed within one noise unit of its peak. The message names the stall generation and how many generations followed.",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "verdict"
+    },
+    {
+      "caveats": "Every rule has its thresholds; a run just inside all of them gets this verdict. A verdict is a heuristic with fixed thresholds, not a statistical test.",
+      "formula": "Appears alone when none of the other eight rules fires. The rules are independent except as described here; several can fire and they are listed in the order of importance. Each message quotes the numbers that made the rule fire.",
+      "id": "analysis_verdict_no_clear_limit",
+      "json_path": "analysis.verdict.[].{code,message}",
+      "meaning": "No rule fired.",
+      "name": "Verdict: no clear limit",
+      "range": "present or absent",
+      "reading": "Read the numbers and charts yourself; the absence of a finding is not a finding of health.",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "verdict"
+    }
+  ]
+}

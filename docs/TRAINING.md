@@ -128,12 +128,67 @@ cli train-advisor --time-budget 30m            # or --preset quick|thorough|over
 
 The plan counts what the trainer plays per generation (every genome's matches plus the re-evaluations of the champion
 candidates, the champion and each pool opponent) and warns when 20 generations do not fit the budget. The speed is
-measured over all candidates, not only the chosen pool, and the noise target (a standard error of 0.02 on one
-fitness measurement) is stricter than selection between genomes on the same matches needs, so it errs on the side
-of more matches. The estimate uses the reference player's speed; a trained network is of similar cost but not identical, which is what the
-unplanned 30% is for. The advisor does not start the run: copy the printed command (or run it from the desktop window's
-"Any command" tab). Not built: scoring against a starting genome, a models folder or the hall of fame of earlier runs;
-`train --auto`; recommendations while a run is going; a web form.
+measured over the opponents of the chosen pool only (a slower candidate that was dropped does not set it), and the noise
+target (a standard error of 0.02 on one fitness measurement) is stricter than selection between genomes on the same matches
+needs, so it errs on the side of more matches. The estimate uses the reference player's speed, and a probe of a few
+matches per candidate runs with less parallel load than a real generation, so it measures a lower speed than the run
+reaches: in the check recorded below the plan estimated about 1.8 times the time the run needed (the run ended well before
+its budget). The unplanned 30% of the budget is a reserve for the opposite error, not a cover for this one. All matches
+of a candidate (every reference times every seed) run as one parallel batch, which removed most of the extra pessimism of
+several small batches one after the other: with three references and 12 probe matches per candidate (8 threads, release
+build, short runs, so noisy) the measured speed was 21k and 64k rounds per second before and 63k and 99k after the change,
+against 55k to 89k before and 76k to 100k after with one reference.
+
+**Who the candidates are scored against.** `adaptive` is far stronger than an early network, so against it every
+candidate looks easy. Name the player the model will resemble instead: `--reference neat:PATH` (a starting genome;
+repeatable), `--reference-models DIR` (every genome `*.json` of a folder that this build can load) and
+`--reference-hall RUN_DIR` (the hall of fame stored in the checkpoint of an earlier run, which needs
+`--hall-of-fame`). A candidate's score is the mean over the references; the probe matches per candidate are split over
+them (at least 2 against each, at most 6 references, spread evenly); the header prints the number actually played per
+candidate (rounded up to a multiple of the number of references, never fewer than twice that number), so the probe is
+about as long as with one reference. Measured with a
+champion trained for 28 generations as the reference (12 probe matches per candidate), `random-legal` scored +0.91 and
+was dropped as too weak, where `adaptive` scored +0.69 and kept it, and the three hand-written opponents all landed near
++0.55 to +0.63 instead of -0.18 to +0.33.
+
+**Luck adjustment.** The advisor also reports how much of the variance of a round-1 score the six hand features explain
+(the regression of `--fitness-skill-weight`, fitted on the probe matches themselves, so slightly optimistic), with the
+number of observations it rests on; with fewer than 30 it prints `n/a` (raise `--probe-matches`). It does
+not recommend `--fitness-skill-weight`: all genomes of a generation play the same deals, so the adjustment cannot cancel
+deal luck inside a generation. The duplicate-deal skill score is for comparing finished players (`cli --skill-score
+duplicate`, `cli evaluate`), where it does cut the noise.
+
+**`cli train --auto`** runs the advisor and then the training with what it chose, in one command:
+
+```
+cli train --auto --out runs/auto --time-budget 30m [--opponent SPEC ...] [--reference neat:best.json]
+```
+
+`--opponent` lists the candidates the advisor judges (default: its battery); population, generations, matches per genome,
+rounds and hall of fame are the advisor's and cannot be given; neither can the flags that change what a generation costs
+or means (`--reeval-matches`, `--champion-candidates`, `--racing-top`/`--racing-matches`, `--fitness`, `--features`,
+`--duplicate-rule`, `--pass-rule`, `--exchange-rule`), because the advisor's estimate assumes their defaults (give them to
+`cli train` directly, with the advisor's settings, if you need them). The arguments, the candidate specs and the `--serve`
+port are checked before the probe, so a typo fails at once instead of after minutes. The advice is printed first, the settings are written
+into the run's `config.json` like those of any run, and the advice is saved as `advisor.txt` in the run folder. Also
+`--preset`, `--probe-matches`, `--seed`, `--player-count`, `--deck-variant`.
+
+**`--when-flat advise|stop`** (any `cli train`, also with `--resume`) lets the run watch itself with the run analysis
+(`cli analyse-run`): every 5 generations from generation 30 it analyses the run's own `events.jsonl`. When the verdict
+says the last third is flat (`stop_early`, `noise_limited`, `pool_limited` or `model_limited`), `advise` prints the
+verdict messages (again only when they change) and keeps training; `stop` also ends the run once `stop_early` fires, that
+is when the smoothed curve stayed within one noise unit of its peak for the last 40% of the run. The run is then a normal
+unfinished one: `--resume` continues it (add `--generations N` to change the total). A resumed run is judged again only
+after 5 generations of its own, so it is not stopped at once on the history that stopped it. In a set (`--runs N`) a run
+stopped this way is not recorded as finished: the set ends there (the later runs wait), the summary marks the run and says
+it is not comparable with the others, and `--resume` on the set directory continues that run. With `--auto`, a plan with
+fewer than 30 generations (a budget that is too small) gets a warning that `--when-flat` will not fire. When no `run_end`
+exists yet (always, mid-run) the analysis takes the generation with the best re-evaluation mean in the events as the best
+generation, so a run is stopped only where `cli analyse-run` of the finished run would also say `stop_early`. A real run (24 genomes, two opponents, 150 generations asked)
+advised at 30, 70, 75 and 85 generations and stopped at 85 (`stop_early`: nothing visible added after generation 50).
+
+The advisor does not look at a running training from outside (a later web page could); not built: a web form (the
+desktop window has one, `docs/GUI.md`).
 
 Details of every setting follow.
 
@@ -145,12 +200,14 @@ Details of every setting follow.
 | `--matches-per-genome` | 100 | more matches = less noisy fitness but slower. Cost per generation is about population x matches x rounds |
 | `--rounds` | 8 | rounds per match (roles carry over between rounds) |
 | `--reeval-matches` | 200 | matches used to score each champion; the held-out confirmation uses twice as many |
-| `--opponent SPEC` | `lowest-legal`, `endgame-denial`, `adaptive:reading,tempo,bully` | the training pool, in `--strategy` syntax; repeat for several. A harder pool gives a stronger player but slower early progress |
+| `--auto` | off | run the advisor first and train with its settings (see "Choosing settings") |
+| `--when-flat advise\|stop` | off | advise or stop when the run analysis finds the curve flat (see "Choosing settings") |
+| `--opponent SPEC` | `lowest-legal`, `endgame-denial`, `adaptive:reading,tempo,bully` | the training pool, in `--strategy` syntax; repeat for several. Any spec may end in `+solver[:N]` (the endgame solver plays the last cards of that opponent): exact but slow, so use `+solver:2` to `+solver:4` in a pool (`docs/baselines/solver-toggle/README.md` has the cost) A harder pool gives a stronger player but slower early progress |
 | `--champion-candidates` | 5 | the champion is the best of the top N genomes (by training fitness) re-scored on other matches; 1 trusts the noisy training fitness |
 | `--weight-power` | 0.2 | size of weight mutations; smaller is gentler fine-tuning |
 | `--hall-of-fame N` | 0 (off) | frozen past champions join the training opponents (`--hall-interval K`: every K generations). No measured benefit against the default pool; worth trying when the pool includes evolved opponents |
 | `--fitness-skill-weight W` | 0 (off) | experimental, 0 to 1: trains on `(1 - W) x mean role score + W x a luck-adjusted round-1 score` (see below). Fixed for the run (`--resume` cannot change it) |
-| `--features base\|trick\|hidden\|all` | base | which inputs the networks see (see "Feature sets" below). Fixed for the run (`--resume` cannot change it); a warm start (`--from`) needs the source's value |
+| `--features base\|trick\|hidden\|all` | hidden | which inputs the networks see (see "Feature sets" below). Fixed for the run (`--resume` cannot change it, and an older run resumes with the set in its own config); a warm start (`--from`) needs the source's value. **A `hidden` genome cannot play in the casino bot** (it only knows `base`): train with `--features base` for that |
 | `--fitness mean\|risk:L\|tanh:K` | mean | what evolution maximises (see "Fitness variants" below). Fixed for the run; cannot be combined with `--fitness-skill-weight` |
 | `--racing-top F --racing-matches K` | off | noise-aware selection: the top fraction F of each generation is evaluated on K extra matches before selection (see "Racing" below). Both together; fixed for the run |
 | `--player-counts 3,4,5,6`, `--decks single,double` | off | train one model on several table sizes and decks (see "One model for several tables" below). Replace `--player-count` / `--deck-variant`, which they exclude; fixed for the run |
@@ -179,10 +236,11 @@ Recipes:
 target/release/cli train --out runs/test --population 60 --generations 30 \
   --matches-per-genome 40 --reeval-matches 100 --rounds 6
 
-# the setup of the committed baseline champion (about 11 minutes)
+# the setup of the committed baseline champion neat-v1 (about 11 minutes);
+# --features base is what every run did before `hidden` became the default
 target/release/cli train --out runs/v1 --seed 1 --population 150 \
   --generations 120 --matches-per-genome 80 --reeval-matches 200 \
-  --rounds 8 --champion-candidates 5 --weight-power 0.2 --quiet
+  --rounds 8 --champion-candidates 5 --weight-power 0.2 --features base --quiet
 
 # train for 6 players against a harder pool
 target/release/cli train --out runs/six --player-count 6 \
@@ -229,7 +287,7 @@ treat the option as a way to run it, not as a recommended setting.
 
 ## Feature sets (`--features`)
 
-**Measured recommendation (Phase 13, `docs/baselines/phase-13/README.md`):** `--features hidden` beat `base` head-to-head against the neat-v2 champion (+0.048, significant over 10 seeds each); `trick` alone could not be told apart from `base`. Keep `base` when a genome must run in the casino bot (it only knows set v1). Evolution is noisy: train several seeds and pick the winner by a head-to-head on fresh seeds, not by its training score.
+**`hidden` is the default.** Phase 13 (`docs/baselines/phase-13/README.md`) found `--features hidden` better than `base` head-to-head against the neat-v2 champion (+0.048, significant over 10 seeds each); `trick` alone could not be told apart from `base`. Phase 13b (`docs/baselines/phase-13b/README.md`) repeated it on 10 fresh seeds with the full recipe: battery +0.019 (t = 4.4, 10/10 seeds), head-to-head vs neat-v2 +0.047 (t = 3.3, 8/10 seeds). So new training uses `hidden` unless told otherwise. The shipped champion `docs/baselines/neat-v3` is a `hidden` genome from a 300-generation x 200-match run (selected among 11 candidates on one seed stream, confirmed on another; the longer runs scored clearly better than 120 x 80 ones: `docs/baselines/neat-v3/README.md`). **Casino bot: a `hidden` genome cannot play there.** The casino TypeScript port (outside this repo) knows feature set v1 only; give `--features base` when a genome must run in the casino bot. Evolution is noisy: train several seeds and pick the winner by a head-to-head on fresh seeds, not by its training score.
 
 A network's inputs are the features of one candidate move. The full list
 (`FEATURE_NAMES_V2` in `sim/src/strategies/neat_player/feature_set.rs`; `FEATURE_SET_VERSION` stays 1 and a genome file's recorded feature names, which must be a prefix of that list, tell the sets apart) is the 20
@@ -239,9 +297,9 @@ ablation with an honest genome size:
 
 | `--features` | inputs | adds |
 |---|---|---|
-| `base` (default) | 20 | the v1 features |
+| `base` | 20 | the v1 features |
 | `trick` | 25 | `opponents_in_trick`, `fraction_in_trick`, `all_in_trick_close`, `min_hand_in_trick`, `last_to_act_in_trick` |
-| `hidden` | 28 | `p_win_trick`, `expected_beaters`, `my_unbeatable_fraction` |
+| `hidden` (default) | 28 | `p_win_trick`, `expected_beaters`, `my_unbeatable_fraction` |
 | `all` | 31 | `table_players`, `table_double_deck`, `table_pass_final` |
 
 *Trick.* An opponent is "in the trick" while it is active and, under pass rule
@@ -284,12 +342,15 @@ or 31) and the genome has exactly that many inputs; anything else (other names,
 other order, a prefix that stops inside a group, 20 names with 22 inputs) is
 refused with both lists named. Every older genome therefore loads and plays
 unchanged, and `--features base` runs reproduce earlier runs byte for byte
-(`config.json` only mentions `features` when it is not `base`). `NeatStrategy`
+(`config.json` only mentions `features` when it is not `base`; a config without
+the key, as every run before the `hidden` default wrote, is a `base` run and
+resumes as one). `NeatStrategy`
 builds only the inputs it was trained with and asks the match loop only for the
 context parts they read, so a `base` model costs what it always did. The casino
 TypeScript port implements feature set v1 only: models with `trick`, `hidden` or
-`all` features load in the Rust tools but not in the casino until its port is
-extended.
+`all` features load in the Rust tools but **not in the casino bot** until its port is
+extended (open work). The committed champions neat-v1 and neat-v2 are `base`
+models and still run there; train with `--features base` for a genome the casino can play.
 
 ## Fitness variants, racing and several tables (Phase 13 options)
 

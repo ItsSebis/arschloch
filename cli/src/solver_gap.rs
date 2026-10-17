@@ -38,6 +38,7 @@ pub fn parse_args(args: Vec<String>) -> Result<Options, String> {
         solver: SolverConfig {
             max_unseen: 6,
             node_budget: 2_000_000,
+            ..SolverConfig::default()
         },
     };
     let mut args = args.into_iter();

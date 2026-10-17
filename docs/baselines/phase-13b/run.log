@@ -1,0 +1,102 @@
+train A0 seed 11: --features base
+
+done: 120 generations in 0:03:40
+best champion: generation 94, score +0.640 ±0.012 against the pool (held-out matches)
+play it: cli --player-count 4 --matches 1000 --strategy neat:/tmp/claude-1000/-home-sebi-Documents-Code-arschloch/d4dabbea-31e7-4303-a456-53cbaba01a2e/scratchpad/e5/p13/A0/seed11/best.json --strategy lowest-legal --strategy lowest-legal --strategy lowest-legal
+train A0 seed 12: --features base
+
+done: 120 generations in 0:03:18
+best champion: generation 68, score +0.637 ±0.012 against the pool (held-out matches)
+play it: cli --player-count 4 --matches 1000 --strategy neat:/tmp/claude-1000/-home-sebi-Documents-Code-arschloch/d4dabbea-31e7-4303-a456-53cbaba01a2e/scratchpad/e5/p13/A0/seed12/best.json --strategy lowest-legal --strategy lowest-legal --strategy lowest-legal
+train A0 seed 13: --features base
+
+done: 120 generations in 0:03:18
+best champion: generation 113, score +0.655 ±0.011 against the pool (held-out matches)
+play it: cli --player-count 4 --matches 1000 --strategy neat:/tmp/claude-1000/-home-sebi-Documents-Code-arschloch/d4dabbea-31e7-4303-a456-53cbaba01a2e/scratchpad/e5/p13/A0/seed13/best.json --strategy lowest-legal --strategy lowest-legal --strategy lowest-legal
+train A0 seed 14: --features base
+
+done: 120 generations in 0:04:16
+best champion: generation 104, score +0.646 ±0.012 against the pool (held-out matches)
+play it: cli --player-count 4 --matches 1000 --strategy neat:/tmp/claude-1000/-home-sebi-Documents-Code-arschloch/d4dabbea-31e7-4303-a456-53cbaba01a2e/scratchpad/e5/p13/A0/seed14/best.json --strategy lowest-legal --strategy lowest-legal --strategy lowest-legal
+train A0 seed 15: --features base
+
+done: 120 generations in 0:04:25
+best champion: generation 83, score +0.626 ±0.013 against the pool (held-out matches)
+play it: cli --player-count 4 --matches 1000 --strategy neat:/tmp/claude-1000/-home-sebi-Documents-Code-arschloch/d4dabbea-31e7-4303-a456-53cbaba01a2e/scratchpad/e5/p13/A0/seed15/best.json --strategy lowest-legal --strategy lowest-legal --strategy lowest-legal
+train A0 seed 16: --features base
+
+done: 120 generations in 0:04:09
+best champion: generation 45, score +0.633 ±0.011 against the pool (held-out matches)
+play it: cli --player-count 4 --matches 1000 --strategy neat:/tmp/claude-1000/-home-sebi-Documents-Code-arschloch/d4dabbea-31e7-4303-a456-53cbaba01a2e/scratchpad/e5/p13/A0/seed16/best.json --strategy lowest-legal --strategy lowest-legal --strategy lowest-legal
+train A0 seed 17: --features base
+
+done: 120 generations in 0:04:09
+best champion: generation 90, score +0.605 ±0.013 against the pool (held-out matches)
+play it: cli --player-count 4 --matches 1000 --strategy neat:/tmp/claude-1000/-home-sebi-Documents-Code-arschloch/d4dabbea-31e7-4303-a456-53cbaba01a2e/scratchpad/e5/p13/A0/seed17/best.json --strategy lowest-legal --strategy lowest-legal --strategy lowest-legal
+train A0 seed 18: --features base
+
+done: 120 generations in 0:04:19
+best champion: generation 64, score +0.604 ±0.014 against the pool (held-out matches)
+play it: cli --player-count 4 --matches 1000 --strategy neat:/tmp/claude-1000/-home-sebi-Documents-Code-arschloch/d4dabbea-31e7-4303-a456-53cbaba01a2e/scratchpad/e5/p13/A0/seed18/best.json --strategy lowest-legal --strategy lowest-legal --strategy lowest-legal
+train A0 seed 19: --features base
+
+done: 120 generations in 0:03:02
+best champion: generation 27, score +0.638 ±0.013 against the pool (held-out matches)
+play it: cli --player-count 4 --matches 1000 --strategy neat:/tmp/claude-1000/-home-sebi-Documents-Code-arschloch/d4dabbea-31e7-4303-a456-53cbaba01a2e/scratchpad/e5/p13/A0/seed19/best.json --strategy lowest-legal --strategy lowest-legal --strategy lowest-legal
+train A0 seed 20: --features base
+
+done: 120 generations in 0:03:56
+best champion: generation 37, score +0.644 ±0.012 against the pool (held-out matches)
+play it: cli --player-count 4 --matches 1000 --strategy neat:/tmp/claude-1000/-home-sebi-Documents-Code-arschloch/d4dabbea-31e7-4303-a456-53cbaba01a2e/scratchpad/e5/p13/A0/seed20/best.json --strategy lowest-legal --strategy lowest-legal --strategy lowest-legal
+eval A0
+train A2 seed 11: --features hidden
+
+done: 120 generations in 0:04:47
+best champion: generation 80, score +0.667 ±0.012 against the pool (held-out matches)
+play it: cli --player-count 4 --matches 1000 --strategy neat:/tmp/claude-1000/-home-sebi-Documents-Code-arschloch/d4dabbea-31e7-4303-a456-53cbaba01a2e/scratchpad/e5/p13/A2/seed11/best.json --strategy lowest-legal --strategy lowest-legal --strategy lowest-legal
+train A2 seed 12: --features hidden
+
+done: 120 generations in 0:04:15
+best champion: generation 81, score +0.642 ±0.011 against the pool (held-out matches)
+play it: cli --player-count 4 --matches 1000 --strategy neat:/tmp/claude-1000/-home-sebi-Documents-Code-arschloch/d4dabbea-31e7-4303-a456-53cbaba01a2e/scratchpad/e5/p13/A2/seed12/best.json --strategy lowest-legal --strategy lowest-legal --strategy lowest-legal
+train A2 seed 13: --features hidden
+
+done: 120 generations in 0:06:30
+best champion: generation 57, score +0.651 ±0.012 against the pool (held-out matches)
+play it: cli --player-count 4 --matches 1000 --strategy neat:/tmp/claude-1000/-home-sebi-Documents-Code-arschloch/d4dabbea-31e7-4303-a456-53cbaba01a2e/scratchpad/e5/p13/A2/seed13/best.json --strategy lowest-legal --strategy lowest-legal --strategy lowest-legal
+train A2 seed 14: --features hidden
+
+done: 120 generations in 0:06:34
+best champion: generation 58, score +0.660 ±0.011 against the pool (held-out matches)
+play it: cli --player-count 4 --matches 1000 --strategy neat:/tmp/claude-1000/-home-sebi-Documents-Code-arschloch/d4dabbea-31e7-4303-a456-53cbaba01a2e/scratchpad/e5/p13/A2/seed14/best.json --strategy lowest-legal --strategy lowest-legal --strategy lowest-legal
+train A2 seed 15: --features hidden
+
+done: 120 generations in 0:05:48
+best champion: generation 110, score +0.662 ±0.012 against the pool (held-out matches)
+play it: cli --player-count 4 --matches 1000 --strategy neat:/tmp/claude-1000/-home-sebi-Documents-Code-arschloch/d4dabbea-31e7-4303-a456-53cbaba01a2e/scratchpad/e5/p13/A2/seed15/best.json --strategy lowest-legal --strategy lowest-legal --strategy lowest-legal
+train A2 seed 16: --features hidden
+
+done: 120 generations in 0:04:48
+best champion: generation 74, score +0.666 ±0.012 against the pool (held-out matches)
+play it: cli --player-count 4 --matches 1000 --strategy neat:/tmp/claude-1000/-home-sebi-Documents-Code-arschloch/d4dabbea-31e7-4303-a456-53cbaba01a2e/scratchpad/e5/p13/A2/seed16/best.json --strategy lowest-legal --strategy lowest-legal --strategy lowest-legal
+train A2 seed 17: --features hidden
+
+done: 120 generations in 0:03:49
+best champion: generation 115, score +0.643 ±0.013 against the pool (held-out matches)
+play it: cli --player-count 4 --matches 1000 --strategy neat:/tmp/claude-1000/-home-sebi-Documents-Code-arschloch/d4dabbea-31e7-4303-a456-53cbaba01a2e/scratchpad/e5/p13/A2/seed17/best.json --strategy lowest-legal --strategy lowest-legal --strategy lowest-legal
+train A2 seed 18: --features hidden
+
+done: 120 generations in 0:03:55
+best champion: generation 78, score +0.653 ±0.012 against the pool (held-out matches)
+play it: cli --player-count 4 --matches 1000 --strategy neat:/tmp/claude-1000/-home-sebi-Documents-Code-arschloch/d4dabbea-31e7-4303-a456-53cbaba01a2e/scratchpad/e5/p13/A2/seed18/best.json --strategy lowest-legal --strategy lowest-legal --strategy lowest-legal
+train A2 seed 19: --features hidden
+
+done: 120 generations in 0:04:24
+best champion: generation 109, score +0.651 ±0.012 against the pool (held-out matches)
+play it: cli --player-count 4 --matches 1000 --strategy neat:/tmp/claude-1000/-home-sebi-Documents-Code-arschloch/d4dabbea-31e7-4303-a456-53cbaba01a2e/scratchpad/e5/p13/A2/seed19/best.json --strategy lowest-legal --strategy lowest-legal --strategy lowest-legal
+train A2 seed 20: --features hidden
+
+done: 120 generations in 0:04:11
+best champion: generation 90, score +0.663 ±0.012 against the pool (held-out matches)
+play it: cli --player-count 4 --matches 1000 --strategy neat:/tmp/claude-1000/-home-sebi-Documents-Code-arschloch/d4dabbea-31e7-4303-a456-53cbaba01a2e/scratchpad/e5/p13/A2/seed20/best.json --strategy lowest-legal --strategy lowest-legal --strategy lowest-legal
+eval A2

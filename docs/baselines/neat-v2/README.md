@@ -23,8 +23,11 @@ the reference for the older rule (`free`).
 target/release/cli train --out runs/v2 --seed 1 --population 150 \
   --generations 120 --matches-per-genome 80 --reeval-matches 200 \
   --rounds 8 --champion-candidates 5 --weight-power 0.2 --pass-rule final \
-  --exchange-rule free --quiet
+  --exchange-rule free --features base --quiet
 ```
+
+(`--features base` was the only choice then; the default of `cli train` is now `hidden`,
+see `../neat-v3/README.md`.)
 
 4 players, single deck, opponent pool `lowest-legal`, `endgame-denial`,
 `adaptive:reading,tempo,bully`. 120 generations took 6:51 on a 4-core laptop

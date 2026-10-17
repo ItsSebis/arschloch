@@ -4,7 +4,7 @@
 //!
 //! - `GET  /`, `/play.js`, `/play-lib.js`, `/play.css`: the page
 //! - `GET  /api/catalog`: the opponents a game can be set up with
-//! - `POST /api/games`: start a game
+//! - `POST /api/games`: start a game (an opponent id may end in `+solver[:N]`)
 //! - `GET  /api/games/ID?events_since=N`: the view and the events from N
 //! - `POST /api/games/ID/{play,pass,give,next}`: the human acts
 //! - `GET  /api/games/ID/advice?model=ID`: a model ranks the legal moves
@@ -108,6 +108,27 @@ pub struct PlayApp {
     records: RecordStore,
 }
 
+/// The largest solver settings an opponent of the play page may ask for: the page
+/// holds the games lock while the bots move, so one request must not be able to make a
+/// move take minutes (`T` up to 8, the default budget, a small sampler, no genome path
+/// as the leaf evaluator since that would read a server file). `None` when over.
+fn clamp_solver(toggle: &sim::SolverToggle) -> Option<()> {
+    const MAX_UNSEEN: usize = 8;
+    const MAX_BUDGET: u64 = 2_000_000;
+    const MAX_SAMPLES: usize = 32;
+    const MAX_DEPTH: u8 = 2;
+    const MAX_ROLLOUTS: u64 = 20_000;
+    let solver = &toggle.solver;
+    let within = solver.max_unseen <= MAX_UNSEEN && solver.node_budget <= MAX_BUDGET;
+    let sampler = toggle.sampler.as_ref().is_none_or(|s| {
+        s.samples <= MAX_SAMPLES
+            && s.depth <= MAX_DEPTH
+            && s.rollouts <= MAX_ROLLOUTS
+            && !matches!(s.leaf, sim::LeafSpec::Neat { .. })
+    });
+    (within && sampler).then_some(())
+}
+
 fn bad(status: u16, message: &str) -> Response {
     Response::json(status, &json!({ "error": message }))
 }
@@ -175,6 +196,34 @@ impl PlayApp {
 
     fn entry(&self, id: &str) -> Option<&CatalogEntry> {
         self.catalog.iter().find(|entry| entry.id == id)
+    }
+
+    /// A catalog entry, or one with the endgame solver added: `ID+solver[:N]` is the
+    /// entry `ID` playing until at most N (default 6) cards are unseen, the solver after
+    /// that (`sim::EndgameSolver::wrapping`). A wrapped model gives no advice. An id that
+    /// is itself in the catalog wins (a model file `champ+solver.json` is `model:champ+solver`).
+    /// The solver runs while the games lock is held, so its options stay within
+    /// [`clamp_solver`].
+    fn resolve(&self, id: &str) -> Option<CatalogEntry> {
+        if let Some(entry) = self.entry(id) {
+            return Some(entry.clone());
+        }
+        let (base, rest) = sim::split_solver_suffix(id)?;
+        let toggle = sim::parse_solver_toggle(rest).ok()?;
+        clamp_solver(&toggle)?;
+        let base = self.entry(base)?;
+        let strategy: Arc<dyn Strategy> = Arc::new(sim::EndgameSolver::wrapping_with_sampler(
+            Arc::clone(&base.strategy),
+            toggle.solver,
+            toggle.sampler,
+        ));
+        Some(CatalogEntry {
+            id: id.to_owned(),
+            label: strategy.name().to_owned(),
+            kind: OpponentKind::Strategy,
+            strategy,
+            model: None,
+        })
     }
 
     fn catalog_response(&self) -> Response {
@@ -256,10 +305,10 @@ impl PlayApp {
         }
         let mut entries = Vec::new();
         for id in ids {
-            let Some(entry) = id.as_str().and_then(|id| self.entry(id)) else {
+            let Some(entry) = id.as_str().and_then(|id| self.resolve(id)) else {
                 return Err(bad(400, "an opponent is not in the catalog"));
             };
-            entries.push(entry.clone());
+            entries.push(entry);
         }
         let human_seat = match request["human_seat"].as_u64() {
             None => u8::try_from(rand::random::<u32>() % u32::from(players)).unwrap_or(0),

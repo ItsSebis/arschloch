@@ -9,7 +9,9 @@
 
 use std::collections::HashMap;
 
-use engine::{Card, Move, Round, SeatId};
+use engine::{Move, Round, SeatId};
+
+use crate::card_bits::card_bits;
 
 /// 0-based finishing place by seat (0 = first out), for all seats.
 pub type Places = [u8; 6];
@@ -35,14 +37,6 @@ struct Position {
     passed: u8,
     /// Who went out, in order: the same hands can follow different orders.
     finished: [Option<SeatId>; 6],
-}
-
-fn card_bits(cards: &[Card]) -> u128 {
-    cards.iter().fold(0, |mask, card| {
-        mask | 1u128
-            .checked_shl(u32::from(card.deal_index))
-            .expect("deal indices of a round's deck are below 128")
-    })
 }
 
 impl Position {

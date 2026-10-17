@@ -31,8 +31,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Build both architectures
         run: |
-          cargo build --release -p cli --target aarch64-apple-darwin
-          cargo build --release -p cli --target x86_64-apple-darwin
+          cargo build --release -p cli -p gui --target aarch64-apple-darwin
+          cargo build --release -p cli -p gui --target x86_64-apple-darwin
       - name: Package and upload
         env:
           GH_TOKEN: ${{ github.token }}
@@ -42,9 +42,10 @@ jobs:
             name="arschloch-${TAG}-${label}"
             mkdir -p "$name/docs"
             cp "target/${triple}/release/cli" "$name/cli"
+            cp "target/${triple}/release/arschloch-gui" "$name/arschloch-gui"
             cp README.md "$name/"
-            cp docs/TRAINING.md docs/RULES.md docs/PLAYING.md "$name/docs/"
-            cp docs/baselines/neat-v2/champion.json "$name/champion.json"
+            cp docs/TRAINING.md docs/RULES.md docs/PLAYING.md docs/GUI.md "$name/docs/"
+            cp docs/baselines/neat-v3/champion.json "$name/champion.json"
             tar -czf "${name}.tar.gz" "$name"
             shasum -a 256 "${name}.tar.gz" > "${name}.tar.gz.sha256"
             gh release upload "$TAG" "${name}.tar.gz" "${name}.tar.gz.sha256" --clobber

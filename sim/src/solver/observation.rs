@@ -70,6 +70,23 @@ impl Observation {
         })
     }
 
+    /// The same view with every pass ceiling forgotten.
+    #[must_use]
+    pub fn without_ceilings(&self) -> Self {
+        Self {
+            ceilings: vec![PassCeilings::default(); self.ceilings.len()],
+            ..self.clone()
+        }
+    }
+
+    /// Every card still in some hand: our own and the unseen ones.
+    #[must_use]
+    pub fn cards_in_play(&self) -> Vec<Card> {
+        let mut cards = self.hand.clone();
+        cards.extend_from_slice(&self.unseen);
+        cards
+    }
+
     /// The round with `deal` (hands by seat) in place, or `None` if the
     /// position is inconsistent (see [`Round::from_position`]).
     #[must_use]

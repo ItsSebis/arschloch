@@ -18,10 +18,23 @@
       <p class="muted" id="summary"></p>
       <div id="strategies"></div>
     </section>
+    <section class="card" id="estimate-card" hidden>
+      <h2>Luck-adjusted estimate</h2>
+      <p class="muted">A cheap adjustment for an ordinary run: round 1 is predicted from the dealt hand and the part the hand explains is taken off. It only knows what the hand features capture, so it removes less luck than the duplicate deals.</p>
+      <div id="estimate"></div>
+      <div id="agreement"></div>
+    </section>
     <section class="card" id="skill-card" hidden>
       <h2>Luck-adjusted score</h2>
       <p class="muted">Every deal replayed with the strategies rotated through all seats, so the luck of the deal cancels. The skill score is the plain score without it.</p>
       <div id="skill"></div>
+    </section>
+    <section class="card" id="compare-card">
+      <h2>Compare with another file</h2>
+      <p class="muted" id="compare-hint">Pick a second results file (it is read in this browser and not uploaded), or start <code>cli view A.json B.json</code>.</p>
+      <input type="file" id="compare-file" accept=".json,application/json">
+      <p id="compare-status" class="muted"></p>
+      <div id="compare"></div>
     </section>
     <section class="card">
       <h2>What the numbers mean</h2>

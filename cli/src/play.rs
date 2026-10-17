@@ -12,9 +12,12 @@ use web::{CatalogEntry, PlayApp, RecordStore, Server};
 
 use crate::args::{FixedStrategy, StrategyArg};
 
-/// The committed baseline champion, built in so `cli play` works from a
+/// The committed champion (neat-v3), built in so `cli play` works from a
 /// release archive without any file.
-const BUILT_IN_CHAMPION: &str = include_str!("../../docs/baselines/neat-v2/champion.json");
+const BUILT_IN_CHAMPION: &str = include_str!("../../docs/baselines/neat-v3/champion.json");
+/// The previous champion (neat-v2): still offered, so saved records and links naming
+/// `model:champion-v2` keep working.
+const BUILT_IN_CHAMPION_V2: &str = include_str!("../../docs/baselines/neat-v2/champion.json");
 
 /// Play against the models in the browser.
 #[derive(Parser, Debug)]
@@ -92,12 +95,21 @@ pub fn build_catalog(models: &[PathBuf]) -> anyhow::Result<Vec<CatalogEntry>> {
         let label = strategy.name().to_owned();
         catalog.push(CatalogEntry::strategy(spec, &label, strategy));
     }
-    let champion = GenomeFile::from_json(BUILT_IN_CHAMPION).context("built-in champion")?;
-    catalog.push(CatalogEntry::model(
-        "model:champion-v2",
-        "Neat(champion-v2)",
-        Arc::new(NeatStrategy::new("Neat(champion-v2)", &champion.genome)?),
-    ));
+    for (id, label, json) in [
+        ("model:champion-v3", "Neat(champion-v3)", BUILT_IN_CHAMPION),
+        (
+            "model:champion-v2",
+            "Neat(champion-v2)",
+            BUILT_IN_CHAMPION_V2,
+        ),
+    ] {
+        let champion = GenomeFile::from_json(json).context("built-in champion")?;
+        catalog.push(CatalogEntry::model(
+            id,
+            label,
+            Arc::new(NeatStrategy::new(label, &champion.genome)?),
+        ));
+    }
     for (index, path) in models.iter().enumerate() {
         let mut label = model_label(path);
         // Two models with the same name must stay distinguishable.
@@ -146,6 +158,7 @@ mod tests {
             "card-counter",
             "endgame-denial",
             "adaptive:reading,tempo,bully",
+            "model:champion-v3",
             "model:champion-v2",
         ] {
             assert!(ids.contains(&expected), "{expected} in {ids:?}");

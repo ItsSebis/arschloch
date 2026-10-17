@@ -1,0 +1,52 @@
+4 players, Single deck, FirstDealtWins, pass rule final, exchange rule forced, 1200 matches x 5 rounds, seed 7, 4 threads
+
+Strategy                                                  President       Vize            ViceArschloch   Arschloch       
+Adaptive(counting,reading)                                812             753             1816            2619            
+Adaptive(counting,reading)+Solver(T=6,S=16,D=1,adaptive)  1373            2498            1702            427             
+LowestLegal                                               902             852             1548            2698            
+Neat(champion)                                            2913            1897            934             256             
+
+Voluntary pass rate: 18.44%
+
+Voluntary pass rate by strategy:
+  Adaptive(counting,reading)                                0.00%
+  Adaptive(counting,reading)+Solver(T=6,S=16,D=1,adaptive)  52.90%
+  LowestLegal                                               0.00%
+  Neat(champion)                                            36.46%
+
+President retention (stayed President the very next round):
+  Adaptive(counting,reading)                                57.46% (393/684)
+  Adaptive(counting,reading)+Solver(T=6,S=16,D=1,adaptive)  47.91% (526/1098)
+  LowestLegal                                               57.09% (431/755)
+  Neat(champion)                                            70.79% (1602/2263)
+
+First-round placement variance (lower = more skill-driven, higher = more luck-driven):
+  Adaptive(counting,reading)                                1.22
+  Adaptive(counting,reading)+Solver(T=6,S=16,D=1,adaptive)  0.92
+  LowestLegal                                               1.27
+  Neat(champion)                                            0.92
+
+
+Average place (1 = best), mean score (+1 best .. -1 worst), strength rating (Elo-like points, field mean 0), share of rounds as President; ± = standard error over matches:
+Strategy                                                  avg rank ±SE  mean score ±SE  strength rating ±SE  President % [95% Wilson]
+Adaptive(counting,reading)                                3.04 ±0.02    -0.360 ±0.015   -106 ±5              13.5% [12.7, 14.4]
+Adaptive(counting,reading)+Solver(T=6,S=16,D=1,adaptive)  2.20 ±0.02    +0.202 ±0.011   +57 ±3               22.9% [21.8, 24.0]
+LowestLegal                                               3.01 ±0.02    -0.338 ±0.016   -99 ±5               15.0% [14.2, 16.0]
+Neat(champion)                                            1.76 ±0.02    +0.496 ±0.011   +148 ±4              48.5% [47.3, 49.8]
+
+By seat (position bias; a fair table gives every seat the same numbers):
+Seat    avg rank ±SE  mean score ±SE
+seat 0  2.48 ±0.03    +0.012 ±0.017
+seat 1  2.48 ±0.03    +0.016 ±0.017
+seat 2  2.51 ±0.03    -0.004 ±0.017
+seat 3  2.54 ±0.03    -0.024 ±0.017
+
+Luck-adjusted score (--skill-score duplicate; score +1 best .. -1 worst, ± = standard error):
+Strategy                                                  plain score ±SE  skill (duplicate) ±SE  skill (estimate) ±SE  variance reduction M  luck share
+Adaptive(counting,reading)+Solver(T=6,S=16,D=1,adaptive)  +0.202 ±0.011    +0.202 ±0.010          -                     1.15                  13%
+Neat(champion)                                            +0.496 ±0.011    +0.496 ±0.010          -                     1.16                  14%
+Adaptive(counting,reading)                                -0.360 ±0.015    -0.360 ±0.013          -                     1.48                  32%
+LowestLegal                                               -0.338 ±0.016    -0.338 ±0.013          -                     1.49                  33%
+Duplicate: 300 groups of 4 matches, 5 rounds per match; plain score, duplicate skill, M and luck share cover all rounds.
+Duplicate deals cancel the luck of the deal in round 1; later rounds are luck-reduced, not luck-free.
+In duplicate mode the plain score equals the duplicate skill value by construction (the mean of the group means is the mean of the matches); its ±SE is what an ordinary run of the same size would show, not an independent estimate.

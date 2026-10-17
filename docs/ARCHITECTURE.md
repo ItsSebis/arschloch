@@ -213,7 +213,13 @@ the user view `docs/SOLVER.md`.
   clones `Round` per node, with a node budget).
 - `report`: `analyze` solves every consistent deal and averages per move
   (`MoveReport`); `gap`: the disagreement benchmark; `config`: the options of
-  `endgame-solver[:OPTIONS]`; `notation`: card tokens (`9H`, `10S`, `AC`).
+  `endgame-solver[:OPTIONS]` and of the `+solver[:OPTIONS]` toggle (`SolverToggle`); `notation`: card tokens (`9H`,
+  `10S`, `AC`). `SolverConfig::ceilings` (`CeilingMode`: hard, soft, off) decides how pass ceilings restrict the deals.
+- Phase B, the early-game sampler (`docs/superpowers/specs/2026-10-17-solver-phase-b-design.md`): `sample`: one random
+  consistent deal (`sample_deal`); `sampler`: `sample_analyze` searches sampled deals to a depth with max^n and averages
+  per move, `SamplerConfig`/`LeafSpec` are its options; `leaf`: the pluggable `LeafEvaluator`s (`Rollout` with any
+  strategy in every seat, `CardCount`, a static guess). `EndgameSolver` asks the exact solver, then the sampler, then its
+  fallback.
 
 ### `cli`
 
@@ -235,7 +241,7 @@ original summary unchanged; `extended_summary` renders the sections
 appended after it. `cli evaluate` also reports the average place per cell
 and has `--explain`; `cli stats-doc` prints `docs/STATISTICS.md`.
 
-`web` also serves `cli view FILE` (Phase 11b): `ResultsApp` hands out one results file (re-read on every request) and
+`web` also serves `cli view FILE` (Phase 11b): `ResultsApp` hands out one results file (re-read on every request; `/api/compare` serves an optional second one) and
 the page `results.html` / `results_lib.js` (pure, tested in Node) / `results.js` (DOM only), with the shared `lib.js` and
 `style.css`.
 
@@ -246,6 +252,28 @@ process, streams its output into an activity log and starts the browser-based to
 the workspace, so it can never drift from the behaviour of the command line; a test runs the real `cli` with the
 arguments the form builds. It is left out of the workspace's `default-members` (it pulls in a windowing stack); see
 `docs/GUI.md`.
+
+### Module layout of the larger files
+
+A file that grew past about 400 lines is a directory with the root file as its entry; each child holds one concern, and
+`tests.rs` holds the unit tests. (Phase 19, simplification; built in v0.7.)
+
+- `sim::session` (the interactive game): `types` (config, errors, card ids, `GameEvent`, the views), `flow` (dealing,
+  the exchange, the AI seats playing until the human must act, the end of a round), `view` (legal moves, model advice,
+  `view()`), and `session.rs` itself (the `Session` state and the human's commands). The deck is dealt with
+  `match_runner::shuffled_numbered_deck`, the same function `run_match` and `solver::gap` use.
+- `sim::training::trainer`: `setup` (new run, warm start, resume), `stages`, `seeds`, `progress`, `stats`; `trainer.rs`
+  keeps `Trainer`, the observer trait and the generation loop (`run`, `step`).
+- `sim::useful_passes`: `rollout` (one pass's rollouts and the match replay); the types, `summarise` and
+  `analyse_useful_passes` stay in `useful_passes.rs`.
+- `sim::card_bits`: one card as a bit of a `u128` by its `deal_index` (used by the turn context and the solver's search).
+- `sim::strategies`: `lowest_play`, `highest_play` and `highest_unseen` are the shared selection helpers.
+- `cli::advisor` (`train-advisor`): `plan` (time budget, matches per genome, the `cli train` command line),
+  `references` (the players the candidates are scored against), `probe`, `render`; `advisor.rs` has the options and
+  `advise`. `cli::train_output`: `render` (pure line renderers) and `observer` (what is printed while a run goes);
+  `cli::train_args` keeps its tests in `train_args/tests.rs`.
+- `gui`: `tabs/` adds the drawing methods of one tab each to `App` (`simulation`, `solver`, `training`, `picker`);
+  `main.rs` keeps the state, the job handling and the frame loop.
 
 ### `neat` (Phase 10; core done in 10a)
 

@@ -13,8 +13,8 @@ target/release/cli play
 ```
 
 Open the printed address (`http://127.0.0.1:8090/`). The page listens on your
-own machine only. A trained champion (`Neat(champion-v2)`, the committed
-baseline) is built in, so this works from a release download too. To play
+own machine only. Two trained champions (`Neat(champion-v3)`, the committed
+baseline, and `Neat(champion-v2)`, the previous one) are built in, so this works from a release download too. To play
 against your own models, add them:
 
 ```bash
@@ -22,7 +22,10 @@ target/release/cli play --model runs/first --model runs/second/gen-0042.json
 ```
 
 `--model` takes a genome file written by `cli train` or a run directory (its
-`best.json`). Other options: `--port N` (default 8090) and `--records FILE`
+`best.json`). Note: `cli train` now trains the
+`hidden` feature set by default; those models play here and in every tool of this repo,
+**but not in the casino bot**, whose TypeScript port knows only feature set v1 (`base`). A model
+for the casino must be trained with `--features base`. Other options: `--port N` (default 8090) and `--records FILE`
 (default `play-records.jsonl` in the current directory).
 
 ## Setting up a game
@@ -70,8 +73,8 @@ select those cards.
 Finished matches are appended to the records file, one JSON line each. *Your
 record* shows your mean role score (+1 = always President, 0 = even, -1 = always
 last) per opponent and per table, how often you finished first and last, and the
-latest games. For reference, the built-in champion scores about +0.6 against the
-hand-written strategies (`docs/baselines/neat-v2`); the same scale applies to
+latest games. For reference, the built-in champion scores about +0.7 against the
+hand-written strategies (`docs/baselines/neat-v3`); the same scale applies to
 you.
 
 ## Security

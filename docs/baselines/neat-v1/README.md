@@ -25,8 +25,11 @@ strategies. Nothing here changes the pre-NEAT numbers.
 ```bash
 target/release/cli train --out runs/v1 --seed 1 --population 150 \
   --generations 120 --matches-per-genome 80 --reeval-matches 200 \
-  --rounds 8 --champion-candidates 5 --weight-power 0.2 --quiet
+  --rounds 8 --champion-candidates 5 --weight-power 0.2 --features base --quiet
 ```
+
+(`--features base` was the only choice then and is spelled out because the default of
+`cli train` is now `hidden`.)
 
 4 players, single deck, opponent pool `lowest-legal`, `endgame-denial`,
 `adaptive:reading,tempo,bully`. 120 generations took about 11 minutes on 8

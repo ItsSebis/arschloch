@@ -1,0 +1,12 @@
+4 players, Single deck, FirstDealtWins, pass rule final, exchange rule forced, 4000 matches x 10 rounds per cell, seed 777777
+score: +1 always President .. -1 always last; 0 is even
+
+opponent                         best
+Neat(champion)          +0.164 ±0.006
+mixed (all opponents)   +0.164 ±0.006
+
+average place: 1 = best .. 4 = last, ± standard error
+
+opponent                         best
+Neat(champion)             2.25 ±0.01
+mixed (all opponents)      2.25 ±0.01

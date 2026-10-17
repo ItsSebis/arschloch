@@ -82,31 +82,41 @@ impl Walker<'_> {
     /// A card above the seat's lowest ceiling can never be in its hand: pruning
     /// here keeps contradictory ceilings from costing a walk over every assignment.
     fn beats_single_ceiling(&self, seat: usize, card: Card) -> bool {
-        let rule = self.observation.duplicate_rule;
-        self.observation.ceilings[seat]
-            .ceiling(1, rule)
-            .is_some_and(|ceiling| card.compare(&ceiling, rule) == Ordering::Greater)
+        beats_single_ceiling(self.observation, seat, card)
     }
 
-    /// No opponent holds a combo that beats its pass ceiling. Ceilings are
-    /// closed upwards (a larger size has the lower, stricter ceiling), so the
-    /// size of the whole rank group is the one to check.
     fn consistent(&self) -> bool {
-        let rule = self.observation.duplicate_rule;
-        self.hands.iter().enumerate().all(|(seat, hand)| {
-            if seat == usize::from(self.observation.seat) {
-                return true;
-            }
-            let mut sorted = hand.clone();
-            sorted.sort_by(|a, b| a.compare(b, rule));
-            sorted.chunk_by(|a, b| a.rank == b.rank).all(|group| {
-                let top = &group[group.len() - 1];
-                self.observation.ceilings[seat]
-                    .ceiling(group.len(), rule)
-                    .is_none_or(|ceiling| top.compare(&ceiling, rule) != Ordering::Greater)
-            })
-        })
+        respects_ceilings(self.observation, &self.hands)
     }
+}
+
+/// Whether `card` is above `seat`'s lowest (size-1) pass ceiling, so the seat
+/// cannot hold it.
+pub(super) fn beats_single_ceiling(observation: &Observation, seat: usize, card: Card) -> bool {
+    let rule = observation.duplicate_rule;
+    observation.ceilings[seat]
+        .ceiling(1, rule)
+        .is_some_and(|ceiling| card.compare(&ceiling, rule) == Ordering::Greater)
+}
+
+/// No opponent holds a combo that beats its pass ceiling. Ceilings are
+/// closed upwards (a larger size has the lower, stricter ceiling), so the
+/// size of the whole rank group is the one to check.
+pub(super) fn respects_ceilings(observation: &Observation, hands: &[Vec<Card>]) -> bool {
+    let rule = observation.duplicate_rule;
+    hands.iter().enumerate().all(|(seat, hand)| {
+        if seat == usize::from(observation.seat) {
+            return true;
+        }
+        let mut sorted = hand.clone();
+        sorted.sort_by(|a, b| a.compare(b, rule));
+        sorted.chunk_by(|a, b| a.rank == b.rank).all(|group| {
+            let top = &group[group.len() - 1];
+            observation.ceilings[seat]
+                .ceiling(group.len(), rule)
+                .is_none_or(|ceiling| top.compare(&ceiling, rule) != Ordering::Greater)
+        })
+    })
 }
 
 #[cfg(test)]

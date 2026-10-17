@@ -452,3 +452,71 @@ fn the_catalog_and_the_page_are_served() {
     );
     std::fs::remove_file(path).ok();
 }
+
+#[test]
+fn an_opponent_can_get_the_endgame_solver_with_a_suffix() {
+    let (app, path) = app("solver-suffix");
+    let (_, view) = new_game(
+        &app,
+        3,
+        1,
+        &["lowest-legal+solver", "model:champion+solver:4"],
+    );
+    let names: Vec<&str> = view["seats"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s["name"].as_str().unwrap())
+        .collect();
+    assert!(names.contains(&"LowestLegal+Solver(T=6)"), "{names:?}");
+    assert!(names.contains(&"Neat(champion)+Solver(T=4)"), "{names:?}");
+    for bad in ["ghost+solver", "lowest-legal+solver:x", "+solver"] {
+        let body = json!({"players": 3, "opponents": ["lowest-legal", bad], "human_seat": 0});
+        assert_eq!(
+            call(&app, "POST", "/api/games", &body.to_string()).0,
+            400,
+            "{bad}"
+        );
+    }
+    let _ = std::fs::remove_file(path);
+}
+
+#[test]
+fn a_model_file_named_with_the_suffix_resolves_and_solver_options_are_clamped() {
+    let path = records_path("solver-clamp");
+    let catalog = vec![
+        CatalogEntry::strategy("lowest-legal", "LowestLegal", Arc::new(LowestLegal)),
+        CatalogEntry::model("model:champ+solver", "Neat(champ+solver)", champion()),
+    ];
+    let app = PlayApp::new(catalog, RecordStore::new(Some(path.clone()))).with_fixed_seeds();
+    assert_eq!(
+        app.resolve("model:champ+solver").unwrap().label,
+        "Neat(champ+solver)",
+        "the exact catalog entry wins over splitting"
+    );
+    let both = app.resolve("model:champ+solver+solver:4").unwrap();
+    assert!(both.label.ends_with("+Solver(T=4)"), "{}", both.label);
+    for ok in [
+        "lowest-legal+solver:8",
+        "lowest-legal+solver:budget=1000,samples=8,depth=2",
+    ] {
+        assert!(app.resolve(ok).is_some(), "{ok}");
+    }
+    for bad in [
+        "lowest-legal+solver:9",
+        "lowest-legal+solver:budget=99999999",
+        "lowest-legal+solver:samples=1000",
+        "lowest-legal+solver:samples=4,depth=3",
+        "lowest-legal+solver:samples=4,rollouts=1000000",
+        "lowest-legal+solver:samples=4,leaf=neat:/etc/passwd",
+        "lowest-legal+solver:",
+    ] {
+        let body = json!({"players": 3, "opponents": ["lowest-legal", bad], "human_seat": 0});
+        assert_eq!(
+            call(&app, "POST", "/api/games", &body.to_string()).0,
+            400,
+            "{bad}"
+        );
+    }
+    let _ = std::fs::remove_file(path);
+}
