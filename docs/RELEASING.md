@@ -4,8 +4,19 @@ How the binaries on a GitHub release are produced.
 
 - **Linux and Windows** are built by hand from the tagged commit and uploaded
   with the release:
-  - Linux: `cargo build --release -p cli -p gui` (needs glibc 2.34 or newer to run; the window needs an X11 or Wayland
-    session and loads its libraries when it starts, so building needs no extra system packages).
+  - Linux: `cargo build --release -p cli -p gui`, **inside an older distribution**: the binaries need the glibc of the
+    machine that built them (built on a glibc 2.43 desktop, `arschloch-gui` needs glibc 2.43 for `atan2f` and would
+    not start on Ubuntu 24.04 or Debian 12). Built in Debian 12 (bookworm) both need glibc 2.35 or newer (`hypot`)
+    and produce the same results (checked on 2026-10-17):
+
+    ```
+    docker run --rm --user $(id -u):$(id -g) -v $PWD:/src:ro -v $HOME/.cache/docker-cargo-home:/cargo \
+      -v $HOME/.cache/target-docker:/target -e CARGO_HOME=/cargo -e CARGO_TARGET_DIR=/target -w /src \
+      rust:1.98-bookworm cargo build --release --locked -p cli -p gui
+    ```
+
+    Check the floor with `objdump -T BINARY | grep -o 'GLIBC_[0-9.]*' | sort -V | tail -1`. The window needs an X11
+    or Wayland session and loads its libraries when it starts, so building needs no extra system packages.
   - Windows (cross-compiled from Linux with `cargo-xwin`, C runtime linked
     statically so no Visual C++ redistributable is needed):
     `RUSTFLAGS="-C target-feature=+crt-static" cargo xwin build --release
@@ -43,4 +54,4 @@ How the binaries on a GitHub release are produced.
   (`Neat(champion-v2)`, `docs/baselines/neat-v2`).
 - **The casino bot cannot play `neat-v3`, nor any genome trained with the new default.** Its TypeScript port (outside
   this repository) knows feature set v1 (`base`) only. Genomes for the casino must be trained with `--features base`;
-  neat-v1 and neat-v2 still work there. Porting the `hidden` inputs to the casino is open work (ROADMAP item 5).
+  neat-v1 and neat-v2 still work there. Porting the `hidden` inputs to the casino is open work (ROADMAP open work item 4).
