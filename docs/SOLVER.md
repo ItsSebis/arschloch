@@ -75,7 +75,7 @@ most `max-unseen` cards are unseen, the exact solver plays as before. Design:
 | `samples=N` | off | sampled splits per early-game decision; without it (or `samples=0`) nothing changes |
 | `depth=D` | 1 | plies searched in each split (1 to 4); 1 = each own move, then the leaf. Forced moves do not count |
 | `leaf=E` | `adaptive` | `adaptive`: play the round out with `adaptive` in every seat; `cards`: a static guess from the cards left (no play-out, cheap, crude); `neat:PATH`: play the round out with a trained genome in every seat |
-| `rollouts=N` | 20000 | leaf evaluations allowed per decision; sampling stops after the sample that crosses it |
+| `rollouts=N` | 20000 | leaf evaluations allowed per decision: a sample that would cross it is abandoned mid-search and sampling stops; the first sample is always completed |
 | `ceilings=M` | `hard` | pass ceilings: `hard` (a split must respect them), `soft` (respect them while some split does, else ignore them), `off` (ignore them). Also applies to the exact endgame |
 
 Examples: `endgame-solver:samples=16`, `adaptive+solver:samples=16,depth=2`, the sampler alone without the exact
@@ -88,8 +88,15 @@ shows the settings: `Adaptive(counting,reading)+Solver(T=6,S=16,D=1,adaptive)`.
   drawn and the solver plays byte for byte as before.
 - **Sampling:** each unseen card goes to a seat with probability proportional to the room left in its hand: without
   ceilings exactly a uniform random split; with ceilings close to uniform over the consistent splits, not exactly.
-- **Ceilings that no split fits** (a seat that passed while holding a beating card): `hard` skips the sample, and if no
-  sample fits, the fallback plays the decision; `soft` then samples without ceilings.
+- **Ties:** moves of equal value are not chosen by engine order (which would always pick `Pass`, listed first): a play
+  beats `Pass`, and among plays the lower top card wins. A pass is played only when strictly better.
+- **Ceilings that no split fits** (a seat that passed while holding a beating card): a split is drawn up to 64 times;
+  `hard` then skips the sample (`NoConsistentDeal`), and if no sample fits, the fallback plays the decision; `soft`
+  samples without ceilings from then on, for the later samples of that decision too.
+- **Known weaknesses:** the cards a seat gave and received in the exchange are not pinned to their hands (the
+  observation does not carry them); the play-out's pass tracker starts empty at the decision, so it does not know
+  earlier passes; with the sampler on, the wrapped strategy only plays forced moves and fallbacks (it no longer sees
+  every decision as in phase A).
 - **Not built:** `--pass-rule free` (the sampler rebuilds a `final`-rule round like the exact solver; under `free` the
   fallback plays every move), and play-outs with different strategies per seat.
 - **Cost:** about `samples x legal moves x replies^(depth-1)` play-outs per decision: see the measurements before using
@@ -145,10 +152,11 @@ Those are the lessons; `docs/baselines/solver/README.md` has the first results.
 - Cost grows quickly with the number of unseen cards; `max-unseen` and `budget` bound it. Measured defaults: 6 unseen cards, 2M nodes per decision (T=8 already takes minutes per 200 games). At T=6 the solver plays exactly about 11% of the decisions of a 4-player single-deck round.
 - It beats the strategy it falls back to clearly (+0.14 score head to head) but not the trained neat champion, whose strength lies in the part of the round the solver does not play; see the measurements. The better use is the toggle: the champion with `+solver` beats three plain champions by +0.083 (`docs/baselines/solver-toggle/README.md`).
 - The sampler (phase B) changes that (`docs/baselines/solver-phase-b/README.md`): `adaptive+solver:samples=16` beats
-  three `adaptive` by +0.84 (the exact endgame alone: +0.13), but with `adaptive` play-outs it still loses to the
+  three `adaptive` by +0.89 (the exact endgame alone: +0.13), but with `adaptive` play-outs it still loses to the
   champion. With the champion as the play-out policy and the ceilings off,
   `neat:docs/baselines/neat-v2/champion.json+solver:samples=16,leaf=neat:docs/baselines/neat-v2/champion.json,ceilings=off`
-  beats three champions by +0.153 +-0.011 and wins the mixed table. Depth 2-3 and `leaf=cards` are worse than depth 1
+  beats three champions by +0.172 +-0.016 (+0.153 before the tie rule was fixed) and wins the mixed table
+  (+0.059 +-0.015 over the champion, paired). Depth 2-3 and `leaf=cards` are worse than depth 1
   with a play-out; more samples help (+0.50 at 4, +0.96 at 64 against `adaptive`).
 - The unseen cards are weighted equally; hand reading only removes impossible splits. Pass ceilings are used as hard
   facts by default: a seat that passed on purpose while holding a beating card (`adaptive`'s deception,

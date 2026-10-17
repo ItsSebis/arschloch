@@ -248,7 +248,7 @@ mod tests {
         // Seat 3 is out (place 0). Seat 0: one card, score 1. Seat 2: two cards,
         // both above every other hand's best (5C), 2 - 2 x 0.5 = 1: it shares
         // places 1 and 2 with seat 0. Seat 1: 2, last.
-        assert!((values[3] - 0.0).abs() < 1e-6);
+        assert!(values[3].abs() < 1e-6);
         assert!((values[0] - 1.5).abs() < 1e-6);
         assert!((values[2] - 1.5).abs() < 1e-6);
         assert!((values[1] - 3.0).abs() < 1e-6);

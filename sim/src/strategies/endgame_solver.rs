@@ -41,7 +41,8 @@ pub struct EndgameSolver {
     /// Whether a forced move (one legal move) still goes to the fallback. The
     /// `endgame-solver` strategy returns it directly; a wrapper hands it on, so the
     /// wrapped strategy sees (and draws randomness for) every decision it would
-    /// have made alone.
+    /// have made alone. With the sampler on this holds only for forced moves and
+    /// the decisions the solver falls back on: it answers the others itself.
     delegate_forced: bool,
     /// The early-game sampler and its leaf evaluator; `None` = phase A only.
     sampler: Option<(SamplerConfig, Arc<dyn LeafEvaluator>)>,

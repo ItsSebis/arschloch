@@ -3,6 +3,7 @@
 //! depth limit with a leaf evaluator and average per move ("perfect-information
 //! Monte Carlo"). See docs/superpowers/specs/2026-10-17-solver-phase-b-design.md.
 
+use std::cmp::Ordering;
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -112,8 +113,10 @@ pub struct SamplerConfig {
     /// Plies searched with max^n in each deal; forced moves do not count.
     pub depth: u8,
     pub leaf: LeafSpec,
-    /// Leaf evaluations allowed per decision; sampling stops after the sample
-    /// that crosses it (one sample is always completed).
+    /// Leaf evaluations allowed per decision. The first sample is always
+    /// completed; a later sample that would cross the budget is abandoned
+    /// mid-search (its partial leaves still count as spent) and sampling
+    /// stops, so a decision costs at most `max(rollouts, first sample)` leaves.
     pub rollouts: u64,
 }
 
@@ -154,23 +157,51 @@ pub struct SampleReport {
     pub moves: Vec<(Move, f64)>,
     /// Deals searched.
     pub samples: u64,
-    /// Leaf evaluations spent.
+    /// Leaf evaluations spent (including those of an abandoned sample).
     pub leaves: u64,
+    /// The duplicate rule the moves are ranked under (for the tie rule).
+    pub rule: DuplicateRule,
+}
+
+/// True when `a` is preferred to `b` among moves of equal value: a play to
+/// `Pass` (a pass is chosen only when strictly better), and among two plays
+/// the one whose top card is lower (keep the strong cards for later). Equal
+/// strength keeps the earlier move. The engine lists `Pass` first, so without
+/// this rule every tie went to `Pass` (`min_by` and a strict `<` keep the first).
+fn tie_prefers(a: Move, b: Move, rule: DuplicateRule) -> bool {
+    match (a, b) {
+        (Move::Play(_), Move::Pass) => true,
+        (Move::Play(x), Move::Play(y)) => {
+            x.top_card(rule).compare(&y.top_card(rule), rule) == Ordering::Less
+        }
+        _ => false,
+    }
 }
 
 impl SampleReport {
-    /// The move with the lowest mean place, the first one on ties.
+    /// The move with the lowest mean place; ties follow `tie_prefers` (a play
+    /// before `Pass`, then the weaker top card, then engine order).
     ///
     /// # Panics
     ///
     /// Panics on an empty report (`sample_analyze` never returns one).
     #[must_use]
     pub fn best(&self) -> Move {
-        self.moves
-            .iter()
-            .min_by(|a, b| a.1.total_cmp(&b.1))
-            .expect("sample_analyze never returns an empty report")
-            .0
+        let mut best = *self
+            .moves
+            .first()
+            .expect("sample_analyze never returns an empty report");
+        for &(mv, mean) in &self.moves[1..] {
+            let better = match mean.total_cmp(&best.1) {
+                Ordering::Less => true,
+                Ordering::Equal => tie_prefers(mv, best.0, self.rule),
+                Ordering::Greater => false,
+            };
+            if better {
+                best = (mv, mean);
+            }
+        }
+        best.0
     }
 }
 
@@ -202,6 +233,8 @@ pub fn sample_analyze(
         if samples > 0 && leaves >= config.rollouts {
             break;
         }
+        // The first sample is never cut, so a decision always gets an answer.
+        let limit = (samples > 0).then(|| config.rollouts - leaves);
         let mut rng = rand::rngs::StdRng::seed_from_u64(mix(seed.wrapping_add(i as u64)));
         let mut deal = sample_deal(observation, use_ceilings, &mut rng);
         if deal.is_none() && use_ceilings && ceilings == CeilingMode::Soft {
@@ -220,19 +253,30 @@ pub fn sample_analyze(
             rule: observation.duplicate_rule,
             seed: rng.next_u64(),
             leaves: 0,
+            limit,
+            cut: false,
         };
         let seat_to_move = round.seat_to_move().ok_or(SolveError::InvalidPosition)?;
         let legal = round.legal_moves();
         if sums.is_empty() {
             sums = legal.iter().map(|&mv| (mv, 0.0)).collect();
         }
-        for (slot, mv) in sums.iter_mut().zip(legal) {
+        let mut values = Vec::with_capacity(legal.len());
+        for mv in legal {
             let mut next = round.clone();
             next.submit_move(seat_to_move, mv)
                 .expect("moves from legal_moves are accepted");
-            slot.1 += f64::from(search.value(&next, config.depth.saturating_sub(1))[seat]);
+            values.push(f64::from(
+                search.value(&next, config.depth.saturating_sub(1))[seat],
+            ));
         }
         leaves += search.leaves;
+        if search.cut {
+            break; // out of budget mid-sample: the partial sample is dropped
+        }
+        for (slot, value) in sums.iter_mut().zip(values) {
+            slot.1 += value;
+        }
         samples += 1;
     }
     if samples == 0 {
@@ -243,6 +287,7 @@ pub fn sample_analyze(
         moves: sums.into_iter().map(|(mv, sum)| (mv, sum / n)).collect(),
         samples,
         leaves,
+        rule: observation.duplicate_rule,
     })
 }
 
@@ -255,10 +300,17 @@ struct DepthSearch<'a> {
     /// same luck (common random numbers).
     seed: u64,
     leaves: u64,
+    /// Leaf evaluations this deal may still spend (`None`: unlimited).
+    limit: Option<u64>,
+    /// The limit was hit: the values returned since are meaningless.
+    cut: bool,
 }
 
 impl DepthSearch<'_> {
     fn value(&mut self, round: &Round, depth: u8) -> Values {
+        if self.cut {
+            return [0.0; 6];
+        }
         let Some(seat) = round.seat_to_move() else {
             return finished_values(round);
         };
@@ -271,20 +323,29 @@ impl DepthSearch<'_> {
             return self.value(&next, depth);
         }
         if depth == 0 {
+            if self.limit.is_some_and(|limit| self.leaves >= limit) {
+                self.cut = true;
+                return [0.0; 6];
+            }
             self.leaves += 1;
             return self.leaf.values(round, self.cards, self.rule, self.seed);
         }
-        let mut best: Option<Values> = None;
+        // Ties follow `tie_prefers`, not the engine's order (Pass first).
+        let mut best: Option<(Move, Values)> = None;
         for mv in moves {
             let mut next = round.clone();
             next.submit_move(seat, mv)
                 .expect("moves from legal_moves are accepted");
             let value = self.value(&next, depth - 1);
-            if best.is_none_or(|b| value[usize::from(seat)] < b[usize::from(seat)]) {
-                best = Some(value);
+            let better = best.is_none_or(|(best_mv, b)| {
+                let (new, old) = (value[usize::from(seat)], b[usize::from(seat)]);
+                new < old || (new.total_cmp(&old).is_eq() && tie_prefers(mv, best_mv, self.rule))
+            });
+            if better {
+                best = Some((mv, value));
             }
         }
-        best.expect("a seat to move has at least one legal move")
+        best.expect("a seat to move has at least one legal move").1
     }
 }
 
@@ -366,6 +427,65 @@ mod tests {
     }
 
     #[test]
+    fn a_tie_never_chooses_pass_and_prefers_the_weaker_play() {
+        let rule = DuplicateRule::FirstDealtWins;
+        let play = |rank, i| Move::Play(Combo::new(vec![Card::new(rank, Suit::Clubs, i)]).unwrap());
+        let (low, high) = (play(Rank::Four, 0), play(Rank::King, 1));
+        let report = |moves: &[(Move, f64)]| SampleReport {
+            moves: moves.to_vec(),
+            samples: 1,
+            leaves: 1,
+            rule,
+        };
+        // Pass is listed first, as the engine does; all three tie.
+        assert_eq!(
+            report(&[(Move::Pass, 1.5), (high, 1.5), (low, 1.5)]).best(),
+            low
+        );
+        assert_eq!(report(&[(Move::Pass, 1.5), (high, 1.5)]).best(), high);
+        // Strictly better wins whatever it is.
+        assert_eq!(
+            report(&[(Move::Pass, 1.0), (high, 1.5), (low, 1.5)]).best(),
+            Move::Pass
+        );
+        assert_eq!(
+            report(&[(Move::Pass, 2.0), (high, 1.0), (low, 1.5)]).best(),
+            high
+        );
+    }
+
+    #[test]
+    fn exact_ties_on_real_positions_do_not_choose_pass() {
+        let (mut ties, mut checked) = (0, 0);
+        observations(61, |o, _| {
+            let cards: usize = o.hand_sizes.iter().sum();
+            if cards > 9 {
+                return;
+            }
+            let config = config(2, 40, LeafSpec::Cards);
+            let report = sample_analyze(o, &config, CeilingMode::Off, &CardCount, 3).unwrap();
+            let pass = report.moves.iter().find(|m| m.0 == Move::Pass);
+            let tied_play = pass.is_some_and(|p| {
+                report
+                    .moves
+                    .iter()
+                    .any(|m| m.0 != Move::Pass && m.1.total_cmp(&p.1).is_eq())
+            });
+            if tied_play {
+                ties += 1;
+                let best_mean = report.moves.iter().map(|m| m.1).fold(f64::MAX, f64::min);
+                let pass_mean = pass.unwrap().1;
+                if pass_mean.total_cmp(&best_mean).is_eq() {
+                    assert_ne!(report.best(), Move::Pass);
+                }
+            }
+            checked += 1;
+        });
+        assert!(checked > 5, "only {checked} positions");
+        eprintln!("{ties} tied positions of {checked}");
+    }
+
+    #[test]
     fn it_answers_every_early_position_with_legal_moves_deterministically() {
         let leaf = LeafSpec::Adaptive.evaluator();
         let mut checked = 0;
@@ -419,6 +539,29 @@ mod tests {
             };
             let cut = sample_analyze(o, &tight, CeilingMode::Off, &leaf, 1).unwrap();
             assert_eq!(cut.samples, 1, "one sample is always completed");
+            // A budget between one and two samples: a sample that would cross
+            // it is abandoned mid-search, so the work stays within it.
+            let first = sample_analyze(
+                o,
+                &config(1, 2, LeafSpec::Cards),
+                CeilingMode::Off,
+                &leaf,
+                1,
+            )
+            .unwrap()
+            .leaves;
+            let bounded = SamplerConfig {
+                rollouts: first + first / 2,
+                ..config(8, 2, LeafSpec::Cards)
+            };
+            let b = sample_analyze(o, &bounded, CeilingMode::Off, &leaf, 1).unwrap();
+            assert!(
+                b.leaves <= bounded.rollouts,
+                "{} > {}",
+                b.leaves,
+                bounded.rollouts
+            );
+            assert!(b.samples >= 1 && b.samples < 8);
             checked += 1;
         });
         assert!(checked >= 5, "only {checked} positions");

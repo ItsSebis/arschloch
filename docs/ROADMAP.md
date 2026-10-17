@@ -542,7 +542,7 @@ head, luck-free) but plays exactly only the last ~11% of the decisions, so it do
 (+0.63 against -0.08 in the same table). The hand-off threshold defaults to 6 unseen cards (T=8 is too costly). A
 position memo made the search about 95x cheaper. Phase B, the early-game sampler (`samples=N` on both solver specs,
 spec `docs/superpowers/specs/2026-10-17-solver-phase-b-design.md`, measurements
-`docs/baselines/solver-phase-b/README.md`), beats `adaptive` by +0.84 and, with the champion as its play-out policy and
+`docs/baselines/solver-phase-b/README.md`), beats `adaptive` by +0.89 and, with the champion as its play-out policy and
 the pass ceilings off, beats three champions by +0.153; see open item 8 for what remains.
 
 Goal: find the best overall strategy for real games, and learn from it. A
@@ -724,10 +724,16 @@ with a policy (pluggable `LeafEvaluator`), average per move. `ceilings=hard|soft
 `--pass-rule free` is not supported (as phase A: the fallback plays).
 
 Measured (`docs/baselines/solver-phase-b/README.md`, luck-free head to head, 1200 matches): the sampler alone with 16
-samples beats three `adaptive` by +0.84 (64 samples: +0.96; the exact endgame alone: +0.13) at about 1 ms per decision.
+samples beats three `adaptive` by +0.84, +0.89 after the tie fix (64 samples: +0.96; the exact endgame alone: +0.13) at about 1 ms per decision.
 Depth 2-3 and the static `cards` leaf are worse. With `adaptive` play-outs it does **not** beat the neat-v2 champion
 (-0.36 against three champions; +0.20 against +0.50 in the mixed table). With the champion as the play-out policy and
-`ceilings=off` it does: +0.153 +-0.015 over three champions and +0.42 against +0.38 in the mixed table. Ignoring the
+`ceilings=off` it does: +0.153 +-0.015 over three champions and +0.42 against +0.38 in the mixed table.
+A review found that ties went to `Pass` (the engine lists it first); with the tie rule fixed (a play beats `Pass`
+on equal value, then the lower top card) the headline rows were measured again: sampler alone +0.887 +-0.009 against
+three `adaptive` (was +0.837), the champion play-out sampler +0.172 +-0.016 over three champions (was +0.153) and
++0.427 against +0.368 in the mixed table (paired difference +0.059 +-0.015, 4 SE), the sampler's pass rate 36% (was
+69%), places lost against the exact endgame 0.026 (was 0.039). Not worse anywhere. Open from the review: the exchange
+holdings are not pinned in the sampled deals, and the rest of the phase B tables are pre-fix. Ignoring the
 pass ceilings helps against the champion (which passes on purpose) and hurts against `hold-back-pairs`.
 
 Still open: other table sizes and the double deck; `--pass-rule free`; a cheaper NEAT play-out or more samples with it;

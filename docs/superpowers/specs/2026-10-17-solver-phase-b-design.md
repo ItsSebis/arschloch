@@ -43,7 +43,7 @@ takes a spec (cli, evaluate, play, train pools, GUI, web ids) gets it without ne
 | `depth=D` | 1 | plies searched with max^n per sampled deal (1 = our move only, then the leaf) |
 | `leaf=E` | `adaptive` | leaf evaluator: `adaptive` (roll the round out with `Adaptive` for every seat), `cards` (static: fewer cards and more top cards is better, no rollout), `neat:PATH` (roll out with a NEAT genome for every seat; the experiment) |
 | `ceilings=M` | `hard` | pass ceilings when sampling: `hard` (a deal must respect them; none found = fallback), `soft` (respect them, but if no consistent deal is found, sample without them), `off` (ignore them). Applies to the exact endgame too (its enumeration) |
-| `rollouts=N` | 20000 | budget: leaf evaluations per decision; sampling stops after the sample that crosses it (at least one sample is always completed) |
+| `rollouts=N` | 20000 | budget: leaf evaluations per decision; a sample that would cross it is abandoned mid-search and sampling stops (the first sample is always completed, so a decision costs at most `max(N, first sample)` leaves) |
 
 Examples: `endgame-solver:samples=16`, `adaptive+solver:samples=16,depth=2`,
 `neat:docs/baselines/neat-v2/champion.json+solver:samples=8,leaf=neat:docs/baselines/neat-v2/champion.json`, and the
@@ -71,7 +71,7 @@ rejected and retried, up to 64 attempts per sample; if none succeed the decision
 ### Search of one sampled deal (`sim/src/solver/sampler.rs`)
 
 Depth-limited max^n on `Round` clones (no memo: at depth 1-3 positions rarely repeat). Values are `[f32; 6]` expected
-places; each seat to move picks the move with its own lowest value, first in engine order on ties (as phase A). A finished
+places; each seat to move picks the move with its own lowest value. Ties (equal value to the seat) are broken by an explicit rule, the same at the root and inside the search: a play beats `Pass` (a pass is chosen only when strictly better), among plays the one with the lower top card wins (strong cards are kept for later), equal strength keeps engine order. Phase A's "first in engine order" would send every tie to `Pass`, which the engine lists first; a probe found 5527 of 13418 pass choices to be pure tie-breaks. The exact solver (`report.best()`) keeps its own rule and its outputs are unchanged. A finished
 round is valued by its finishing order; at the depth limit the leaf evaluator values it.
 
 ### Leaf evaluators (`sim/src/solver/leaf.rs`), pluggable
@@ -139,6 +139,19 @@ All runs: release build, 4 players, single deck, `--pass-rule final`, 4 threads,
   goldens unchanged.
 
 ## Non-goals and known weaknesses
+
+- **Exchange holdings are not used.** A seat knows which cards it gave and received in the exchange (they are in a
+  specific hand until played), but `Observation`/`TurnContext` do not carry them, so the sampler deals those cards at
+  random like any other unseen card. Pinning them needs the exchange record in the context.
+- **`ceilings=hard` can fail:** `sample_deal` gives up after 64 attempts (`NoConsistentDeal`), the sample is skipped and
+  if every sample fails the fallback plays the decision. `ceilings=soft` switches the ceilings off for the *remaining*
+  samples of that decision after the first failed one (so a decision can mix constrained and unconstrained samples).
+- The rollout `PassTracker` starts empty at each rebuild: the play-out policy does not know the passes seen before the
+  decision (only `combo_holder` is patched in).
+- With the sampler on, the wrapped strategy no longer "sees every decision" (phase A's wording): it plays forced moves
+  and the fallbacks only, so its random stream differs from a run without the sampler.
+- Ties are broken by the rule above, a heuristic: it prefers weak plays over `Pass`; it does not look at what the move
+  gives up beyond the top card.
 
 Strategy fusion and no information hiding (as phase A, now larger because positions are far from the end); the
 sampling is near-uniform, not exactly uniform, under ceilings; opponents in rollouts all play the same policy; no
