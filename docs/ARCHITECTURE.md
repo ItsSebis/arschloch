@@ -213,7 +213,13 @@ the user view `docs/SOLVER.md`.
   clones `Round` per node, with a node budget).
 - `report`: `analyze` solves every consistent deal and averages per move
   (`MoveReport`); `gap`: the disagreement benchmark; `config`: the options of
-  `endgame-solver[:OPTIONS]`; `notation`: card tokens (`9H`, `10S`, `AC`).
+  `endgame-solver[:OPTIONS]` and of the `+solver[:OPTIONS]` toggle (`SolverToggle`); `notation`: card tokens (`9H`,
+  `10S`, `AC`). `SolverConfig::ceilings` (`CeilingMode`: hard, soft, off) decides how pass ceilings restrict the deals.
+- Phase B, the early-game sampler (`docs/superpowers/specs/2026-10-17-solver-phase-b-design.md`): `sample`: one random
+  consistent deal (`sample_deal`); `sampler`: `sample_analyze` searches sampled deals to a depth with max^n and averages
+  per move, `SamplerConfig`/`LeafSpec` are its options; `leaf`: the pluggable `LeafEvaluator`s (`Rollout` with any
+  strategy in every seat, `CardCount`, a static guess). `EndgameSolver` asks the exact solver, then the sampler, then its
+  fallback.
 
 ### `cli`
 

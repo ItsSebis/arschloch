@@ -184,11 +184,12 @@ impl PlayApp {
         let Some((base, rest)) = sim::split_solver_suffix(id) else {
             return self.entry(id).cloned();
         };
-        let config = sim::parse_solver_toggle(rest).ok()?;
+        let toggle = sim::parse_solver_toggle(rest).ok()?;
         let base = self.entry(base)?;
-        let strategy: Arc<dyn Strategy> = Arc::new(sim::EndgameSolver::wrapping(
+        let strategy: Arc<dyn Strategy> = Arc::new(sim::EndgameSolver::wrapping_with_sampler(
             Arc::clone(&base.strategy),
-            config,
+            toggle.solver,
+            toggle.sampler,
         ));
         Some(CatalogEntry {
             id: id.to_owned(),

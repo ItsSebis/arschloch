@@ -191,6 +191,7 @@ mod tests {
             solver: SolverConfig {
                 max_unseen: 4,
                 node_budget: 100_000,
+                ..SolverConfig::default()
             },
         }
     }
@@ -246,7 +247,7 @@ mod tests {
             ..SolverSpec::default()
         };
         let table: Vec<Arc<dyn Strategy>> = (0..4)
-            .map(|_| Arc::new(EndgameSolver::new(spec)) as Arc<dyn Strategy>)
+            .map(|_| Arc::new(EndgameSolver::new(spec.clone())) as Arc<dyn Strategy>)
             .collect();
         let (rows, stats) = run_gap(&table, &config(20));
         assert!(stats.solvable > 0);

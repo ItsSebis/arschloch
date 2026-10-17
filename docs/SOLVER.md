@@ -55,6 +55,41 @@ the desktop window (a tick box per seat) and the web play page (a "solver" box p
   `docs/baselines/solver-toggle/README.md` for the cost per match. Training a *genome* with the solver finishing its
   own rounds is not built (a genome is one of the `neat` strategies, the toggle is only on opponents and in play).
 
+## The early game: the sampler (phase B), `samples=N`
+
+Both forms above also take the options of the early-game sampler. With `samples=N` the solver does not hand the early
+game to the fallback: at each decision with more than `max-unseen` unseen cards it **samples** N splits of the unseen
+cards that fit what the seat knows (hand sizes, and the pass ceilings unless `ceilings=off`), searches each split to a
+bounded depth with max^n (every seat takes its own best place), values the positions at the depth limit with a **leaf
+evaluator**, and plays the move with the best mean place over the samples ("perfect-information Monte Carlo"). Once at
+most `max-unseen` cards are unseen, the exact solver plays as before. Design:
+`docs/superpowers/specs/2026-10-17-solver-phase-b-design.md`; measurements: `docs/baselines/solver-phase-b/README.md`.
+
+| Option | Default | Meaning |
+|---|---|---|
+| `samples=N` | off | sampled splits per early-game decision; without it (or `samples=0`) nothing changes |
+| `depth=D` | 1 | plies searched in each split (1 to 4); 1 = each own move, then the leaf. Forced moves do not count |
+| `leaf=E` | `adaptive` | `adaptive`: play the round out with `adaptive` in every seat; `cards`: a static guess from the cards left (no play-out, cheap, crude); `neat:PATH`: play the round out with a trained genome in every seat |
+| `rollouts=N` | 20000 | leaf evaluations allowed per decision; sampling stops after the sample that crosses it |
+| `ceilings=M` | `hard` | pass ceilings: `hard` (a split must respect them), `soft` (respect them while some split does, else ignore them), `off` (ignore them). Also applies to the exact endgame |
+
+Examples: `endgame-solver:samples=16`, `adaptive+solver:samples=16,depth=2`, the sampler alone without the exact
+endgame `adaptive+solver:max-unseen=0,samples=16`, and the champion searching with its own network at the leaves
+`neat:docs/baselines/neat-v2/champion.json+solver:samples=8,leaf=neat:docs/baselines/neat-v2/champion.json`. The name
+shows the settings: `Adaptive(counting,reading)+Solver(T=6,S=16,D=1,adaptive)`.
+
+- **Deterministic:** when the sampler plays a decision it draws one number from the match's random stream and derives
+  every sample and play-out from it, so a seed gives the same match at any thread count. Without `samples` nothing is
+  drawn and the solver plays byte for byte as before.
+- **Sampling:** each unseen card goes to a seat with probability proportional to the room left in its hand: without
+  ceilings exactly a uniform random split; with ceilings close to uniform over the consistent splits, not exactly.
+- **Ceilings that no split fits** (a seat that passed while holding a beating card): `hard` skips the sample, and if no
+  sample fits, the fallback plays the decision; `soft` then samples without ceilings.
+- **Not built:** `--pass-rule free` (the sampler rebuilds a `final`-rule round like the exact solver; under `free` the
+  fallback plays every move), and play-outs with different strategies per seat.
+- **Cost:** about `samples x legal moves x replies^(depth-1)` play-outs per decision: see the measurements before using
+  it in a training pool.
+
 ## Explaining a situation: `cli solve FILE`
 
 `cli solve [--max-unseen N] [--budget N] FILE` reads a position and prints every legal move with its expected
@@ -104,13 +139,19 @@ Those are the lessons; `docs/baselines/solver/README.md` has the first results.
 
 - Cost grows quickly with the number of unseen cards; `max-unseen` and `budget` bound it. Measured defaults: 6 unseen cards, 2M nodes per decision (T=8 already takes minutes per 200 games). At T=6 the solver plays exactly about 11% of the decisions of a 4-player single-deck round.
 - It beats the strategy it falls back to clearly (+0.14 score head to head) but not the trained neat champion, whose strength lies in the part of the round the solver does not play; see the measurements. The better use is the toggle: the champion with `+solver` beats three plain champions by +0.083 (`docs/baselines/solver-toggle/README.md`).
+- The sampler (phase B) changes that (`docs/baselines/solver-phase-b/README.md`): `adaptive+solver:samples=16` beats
+  three `adaptive` by +0.84 (the exact endgame alone: +0.13), but with `adaptive` play-outs it still loses to the
+  champion. With the champion as the play-out policy and the ceilings off,
+  `neat:docs/baselines/neat-v2/champion.json+solver:samples=16,leaf=neat:docs/baselines/neat-v2/champion.json,ceilings=off`
+  beats three champions by +0.153 +-0.011 and wins the mixed table. Depth 2-3 and `leaf=cards` are worse than depth 1
+  with a play-out; more samples help (+0.50 at 4, +0.96 at 64 against `adaptive`).
 - The unseen cards are weighted equally; hand reading only removes impossible splits. Pass ceilings are used as hard
-  facts: a seat that passed on purpose while holding a beating card (`adaptive`'s deception, `hold-back-pairs`) makes
-  the real split look impossible until that seat plays above its ceiling. The solver then solves the wrong splits, or
-  finds none and plays its fallback; this is counted in `SolverStats::fell_back_other`. A switch to ignore ceilings
-  (the spec's `use_pass_ceilings`) is not built.
+  facts by default: a seat that passed on purpose while holding a beating card (`adaptive`'s deception,
+  `hold-back-pairs`) makes the real split look impossible until that seat plays above its ceiling. The solver then
+  solves the wrong splits, or finds none and plays its fallback; this is counted in `SolverStats::fell_back_other`.
+  `ceilings=soft` or `ceilings=off` (the spec's `use_pass_ceilings`) changes that; measured in
+  `docs/baselines/solver-phase-b/README.md`.
 - A double deck has identical cards that are told apart by deal order, which a written-down position cannot show:
   `cli solve` numbers your copies first and says so when it matters.
 - `endgame-solver:max-unseen=N` with a large N is bounded by the node budget per decision, not by N; the enumeration
   of splits prunes contradictory pass ceilings early.
-- A later phase (the spec's phase B) will sample splits to search the early game as well.

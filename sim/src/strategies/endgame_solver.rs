@@ -1,12 +1,17 @@
 //! `EndgameSolver`: exact play once few cards are unseen, a fallback
-//! strategy before that. See docs/superpowers/specs/2026-10-16-endgame-solver-design.md.
+//! strategy before that (or, with `samples=N`, the phase B sampler). See
+//! docs/superpowers/specs/2026-10-16-endgame-solver-design.md and
+//! docs/superpowers/specs/2026-10-17-solver-phase-b-design.md.
 
 use std::sync::{Arc, Mutex};
 
 use engine::{Card, DuplicateRule, Move};
 
 use crate::solver::config::SolverSpec;
-use crate::solver::{analyze, Observation, SolveError, SolverConfig};
+use crate::solver::leaf::LeafEvaluator;
+use crate::solver::{
+    analyze, sample_analyze, CeilingMode, Observation, SamplerConfig, SolveError, SolverConfig,
+};
 use crate::strategy::{ContextNeeds, Strategy, TurnContext};
 
 /// What the solver did so far (all decisions of this instance).
@@ -21,6 +26,12 @@ pub struct SolverStats {
     pub fell_back_other: u64,
     /// Search nodes spent in total.
     pub nodes: u64,
+    /// Decisions the early-game sampler answered.
+    pub sampled: u64,
+    /// Decisions the sampler could not answer (no consistent deal, `free` rule).
+    pub sample_fell_back: u64,
+    /// Leaf evaluations (rollouts) the sampler spent in total.
+    pub rollouts: u64,
 }
 
 pub struct EndgameSolver {
@@ -32,7 +43,23 @@ pub struct EndgameSolver {
     /// wrapped strategy sees (and draws randomness for) every decision it would
     /// have made alone.
     delegate_forced: bool,
+    /// The early-game sampler and its leaf evaluator; `None` = phase A only.
+    sampler: Option<(SamplerConfig, Arc<dyn LeafEvaluator>)>,
     stats: Mutex<SolverStats>,
+}
+
+/// `T=6`, then `ceilings=..` when not `hard` and the sampler's settings when on.
+fn settings_label(config: &SolverConfig, sampler: Option<&SamplerConfig>) -> String {
+    let mut text = format!("T={}", config.max_unseen);
+    if config.ceilings != CeilingMode::Hard {
+        text.push_str(",ceilings=");
+        text.push_str(config.ceilings.as_str());
+    }
+    if let Some(sampler) = sampler {
+        text.push(',');
+        text.push_str(&sampler.label());
+    }
+    text
 }
 
 impl EndgameSolver {
@@ -42,10 +69,15 @@ impl EndgameSolver {
             config: spec.solver,
             fallback: spec.fallback.build(),
             name: format!(
-                "EndgameSolver({},T={})",
-                spec.fallback, spec.solver.max_unseen
+                "EndgameSolver({},{})",
+                spec.fallback,
+                settings_label(&spec.solver, spec.sampler.as_ref())
             ),
             delegate_forced: false,
+            sampler: spec.sampler.map(|s| {
+                let leaf = s.leaf.evaluator();
+                (s, leaf)
+            }),
             stats: Mutex::new(SolverStats::default()),
         }
     }
@@ -58,11 +90,31 @@ impl EndgameSolver {
     /// `inner`'s pass tracking and hand reading on every turn, whoever then plays.
     #[must_use]
     pub fn wrapping(inner: Arc<dyn Strategy>, config: SolverConfig) -> Self {
+        Self::wrapping_with_sampler(inner, config, None)
+    }
+
+    /// [`Self::wrapping`] with the early-game sampler deciding, before the exact
+    /// endgame, every decision the wrapped strategy would have made (forced moves
+    /// still go to the wrapped strategy). `None` is exactly `wrapping`.
+    #[must_use]
+    pub fn wrapping_with_sampler(
+        inner: Arc<dyn Strategy>,
+        config: SolverConfig,
+        sampler: Option<SamplerConfig>,
+    ) -> Self {
         Self {
             config,
-            name: format!("{}+Solver(T={})", inner.name(), config.max_unseen),
+            name: format!(
+                "{}+Solver({})",
+                inner.name(),
+                settings_label(&config, sampler.as_ref())
+            ),
             fallback: inner,
             delegate_forced: true,
+            sampler: sampler.map(|s| {
+                let leaf = s.leaf.evaluator();
+                (s, leaf)
+            }),
             stats: Mutex::new(SolverStats::default()),
         }
     }
@@ -121,6 +173,43 @@ impl EndgameSolver {
             }
         }
     }
+
+    /// The sampler's move, or `None` (sampler off, unsupported position, no
+    /// consistent deal). Draws one number from `rng` only when it samples.
+    fn sample(
+        &self,
+        legal_moves: &[Move],
+        duplicate_rule: DuplicateRule,
+        context: &TurnContext<'_>,
+        rng: &mut dyn rand::Rng,
+    ) -> Option<Move> {
+        let (config, leaf) = self.sampler.as_ref()?;
+        let Some(observation) = Observation::from_context(context, duplicate_rule) else {
+            self.count(|s| s.sample_fell_back += 1);
+            return None;
+        };
+        let seed = rng.next_u64();
+        let Ok(report) = sample_analyze(
+            &observation,
+            config,
+            self.config.ceilings,
+            leaf.as_ref(),
+            seed,
+        ) else {
+            self.count(|s| s.sample_fell_back += 1);
+            return None;
+        };
+        let best = Some(report.best()).filter(|mv| legal_moves.contains(mv));
+        self.count(|s| {
+            s.rollouts += report.leaves;
+            if best.is_some() {
+                s.sampled += 1;
+            } else {
+                s.sample_fell_back += 1;
+            }
+        });
+        best
+    }
 }
 
 impl Strategy for EndgameSolver {
@@ -145,6 +234,7 @@ impl Strategy for EndgameSolver {
         }
         self.count(|s| s.decisions += 1);
         self.solve(legal_moves, duplicate_rule, context)
+            .or_else(|| self.sample(legal_moves, duplicate_rule, context, rng))
             .unwrap_or_else(|| {
                 self.fallback
                     .choose_play(legal_moves, duplicate_rule, context, rng)
@@ -182,6 +272,7 @@ mod tests {
             solver: crate::solver::SolverConfig {
                 max_unseen,
                 node_budget: 300_000,
+                ..crate::solver::SolverConfig::default()
             },
             ..SolverSpec::default()
         }
@@ -277,6 +368,51 @@ mod tests {
         assert_eq!(
             EndgameSolver::new(spec(7)).name(),
             "EndgameSolver(adaptive,T=7)"
+        );
+        let with_sampler: SolverSpec = "samples=8,depth=2,ceilings=off".parse().unwrap();
+        assert_eq!(
+            EndgameSolver::new(with_sampler).name(),
+            "EndgameSolver(adaptive,T=6,ceilings=off,S=8,D=2,adaptive)"
+        );
+        let toggle =
+            crate::solver::config::parse_solver_toggle(":max-unseen=0,samples=4,leaf=cards")
+                .unwrap();
+        let wrapped = EndgameSolver::wrapping_with_sampler(
+            Arc::new(crate::strategies::LowestLegal),
+            toggle.solver,
+            toggle.sampler,
+        );
+        assert_eq!(wrapped.name(), "LowestLegal+Solver(T=0,S=4,D=1,cards)");
+    }
+
+    #[test]
+    fn the_sampler_answers_the_early_game_and_the_exact_solver_the_end() {
+        let mut spec: SolverSpec = "samples=2,leaf=cards".parse().unwrap();
+        spec.solver.max_unseen = 4;
+        spec.solver.node_budget = 300_000;
+        let solver = EndgameSolver::new(spec);
+        let mut rng = rand::rngs::StdRng::seed_from_u64(5);
+        for_each_state(53, 2, |state, _| {
+            let round = state.round;
+            let seat = round.seat_to_move().unwrap();
+            let mut tracker = PassTracker::new(usize::from(state.players), state.rule);
+            let ctx = turn_context_for(
+                round,
+                seat,
+                state.players,
+                state.round_deck,
+                &mut tracker,
+                ContextNeeds::ALL,
+            );
+            let legal = round.legal_moves();
+            assert!(legal.contains(&solver.choose_play(&legal, state.rule, &ctx, &mut rng)));
+        });
+        let s = solver.stats();
+        assert!(s.sampled > 0 && s.solved > 0, "{s:?}");
+        // Every decision with a choice under the `final` rule is answered by one of them.
+        assert!(
+            s.sampled + s.solved + s.sample_fell_back <= s.decisions,
+            "{s:?}"
         );
     }
 }

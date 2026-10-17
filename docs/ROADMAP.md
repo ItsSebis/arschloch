@@ -43,7 +43,7 @@ grows beyond that should be split.
 5. Settle the `hidden` input set with fresh seeds and longer runs; the casino bot's port (Phase 13)
 6. Simplification left over from Phase 19: the file splits and shared helpers are done; the rest is listed in the section
 7. ~~Endgame solver as a toggle on every strategy (Phase 21)~~ built; training a genome with the solver finishing its rounds is left, see the section
-8. Endgame solver, phase B: the early game (Phase 21)
+8. ~~Endgame solver, phase B: the early game (Phase 21)~~ built and measured; it beats the champion only with the champion's play-outs, see the section
 9. Phase 16, self-play and co-evolutionary training (an idea)
 10. Phase 20, the GPU port (the largest and least certain)
 
@@ -540,8 +540,10 @@ plan: `docs/superpowers/plans/2026-10-16-endgame-solver.md`, user guide `docs/SO
 `docs/baselines/solver/README.md`). Result: the solver clearly beats the strategy it falls back to (+0.14 score head to
 head, luck-free) but plays exactly only the last ~11% of the decisions, so it does not catch the neat-v2 champion
 (+0.63 against -0.08 in the same table). The hand-off threshold defaults to 6 unseen cards (T=8 is too costly). A
-position memo made the search about 95x cheaper. The early-game sampler (phase B) that would close the gap is open
-work, see "Open work".
+position memo made the search about 95x cheaper. Phase B, the early-game sampler (`samples=N` on both solver specs,
+spec `docs/superpowers/specs/2026-10-17-solver-phase-b-design.md`, measurements
+`docs/baselines/solver-phase-b/README.md`), beats `adaptive` by +0.84 and, with the champion as its play-out policy and
+the pass ceilings off, beats three champions by +0.153; see open item 8 for what remains.
 
 Goal: find the best overall strategy for real games, and learn from it. A
 search-based player that, from one seat's view, considers every distribution of
@@ -710,16 +712,26 @@ different early game when it never plays its own endgame?). It needs the trainer
 strategy and is expensive: a threshold-6 solver costs about 1400 times a plain round, so a run needs threshold 2-4 or a
 much smaller pool; as an opponent in a training pool the toggle already works (`train --opponent adaptive+solver:2`).
 
-## 8. Endgame solver, phase B: the early game (Phase 21)
+## 8. Endgame solver, phase B: the early game (Phase 21) -- built
 
-The solver plays only the last ~11% of the decisions exactly, which is why the neat champion still beats it by a wide
-margin (+0.63 against -0.08). Phase B: **sample** consistent deals of the unseen cards instead of enumerating them, search
-to a **depth** with max^n and a **leaf evaluator** (the NEAT network or the Adaptive heuristics are candidates, which is
-itself an experiment), average per move. It reuses `Observation`, `deals` and `search`; the hand-off threshold and the
-samples per decision are the numbers to measure (`cli solver-gap` and the luck-free head to head of
-`docs/baselines/solver/README.md` are the yardsticks). Also open there: the `use_pass_ceilings` switch to measure how
-much dishonest passes hurt (pass ceilings are hard constraints today), and `--pass-rule free`. Gets its own spec first;
-the design outline is in `docs/superpowers/specs/2026-10-16-endgame-solver-design.md`.
+Built (spec `docs/superpowers/specs/2026-10-17-solver-phase-b-design.md`, plan
+`docs/superpowers/plans/2026-10-17-solver-phase-b.md`, user guide `docs/SOLVER.md`): both solver specs take
+`samples=N` (`depth=D`, `leaf=adaptive|cards|neat:PATH`, `rollouts=N`): at every decision with more unseen cards than
+`max-unseen`, sample N consistent deals, search each to depth D with max^n, value the leaves by playing the round out
+with a policy (pluggable `LeafEvaluator`), average per move. `ceilings=hard|soft|off` is the `use_pass_ceilings` switch
+(exact and sampled). Deterministic and thread-count independent; without `samples` everything is byte-identical.
+`--pass-rule free` is not supported (as phase A: the fallback plays).
+
+Measured (`docs/baselines/solver-phase-b/README.md`, luck-free head to head, 1200 matches): the sampler alone with 16
+samples beats three `adaptive` by +0.84 (64 samples: +0.96; the exact endgame alone: +0.13) at about 1 ms per decision.
+Depth 2-3 and the static `cards` leaf are worse. With `adaptive` play-outs it does **not** beat the neat-v2 champion
+(-0.36 against three champions; +0.20 against +0.50 in the mixed table). With the champion as the play-out policy and
+`ceilings=off` it does: +0.153 +-0.011 over three champions and +0.42 against +0.38 in the mixed table. Ignoring the
+pass ceilings helps against the champion (which passes on purpose) and hurts against `hold-back-pairs`.
+
+Still open: other table sizes and the double deck; `--pass-rule free`; a cheaper NEAT play-out or more samples with it;
+play-outs with a different policy per seat (an opponent model); whether to offer the champion-play-out sampler as a named
+opponent on the play page (its time per decision there is not measured); training a genome against the sampler.
 
 ## 9. Phase 16 — Self-play and co-evolutionary training (idea)
 

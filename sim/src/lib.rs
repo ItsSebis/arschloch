@@ -35,9 +35,9 @@ pub use match_runner::{
     RunOptions,
 };
 pub use solver::config::{
-    parse_solver_toggle, split_solver_suffix, SolverSpec, StrategyName, SOLVER_SUFFIX,
+    parse_solver_toggle, split_solver_suffix, SolverSpec, SolverToggle, StrategyName, SOLVER_SUFFIX,
 };
-pub use solver::SolverConfig;
+pub use solver::{CeilingMode, LeafSpec, SamplerConfig, SolverConfig};
 pub use statistics::{aggregate, RoleRetention, Statistics};
 pub use strategies::{
     Adaptive, AdaptiveConfig, CardCounter, DenialMode, EndgameDenial, EndgameSolver, FeatureGroups,

@@ -72,7 +72,10 @@ pub struct Args {
     /// `SPEC+solver[:N]` for any of the above (`adaptive+solver`,
     /// `neat:PATH+solver:8`): that strategy plays until at most N (default 6)
     /// cards are unseen and the solver plays the rest of the round, reported
-    /// as `<name>+Solver(T=N)`. For
+    /// as `<name>+Solver(T=N)`. Both solver forms also take `samples=N`
+    /// (`depth=D`, `leaf=adaptive|cards|neat:PATH`, `rollouts=N`): a sampler
+    /// that searches sampled deals plays the early game as well, and
+    /// `ceilings=hard|soft|off` (how pass ceilings restrict the deals). For
     /// example, a three-seat table: `--strategy lowest-legal --strategy
     /// adaptive:counting --strategy adaptive:reading,deception=0.2`.
     #[arg(long = "strategy", required = true, value_name = "SPEC")]
@@ -223,9 +226,10 @@ pub enum StrategyArg {
     Adaptive(sim::AdaptiveConfig),
     Neat(NeatSpec),
     Solver(sim::SolverSpec),
-    /// `BASE+solver[:N]`: any other spec, with the endgame solver taking over once few
-    /// cards are unseen (`sim::EndgameSolver::wrapping`).
-    WithSolver(Box<StrategyArg>, sim::SolverConfig),
+    /// `BASE+solver[:OPTIONS]`: any other spec, with the endgame solver taking over once
+    /// few cards are unseen and, with `samples=N`, the early-game sampler before that
+    /// (`sim::EndgameSolver::wrapping_with_sampler`).
+    WithSolver(Box<StrategyArg>, sim::SolverToggle),
 }
 
 /// A `neat:PATH` spec. The genome file is loaded and checked while the
@@ -329,9 +333,11 @@ impl StrategyArg {
             Self::Adaptive(config) => Arc::new(sim::Adaptive::new(config)),
             Self::Neat(spec) => spec.strategy,
             Self::Solver(spec) => Arc::new(sim::EndgameSolver::new(spec)),
-            Self::WithSolver(base, config) => {
-                Arc::new(sim::EndgameSolver::wrapping(base.build(), config))
-            }
+            Self::WithSolver(base, toggle) => Arc::new(sim::EndgameSolver::wrapping_with_sampler(
+                base.build(),
+                toggle.solver,
+                toggle.sampler,
+            )),
         }
     }
 }

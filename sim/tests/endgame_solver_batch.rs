@@ -15,6 +15,7 @@ fn small_solver() -> SolverSpec {
         solver: SolverConfig {
             max_unseen: 4,
             node_budget: 100_000,
+            ..SolverConfig::default()
         },
         ..SolverSpec::default()
     }
@@ -85,6 +86,7 @@ fn wrapped(inner: Arc<dyn Strategy>, max_unseen: usize) -> Arc<dyn Strategy> {
         SolverConfig {
             max_unseen,
             node_budget: 100_000,
+            ..SolverConfig::default()
         },
     ))
 }
@@ -121,6 +123,7 @@ fn a_wrapped_strategy_hands_the_endgame_to_the_solver() {
         SolverConfig {
             max_unseen: 4,
             node_budget: 100_000,
+            ..SolverConfig::default()
         },
     ));
     let seats: Vec<Arc<dyn Strategy>> =
@@ -135,4 +138,67 @@ fn a_wrapped_strategy_hands_the_endgame_to_the_solver() {
         )
     );
     assert_eq!(solver.name(), "LowestLegal+Solver(T=4)");
+}
+
+fn sampler(samples: usize, leaf: sim::LeafSpec) -> sim::SamplerConfig {
+    sim::SamplerConfig {
+        samples,
+        leaf,
+        ..sim::SamplerConfig::default()
+    }
+}
+
+#[test]
+fn the_sampler_plays_the_early_game_identically_on_one_and_many_threads() {
+    let run = |threads: usize| {
+        let solver = Arc::new(EndgameSolver::wrapping_with_sampler(
+            Arc::new(LowestLegal),
+            SolverConfig {
+                max_unseen: 3,
+                node_budget: 100_000,
+                ..SolverConfig::default()
+            },
+            Some(sampler(2, sim::LeafSpec::Adaptive)),
+        ));
+        let mut seats: Vec<Arc<dyn Strategy>> = vec![solver.clone()];
+        seats.extend((1..4).map(|_| Arc::new(LowestLegal) as Arc<dyn Strategy>));
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(threads)
+            .build()
+            .unwrap();
+        let summary = pool.install(|| play(&seats, PassRule::Final));
+        (summary, solver.stats())
+    };
+    let (one, stats_one) = run(1);
+    let (many, stats_many) = run(4);
+    assert_eq!(one, many);
+    assert_eq!(stats_one, stats_many);
+    assert!(
+        stats_one.sampled > 0 && stats_one.solved > 0,
+        "{stats_one:?}"
+    );
+    assert!(stats_one.rollouts >= 2 * stats_one.sampled, "{stats_one:?}");
+}
+
+#[test]
+fn the_sampler_never_engages_under_the_free_pass_rule() {
+    // It needs the same `final`-rule rebuild as the exact solver: under `free` the
+    // wrapped strategy plays every move, from the same random stream as alone.
+    let bare: Vec<Arc<dyn Strategy>> = vec![
+        Arc::new(sim::RandomLegal),
+        Arc::new(LowestLegal),
+        Arc::new(sim::RandomLegal),
+        Arc::new(LowestLegal),
+    ];
+    let wrapped: Vec<Arc<dyn Strategy>> = bare
+        .iter()
+        .map(|s| {
+            Arc::new(EndgameSolver::wrapping_with_sampler(
+                Arc::clone(s),
+                SolverConfig::default(),
+                Some(sampler(2, sim::LeafSpec::Cards)),
+            )) as Arc<dyn Strategy>
+        })
+        .collect();
+    assert_eq!(play(&wrapped, PassRule::Free), play(&bare, PassRule::Free));
 }

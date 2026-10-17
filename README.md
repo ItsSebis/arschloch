@@ -74,6 +74,11 @@ duplicate-card rule, thread count, and cross-compiling a Windows `.exe`).
   (`adaptive+solver`, `neat:champion.json+solver:8`): the strategy plays until
   at most N (default 6) cards are unseen, the solver plays the rest of the
   round. Works in every spec position, the desktop window and the play page.
+  With `samples=N` (`adaptive+solver:samples=16`) a sampler plays the early game
+  as well: it searches N sampled splits of the unseen cards and plays each move
+  out; with the neat-v2 champion as its play-out policy
+  (`...+solver:samples=16,leaf=neat:PATH,ceilings=off`) it beats the champion
+  head to head. See `docs/SOLVER.md` and `docs/baselines/solver-phase-b/README.md`.
 
 ### Choosing training settings
 

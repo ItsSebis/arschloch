@@ -5,7 +5,7 @@ use engine::Move;
 use super::deals::for_each_deal;
 use super::observation::Observation;
 use super::search::Search;
-use super::SolverConfig;
+use super::{CeilingMode, SolverConfig};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct MoveStats {
@@ -73,11 +73,27 @@ struct Tally {
 /// # Errors
 ///
 /// See [`SolveError`].
-#[allow(clippy::cast_precision_loss)] // deal counts are far below 2^52
 pub fn analyze(observation: &Observation, config: &SolverConfig) -> Result<MoveReport, SolveError> {
     if observation.unseen.len() > config.max_unseen {
         return Err(SolveError::TooManyUnseen);
     }
+    match config.ceilings {
+        CeilingMode::Hard => analyze_deals(observation, config),
+        CeilingMode::Off => analyze_deals(&observation.without_ceilings(), config),
+        CeilingMode::Soft => match analyze_deals(observation, config) {
+            Err(SolveError::NoConsistentDeal) => {
+                analyze_deals(&observation.without_ceilings(), config)
+            }
+            other => other,
+        },
+    }
+}
+
+#[allow(clippy::cast_precision_loss)] // deal counts are far below 2^52
+fn analyze_deals(
+    observation: &Observation,
+    config: &SolverConfig,
+) -> Result<MoveReport, SolveError> {
     let seat = usize::from(observation.seat);
     let mut search = Search::new(config.node_budget);
     let mut tallies: Vec<Tally> = Vec::new();
@@ -244,6 +260,56 @@ mod tests {
             analyze(&o, &SolverConfig::default()),
             Err(SolveError::NoConsistentDeal)
         ));
+        // Without the ceilings (or with them softened) both splits count.
+        for ceilings in [
+            crate::solver::CeilingMode::Off,
+            crate::solver::CeilingMode::Soft,
+        ] {
+            let config = SolverConfig {
+                ceilings,
+                ..SolverConfig::default()
+            };
+            assert_eq!(analyze(&o, &config).unwrap().deals, 2, "{ceilings:?}");
+        }
+    }
+
+    #[test]
+    fn soft_ceilings_keep_the_ceilings_while_some_deal_respects_them() {
+        // Seat 1 passed on a 9: the King must be seat 2's, one deal less than without.
+        let nine = Combo::new(vec![c(Rank::Nine, Suit::Hearts, 9)]).unwrap();
+        let mut o = obs(
+            vec![c(Rank::Two, Suit::Clubs, 3)],
+            vec![1, 1, 2],
+            vec![
+                c(Rank::Four, Suit::Clubs, 0),
+                c(Rank::Eight, Suit::Hearts, 1),
+                c(Rank::King, Suit::Spades, 2),
+            ],
+            None,
+        );
+        o.ceilings = read_pass_ceilings(3, &[], &[(1, nine, 0)], DuplicateRule::FirstDealtWins);
+        let with = |ceilings| SolverConfig {
+            ceilings,
+            ..SolverConfig::default()
+        };
+        assert_eq!(
+            analyze(&o, &with(crate::solver::CeilingMode::Hard))
+                .unwrap()
+                .deals,
+            2
+        );
+        assert_eq!(
+            analyze(&o, &with(crate::solver::CeilingMode::Soft))
+                .unwrap()
+                .deals,
+            2
+        );
+        assert_eq!(
+            analyze(&o, &with(crate::solver::CeilingMode::Off))
+                .unwrap()
+                .deals,
+            3
+        );
     }
 
     #[test]
@@ -293,6 +359,7 @@ mod tests {
             let config = SolverConfig {
                 max_unseen: 5,
                 node_budget: 300_000,
+                ..SolverConfig::default()
             };
             let Ok(report) = analyze(&o, &config) else {
                 return;

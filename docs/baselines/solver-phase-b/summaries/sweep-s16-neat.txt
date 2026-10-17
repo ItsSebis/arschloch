@@ -1,0 +1,40 @@
+4 players, Single deck, FirstDealtWins, pass rule final, exchange rule forced, 1200 matches x 5 rounds, seed 7, 4 threads
+
+Strategy                                                        President       Vize            ViceArschloch   Arschloch       
+Adaptive(counting,reading)                                      2715            3762            5593            5930            
+Adaptive(counting,reading)+Solver(T=0,S=16,D=1,neat(champion))  3285            2238            407             70              
+
+Voluntary pass rate: 9.42%
+
+Voluntary pass rate by strategy:
+  Adaptive(counting,reading)                                      0.00%
+  Adaptive(counting,reading)+Solver(T=0,S=16,D=1,neat(champion))  58.52%
+
+President retention (stayed President the very next round):
+  Adaptive(counting,reading)                                      51.96% (1142/2198)
+  Adaptive(counting,reading)+Solver(T=0,S=16,D=1,neat(champion))  68.87% (1792/2602)
+
+First-round placement variance (lower = more skill-driven, higher = more luck-driven):
+  Adaptive(counting,reading)                                      1.14
+  Adaptive(counting,reading)+Solver(T=0,S=16,D=1,neat(champion))  0.61
+
+
+Average place (1 = best), mean score (+1 best .. -1 worst), strength rating (Elo-like points, field mean 0), share of rounds as President; ± = standard error over matches:
+Strategy                                                        avg rank ±SE  mean score ±SE  strength rating ±SE  President % [95% Wilson]
+Adaptive(counting,reading)                                      2.82 ±0.00    -0.213 ±0.003   -131 ±2              15.1% [14.6, 15.6]
+Adaptive(counting,reading)+Solver(T=0,S=16,D=1,neat(champion))  1.54 ±0.01    +0.638 ±0.008   +131 ±2              54.8% [53.5, 56.0]
+
+By seat (position bias; a fair table gives every seat the same numbers):
+Seat    avg rank ±SE  mean score ±SE
+seat 0  2.48 ±0.03    +0.016 ±0.017
+seat 1  2.51 ±0.03    -0.007 ±0.017
+seat 2  2.50 ±0.03    +0.002 ±0.017
+seat 3  2.52 ±0.03    -0.011 ±0.017
+
+Luck-adjusted score (--skill-score duplicate; score +1 best .. -1 worst, ± = standard error):
+Strategy                                                        plain score ±SE  skill (duplicate) ±SE  skill (estimate) ±SE  variance reduction M  luck share
+Adaptive(counting,reading)+Solver(T=0,S=16,D=1,neat(champion))  +0.638 ±0.008    +0.638 ±0.007          -                     1.14                  12%
+Adaptive(counting,reading)                                      -0.213 ±0.003    -0.213 ±0.002          -                     1.14                  12%
+Duplicate: 300 groups of 4 matches, 5 rounds per match; plain score, duplicate skill, M and luck share cover all rounds.
+Duplicate deals cancel the luck of the deal in round 1; later rounds are luck-reduced, not luck-free.
+In duplicate mode the plain score equals the duplicate skill value by construction (the mean of the group means is the mean of the matches); its ±SE is what an ordinary run of the same size would show, not an independent estimate.

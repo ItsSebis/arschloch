@@ -456,9 +456,10 @@ fn endgame_solver_specs_parse() {
 fn the_solver_toggle_wraps_any_spec() {
     let arg = "adaptive:reading+solver:8".parse::<StrategyArg>().unwrap();
     match &arg {
-        StrategyArg::WithSolver(base, config) => {
+        StrategyArg::WithSolver(base, toggle) => {
             assert!(matches!(**base, StrategyArg::Adaptive(_)));
-            assert_eq!(config.max_unseen, 8);
+            assert_eq!(toggle.solver.max_unseen, 8);
+            assert_eq!(toggle.sampler, None);
         }
         other => panic!("expected a wrapped spec, got {other:?}"),
     }
@@ -478,7 +479,25 @@ fn the_solver_toggle_wraps_any_spec() {
             .name(),
         "LowestLegal+Solver(T=3)"
     );
+    assert_eq!(
+        "lowest-legal+solver:samples=8,depth=2"
+            .parse::<StrategyArg>()
+            .unwrap()
+            .build()
+            .name(),
+        "LowestLegal+Solver(T=6,S=8,D=2,adaptive)"
+    );
+    assert_eq!(
+        "endgame-solver:samples=4,leaf=cards,ceilings=soft"
+            .parse::<StrategyArg>()
+            .unwrap()
+            .build()
+            .name(),
+        "EndgameSolver(adaptive,T=6,ceilings=soft,S=4,D=1,cards)"
+    );
     for bad in [
+        "adaptive+solver:depth=2",
+        "adaptive+solver:samples=4,leaf=neat:/no/such.json",
         "endgame-solver+solver",
         "adaptive+solver+solver",
         "adaptive+solver:fallback=adaptive",
