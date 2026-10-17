@@ -35,7 +35,8 @@ pub fn has_solver(spec: &str) -> bool {
 const SOLVER_SUFFIX: &str = "+solver";
 
 /// Where the toggle starts: the last `+solver` that ends the spec or is followed by `:`
-/// (the GUI does not link `sim`; the rule is the one of `sim::split_solver_suffix`).
+/// (the GUI does not link `sim`; the rule is the one of `sim::split_solver_suffix`, and a
+/// test here runs the table of cases that sim's test uses).
 fn solver_suffix_at(spec: &str) -> Option<usize> {
     let at = spec.rfind(SOLVER_SUFFIX)?;
     let rest = &spec[at + SOLVER_SUFFIX.len()..];
@@ -47,10 +48,23 @@ fn solver_suffix_at(spec: &str) -> Option<usize> {
 pub fn with_solver(spec: &str, on: bool) -> String {
     let spec = spec.trim();
     match (solver_suffix_at(spec), on) {
+        // `+solver` alone is no spec (the strategy is missing): nothing to toggle.
+        (None, true) if spec.is_empty() => String::new(),
         (Some(at), false) => spec[..at].to_owned(),
         (None, true) => format!("{spec}{SOLVER_SUFFIX}"),
         _ => spec.to_owned(),
     }
+}
+
+/// A spec split into the strategy and its `+solver[:OPTIONS]` toggle (empty when off).
+pub fn split_solver(spec: &str) -> (&str, &str) {
+    let spec = spec.trim();
+    solver_suffix_at(spec).map_or((spec, ""), |at| spec.split_at(at))
+}
+
+/// `neat:PATH` for the genome picked, behind which the seat's `+solver` toggle is kept.
+pub fn with_genome(spec: &str, path: &str) -> String {
+    format!("neat:{path}{}", split_solver(spec).1)
 }
 
 /// The strategy every new seat starts with.
@@ -289,6 +303,34 @@ mod tests {
         assert_eq!(with_solver("adaptive+solver:8", false), "adaptive");
         assert_eq!(with_solver("adaptive+solver:8", true), "adaptive+solver:8");
         assert_eq!(with_solver("adaptive", false), "adaptive");
+        assert_eq!(with_solver("", true), "", "no spec, no `+solver` alone");
+        assert_eq!(with_solver("  ", true), "");
+    }
+
+    #[test]
+    fn picking_a_genome_keeps_the_solver_toggle() {
+        assert_eq!(
+            split_solver("neat:a.json+solver:8"),
+            ("neat:a.json", "+solver:8")
+        );
+        assert_eq!(split_solver("neat:a.json"), ("neat:a.json", ""));
+        assert_eq!(
+            with_genome("neat:a.json+solver:8", "/b.json"),
+            "neat:/b.json+solver:8"
+        );
+        assert_eq!(with_genome("adaptive", "/b.json"), "neat:/b.json");
+    }
+
+    #[test]
+    fn the_suffix_rule_is_the_one_of_sim() {
+        // The table is sim's (`sim/src/solver/suffix_cases.txt`): spec|base|rest, `-` = none.
+        for line in include_str!("../../sim/src/solver/suffix_cases.txt").lines() {
+            let cells: Vec<&str> = line.split('|').collect();
+            let (spec, base, rest) = (cells[0], cells[1], cells[2]);
+            let got =
+                solver_suffix_at(spec).map(|at| (&spec[..at], &spec[at + SOLVER_SUFFIX.len()..]));
+            assert_eq!(got, (base != "-").then_some((base, rest)), "{spec}");
+        }
     }
 
     #[test]

@@ -49,6 +49,12 @@ per deal. Score: +1 best .. -1 worst, +-SE.
 | | `adaptive` | -0.234 +-0.011 |
 | | `lowest-legal` | -0.318 +-0.012 |
 
+Note (stale number): an earlier measurement of this player and seed gave +0.105; the re-run in
+`docs/baselines/solver-toggle/README.md` (`adaptive+solver:6`, same table, same seed 7) gives +0.100 +-0.006. The two
+are 0.8 SE apart, i.e. within noise, and not a regression. Probably the games differ: the `endgame-solver` strategy returns forced moves itself while the
+`+solver` wrapper hands them to `adaptive`, which draws random numbers for them, so the same seed does not replay the
+same games (not re-run to confirm). The +0.105 above is the number of the old strategy and stays as measured.
+
 Reading: the solver is clearly better than the strategy it falls back to (+0.14 in the first table, +0.16 in the
 second; many standard errors), but the trained champion is far stronger than both: the solver plays exactly only about
 11% of the decisions (the last few cards of a round), and the champion's strength is in the rest. Closing that gap

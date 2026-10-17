@@ -705,7 +705,8 @@ Left open:
 play page. Under `--pass-rule free` the wrapper never engages. Behaviour and limits: `docs/SOLVER.md`; measurements:
 `docs/baselines/solver-toggle/README.md`. Luck-free head to head, one toggled seat (T=6) against three plain copies,
 gain in score: `adaptive` +0.133, `endgame-denial` +0.127, `hold-back-pairs` +0.113, `lowest-legal` +0.181, the neat-v2
-champion +0.083 (all +-0.005 to 0.007), so every strategy, the champion included, profits.
+champion +0.083 (SE of each gain 0.007 to 0.009: the four seat scores sum to zero, so the gain is exactly 4/3 of the
+toggled seat's score and its SE 4/3 of that seat's SE), so every strategy, the champion included, profits (10 to 20 SEs).
 
 Still open from this item: **training a NEAT genome with the solver finishing its rounds** (does the genome learn a
 different early game when it never plays its own endgame?). It needs the trainer to build the genome's seat as a wrapped
@@ -726,7 +727,7 @@ Measured (`docs/baselines/solver-phase-b/README.md`, luck-free head to head, 120
 samples beats three `adaptive` by +0.84 (64 samples: +0.96; the exact endgame alone: +0.13) at about 1 ms per decision.
 Depth 2-3 and the static `cards` leaf are worse. With `adaptive` play-outs it does **not** beat the neat-v2 champion
 (-0.36 against three champions; +0.20 against +0.50 in the mixed table). With the champion as the play-out policy and
-`ceilings=off` it does: +0.153 +-0.011 over three champions and +0.42 against +0.38 in the mixed table. Ignoring the
+`ceilings=off` it does: +0.153 +-0.015 over three champions and +0.42 against +0.38 in the mixed table. Ignoring the
 pass ceilings helps against the champion (which passes on purpose) and hurts against `hold-back-pairs`.
 
 Still open: other table sizes and the double deck; `--pass-rule free`; a cheaper NEAT play-out or more samples with it;

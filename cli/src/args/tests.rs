@@ -477,7 +477,7 @@ fn the_solver_toggle_wraps_any_spec() {
             .unwrap()
             .build()
             .name(),
-        "LowestLegal+Solver(T=3)"
+        "LowestLegal+Solver(T=3,budget=500)"
     );
     assert_eq!(
         "lowest-legal+solver:samples=8,depth=2"

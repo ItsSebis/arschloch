@@ -137,7 +137,7 @@ fn a_wrapped_strategy_hands_the_endgame_to_the_solver() {
             PassRule::Final
         )
     );
-    assert_eq!(solver.name(), "LowestLegal+Solver(T=4)");
+    assert_eq!(solver.name(), "LowestLegal+Solver(T=4,budget=100000)");
 }
 
 fn sampler(samples: usize, leaf: sim::LeafSpec) -> sim::SamplerConfig {

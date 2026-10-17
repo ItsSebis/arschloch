@@ -4,28 +4,31 @@ Binary: release build of the commit that added `+solver`. 4 players, single deck
 `--matches 1200 --rounds 5 --seed 7 --skill-score duplicate` (300 duplicate groups; the luck-free head to head of
 `docs/baselines/solver/README.md`), 4 threads. One seat plays `SPEC+solver:6`, the other three play plain `SPEC`; the
 duplicate deals rotate everybody through every seat. `run.sh` reproduces it; the full summaries are the `*-T6.txt` files.
-Score: +1 best .. -1 worst, +-SE. The gain is the toggled seat's score minus the plain seats' score in the same table (its
-SE combines the two and ignores their small correlation, so it is slightly too large).
+Score: +1 best .. -1 worst, +-SE. The gain is the toggled seat's score minus the plain seats' score in the same table.
+The four seat scores of a table sum to zero, so each plain seat scores exactly -1/3 of the toggled seat (correlation -1)
+and the gain is exactly 4/3 x the toggled seat's score, with SE_gain = 4/3 x SE_toggled (the SEs below are those of the
+duplicate skill score, rounded to three decimals).
 
 | SPEC | with `+solver:6` | plain (each of 3) | gain from the toggle | wall time |
 |---|---|---|---|---|
-| `adaptive` (= `Adaptive(counting,reading)`) | +0.100 +-0.006 | -0.033 +-0.002 | **+0.133 +-0.006** | 208 s |
-| `endgame-denial` | +0.095 +-0.007 | -0.032 +-0.002 | **+0.127 +-0.007** | 229 s |
-| `hold-back-pairs` | +0.085 +-0.005 | -0.028 +-0.002 | **+0.113 +-0.005** | 59 s |
-| `lowest-legal` | +0.136 +-0.007 | -0.045 +-0.002 | **+0.181 +-0.007** | 202 s |
-| `neat:` v2 champion | +0.062 +-0.006 | -0.021 +-0.002 | **+0.083 +-0.006** | 388 s |
+| `adaptive` (= `Adaptive(counting,reading)`) | +0.100 +-0.006 | -0.033 +-0.002 | **+0.133 +-0.008** | 208 s |
+| `endgame-denial` | +0.095 +-0.007 | -0.032 +-0.002 | **+0.127 +-0.009** | 229 s |
+| `hold-back-pairs` | +0.085 +-0.005 | -0.028 +-0.002 | **+0.113 +-0.007** | 59 s |
+| `lowest-legal` | +0.136 +-0.007 | -0.045 +-0.002 | **+0.181 +-0.009** | 202 s |
+| `neat:` v2 champion | +0.062 +-0.006 | -0.021 +-0.002 | **+0.083 +-0.008** | 388 s |
 
 Reading:
 
-- Every strategy gains, by 13 to 30 standard errors, so the toggle is a real improvement for all five, including the
+- Every strategy gains, by 10 to 20 standard errors (gain over SE_gain: 16.6, 14.1, 16.1, 20.1, 10.4), so the toggle is a real improvement for all five, including the
   trained champion. The weaker the strategy's own endgame, the larger the gain (`lowest-legal` most, the champion least),
   as `cli solver-gap` predicted (the share of solved decisions where the strategy deviates: 10-15%).
 - The champion gains least but it does gain: with the solver on the last cards it beats three plain copies of itself by
   +0.083. The earlier table (solver+`adaptive` against the champion, `docs/baselines/solver/README.md`) only said that
   the *solver player* is far weaker than the champion, because it falls back to `adaptive` in 89% of the decisions;
   the champion keeping its own early game and the solver finishing is the stronger combination.
-- `adaptive+solver` here (+0.133 over plain adaptive) agrees with the older `endgame-solver` table (+0.140): the same
-  player, since `endgame-solver` is `adaptive+solver` with a different name.
+- `adaptive+solver` here (+0.133 +-0.008 over plain adaptive) agrees with the older `endgame-solver` table (+0.140): the
+  same decisions, since `endgame-solver` is `adaptive+solver` with a different name. The two runs are not the same games
+  (+0.100 here against +0.105 there for the toggled seat, 0.8 SE apart): see the note in `docs/baselines/solver/README.md`.
 - Comparisons are within one table. The toggled seats' scores are not comparable across tables (different opponents);
   the gains are.
 - Threshold 8 was not measured: it costs about 7 times more than 6 (see `docs/baselines/solver/README.md`: 5 minutes

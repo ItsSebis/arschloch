@@ -3,6 +3,7 @@
 use eframe::egui;
 
 use crate::browse::{Kind, Picker};
+use crate::form;
 use crate::{App, PickTarget};
 use std::path::PathBuf;
 
@@ -14,6 +15,7 @@ impl App {
             PickTarget::Preset => (Kind::OpenFile, &["json"], self.preset_path.clone()),
             PickTarget::Genome(seat) => {
                 let spec = self.form.strategies.get(seat).cloned().unwrap_or_default();
+                let (spec, _) = form::split_solver(&spec);
                 let path = spec.strip_prefix("neat:").unwrap_or("").to_owned();
                 (Kind::OpenFile, &["json"], path)
             }
@@ -37,7 +39,8 @@ impl App {
             PickTarget::Preset => self.preset_path = text,
             PickTarget::Genome(seat) => {
                 if let Some(spec) = self.form.strategies.get_mut(seat) {
-                    *spec = format!("neat:{text}");
+                    // The `+solver` toggle of the seat stays on.
+                    *spec = form::with_genome(spec, &text);
                 }
             }
             PickTarget::WatchDir => self.watch_dir = text,

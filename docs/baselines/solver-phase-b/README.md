@@ -6,7 +6,9 @@ single deck, `--pass-rule final`, forced exchange, `--matches 1200 --rounds 5 --
 duplicate groups, the luck-free head to head of `docs/baselines/solver/README.md`), 4 threads (the three rows with the
 neat leaf and `ceilings=off`: 5 threads). One seat plays the configuration under test, the others what the table names; the
 duplicate deals rotate everybody through every seat. Score: +1 best .. -1 worst, +-SE. "Gain" is the tested seat's
-score minus the other seats' in the same table (its SE is about the tested seat's SE). Wall times were taken on a shared
+score minus the other seats' in the same table. Where the three other seats play the same strategy the four scores sum
+to zero, so the gain is exactly 4/3 x the tested seat's score and its SE is 4/3 x the tested seat's SE (the SE of the
+score column, times 4/3: +-0.008 becomes +-0.011); the "gain" columns of every table below except the mixed one are of this kind. Wall times were taken on a shared
 8-core machine with another long job running, so they are rough. `run.sh` reproduces everything; the summaries of these runs are in `summaries/`.
 
 Notation: `S` samples per decision, `D` depth, leaf `adaptive` (play the round out with `adaptive` in every seat),
@@ -83,7 +85,7 @@ Reading:
   Wrapped around the champion with `adaptive` play-outs it makes the champion *worse* (-0.215): the champion's own
   early game is better than what search over `adaptive` play-outs finds.
 - **With the champion as the play-out policy and the ceilings off, it beats the champion**: +0.153 +-0.011 over three
-  champions (the phase A toggle on the champion: +0.083), and +0.422 against +0.379 in the mixed table (a margin of
+  champions (SE of the gain 4/3 x 0.011 = 0.015; the phase A toggle on the champion: +0.083 +-0.008), and +0.422 against +0.379 in the mixed table (a margin of
   about three standard errors). It is the first solver configuration that beats the neat-v2 champion head to head.
 - With the forced exchange and the ceilings off the sampler answers every early decision itself, so the wrapped
   strategy only plays forced moves: `adaptive+solver:...` and `neat:...+solver:...` with the same options played

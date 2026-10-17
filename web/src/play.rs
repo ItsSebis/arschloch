@@ -108,6 +108,27 @@ pub struct PlayApp {
     records: RecordStore,
 }
 
+/// The largest solver settings an opponent of the play page may ask for: the page
+/// holds the games lock while the bots move, so one request must not be able to make a
+/// move take minutes (`T` up to 8, the default budget, a small sampler, no genome path
+/// as the leaf evaluator since that would read a server file). `None` when over.
+fn clamp_solver(toggle: &sim::SolverToggle) -> Option<()> {
+    const MAX_UNSEEN: usize = 8;
+    const MAX_BUDGET: u64 = 2_000_000;
+    const MAX_SAMPLES: usize = 32;
+    const MAX_DEPTH: u8 = 2;
+    const MAX_ROLLOUTS: u64 = 20_000;
+    let solver = &toggle.solver;
+    let within = solver.max_unseen <= MAX_UNSEEN && solver.node_budget <= MAX_BUDGET;
+    let sampler = toggle.sampler.as_ref().is_none_or(|s| {
+        s.samples <= MAX_SAMPLES
+            && s.depth <= MAX_DEPTH
+            && s.rollouts <= MAX_ROLLOUTS
+            && !matches!(s.leaf, sim::LeafSpec::Neat { .. })
+    });
+    (within && sampler).then_some(())
+}
+
 fn bad(status: u16, message: &str) -> Response {
     Response::json(status, &json!({ "error": message }))
 }
@@ -179,12 +200,17 @@ impl PlayApp {
 
     /// A catalog entry, or one with the endgame solver added: `ID+solver[:N]` is the
     /// entry `ID` playing until at most N (default 6) cards are unseen, the solver after
-    /// that (`sim::EndgameSolver::wrapping`). A wrapped model gives no advice.
+    /// that (`sim::EndgameSolver::wrapping`). A wrapped model gives no advice. An id that
+    /// is itself in the catalog wins (a model file `champ+solver.json` is `model:champ+solver`).
+    /// The solver runs while the games lock is held, so its options stay within
+    /// [`clamp_solver`].
     fn resolve(&self, id: &str) -> Option<CatalogEntry> {
-        let Some((base, rest)) = sim::split_solver_suffix(id) else {
-            return self.entry(id).cloned();
-        };
+        if let Some(entry) = self.entry(id) {
+            return Some(entry.clone());
+        }
+        let (base, rest) = sim::split_solver_suffix(id)?;
         let toggle = sim::parse_solver_toggle(rest).ok()?;
+        clamp_solver(&toggle)?;
         let base = self.entry(base)?;
         let strategy: Arc<dyn Strategy> = Arc::new(sim::EndgameSolver::wrapping_with_sampler(
             Arc::clone(&base.strategy),

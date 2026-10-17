@@ -68,9 +68,13 @@ function optionsFor(selectedId) {
   return group("model", "Trained models") + group("strategy", "Hand-written strategies");
 }
 
-// An opponent id may end in "+solver" (the endgame solver finishes the round).
+// An opponent id may end in "+solver" (the endgame solver finishes the round). Only when
+// the id minus the suffix is in the catalog: a model file "champ+solver.json" is itself
+// the catalog id "model:champ+solver".
 function splitSolver(id) {
-  return id.endsWith("+solver") ? [id.slice(0, -"+solver".length), true] : [id, false];
+  const has = (wanted) => state.catalog.some((e) => e.id === wanted);
+  const base = id.slice(0, -"+solver".length);
+  return !has(id) && id.endsWith("+solver") && has(base) ? [base, true] : [id, false];
 }
 
 function renderSetup() {

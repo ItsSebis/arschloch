@@ -77,7 +77,11 @@ pub const SOLVER_SUFFIX: &str = "+solver";
 /// Splits `BASE+solver[:OPTIONS]` into `BASE` and what follows `+solver` (the empty
 /// string, or `:OPTIONS`); `None` when the spec has no such suffix. A path that merely
 /// contains `+solver` (`neat:a+solver.json`) is not a suffix: it must end the spec or
-/// be followed by `:`.
+/// be followed by `:`. The suffix is the last `+solver` of the spec, so a `+` in a
+/// neat path cannot be escaped: a genome file whose name ends in `+solver` (or
+/// `+solver:..`) needs another name.
+/// The cases are tabled in `suffix_cases.txt`, which the GUI's own copy of the rule
+/// (`gui/src/form.rs`, it does not link `sim`) is tested against too.
 #[must_use]
 pub fn split_solver_suffix(spec: &str) -> Option<(&str, &str)> {
     let at = spec.rfind(SOLVER_SUFFIX)?;
@@ -100,9 +104,15 @@ pub struct SolverToggle {
 ///
 /// # Errors
 ///
-/// An unknown option, a value that does not parse, or sampler options without `samples`.
+/// An unknown option, a value that does not parse, sampler options without `samples`, or
+/// a `:` with nothing after it (`x+solver:`).
 pub fn parse_solver_toggle(rest: &str) -> Result<SolverToggle, String> {
     let options = rest.strip_prefix(':').unwrap_or(rest).trim();
+    if options.is_empty() && !rest.is_empty() {
+        return Err(
+            "`+solver:` needs options after the colon (`+solver:N`, or `+solver` alone)".to_owned(),
+        );
+    }
     let mut toggle = SolverToggle::default();
     if let Ok(limit) = options.parse::<usize>() {
         toggle.solver.max_unseen = limit;
@@ -270,6 +280,18 @@ mod tests {
             split_solver_suffix("neat:a+solver.json+solver"),
             Some(("neat:a+solver.json", ""))
         );
+        for line in include_str!("suffix_cases.txt").lines() {
+            let mut cells = line.split('|');
+            let (spec, base, rest) = (
+                cells.next().unwrap(),
+                cells.next().unwrap(),
+                cells.next().unwrap(),
+            );
+            let want = (base != "-").then_some((base, rest));
+            assert_eq!(split_solver_suffix(spec), want, "{spec}");
+        }
+        assert!(parse_solver_toggle(":").is_err(), "empty options");
+        assert!(parse_solver_toggle(": ").is_err(), "blank options");
         assert_eq!(parse_solver_toggle("").unwrap(), SolverToggle::default());
         assert_eq!(parse_solver_toggle(":8").unwrap().solver.max_unseen, 8);
         let both = parse_solver_toggle(":max-unseen=4,budget=99").unwrap();

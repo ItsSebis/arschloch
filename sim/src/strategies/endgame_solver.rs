@@ -48,9 +48,15 @@ pub struct EndgameSolver {
     stats: Mutex<SolverStats>,
 }
 
-/// `T=6`, then `ceilings=..` when not `hard` and the sampler's settings when on.
+/// `T=6`, then `budget=..` and `ceilings=..` when not the defaults and the sampler's
+/// settings when on: two configurations never share a name (the default ones keep the
+/// names they always had).
 fn settings_label(config: &SolverConfig, sampler: Option<&SamplerConfig>) -> String {
     let mut text = format!("T={}", config.max_unseen);
+    if config.node_budget != SolverConfig::default().node_budget {
+        text.push_str(",budget=");
+        text.push_str(&config.node_budget.to_string());
+    }
     if config.ceilings != CeilingMode::Hard {
         text.push_str(",ceilings=");
         text.push_str(config.ceilings.as_str());
@@ -262,6 +268,34 @@ mod tests {
     use super::*;
     use crate::hand_reading::PassTracker;
     use crate::match_runner::turn_context_for;
+
+    #[test]
+    fn configurations_that_differ_have_different_names() {
+        let wrap = |config, sampler| {
+            EndgameSolver::wrapping_with_sampler(Arc::new(crate::LowestLegal), config, sampler)
+                .name()
+                .to_owned()
+        };
+        let base = SolverConfig::default();
+        assert_eq!(wrap(base, None), "LowestLegal+Solver(T=6)", "default name");
+        let budget = SolverConfig {
+            node_budget: 1000,
+            ..base
+        };
+        assert_eq!(wrap(budget, None), "LowestLegal+Solver(T=6,budget=1000)");
+        let sampler = SamplerConfig::default();
+        let other = SamplerConfig {
+            depth: 2,
+            ..sampler.clone()
+        };
+        let names = [
+            wrap(base, Some(sampler.clone())),
+            wrap(base, Some(other)),
+            wrap(budget, Some(sampler)),
+        ];
+        assert_ne!(names[0], names[1]);
+        assert_ne!(names[0], names[2]);
+    }
     use crate::solver::config::SolverSpec;
     use crate::strategy::ContextNeeds;
     use crate::test_support::for_each_state;
@@ -367,7 +401,7 @@ mod tests {
     fn the_name_shows_the_configuration() {
         assert_eq!(
             EndgameSolver::new(spec(7)).name(),
-            "EndgameSolver(adaptive,T=7)"
+            "EndgameSolver(adaptive,T=7,budget=300000)"
         );
         let with_sampler: SolverSpec = "samples=8,depth=2,ceilings=off".parse().unwrap();
         assert_eq!(

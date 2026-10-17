@@ -34,7 +34,12 @@ then the solver plays the rest of the round: `adaptive+solver`, `adaptive:readin
 `max-unseen=N`; `budget=N` is the only other option (the wrapped strategy is the fallback). It works wherever a strategy
 spec does: `--strategy`, `cli evaluate`, `cli play`, `train --opponent`, `train --auto --opponent`, the strategy rows of
 the desktop window (a tick box per seat) and the web play page (a "solver" box per opponent; the server takes ids such as
-`lowest-legal+solver` or `model:champion-v2+solver:4`). It reports as `<name>+Solver(T=N)`.
+`lowest-legal+solver` or `model:champion-v2+solver:4`; to keep one request from stalling the games lock the server
+accepts at most `max-unseen=8`, `budget=2000000`, `samples=32`, `depth=2`, `rollouts=20000` and no `neat:` leaf, and
+answers 400 beyond that; a model file whose own name ends in `+solver` is found by its exact id first). It reports as
+`<name>+Solver(T=N)`, with `budget=..`, `ceilings=..` and the sampler's settings added when they are not the defaults,
+so different configurations never share a name. The suffix is the last `+solver` of the spec (`+solver:` with nothing
+after the colon is an error), so a genome file name ending in `+solver` cannot be written in a spec; rename the file.
 
 - **Before the hand-off** the wrapped strategy decides every move, forced ones too, with the same random stream as
   alone: with `max-unseen=0` a wrapped strategy plays move for move like the bare one (tested, 3 strategies including
