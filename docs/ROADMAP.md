@@ -40,7 +40,7 @@ grows beyond that should be split.
 2. ~~Desktop window: file pickers, progress, a solver editor, a training form (Phase 22)~~ built; a few pieces left, see the section
 3. ~~Results page: the luck-adjusted estimate, comparing two files (Phase 11b)~~ built
 4. ~~Training advisor, the rest: `train --auto`, scoring against genomes, early stop (Phase 18)~~ built; the web form is left, see the section
-5. Settle the `hidden` input set with fresh seeds and longer runs; the casino bot's port (Phase 13)
+5. ~~Settle the `hidden` input set with fresh seeds and longer runs~~ built and measured (`hidden` is the default, neat-v3 ships); the casino bot's port (Phase 13) is left, see the section
 6. Simplification left over from Phase 19: the file splits and shared helpers are done; the rest is listed in the section
 7. ~~Endgame solver as a toggle on every strategy (Phase 21)~~ built; training a genome with the solver finishing its rounds is left, see the section
 8. ~~Endgame solver, phase B: the early game (Phase 21)~~ built and measured; it beats the champion only with the champion's play-outs, see the section
@@ -318,10 +318,12 @@ retention, and training scores a player by its mean finishing role
 t = 3.68, 10 seeds each); the fitness variants (`risk`, `tanh`) and racing
 show no measurable gain and stay opt-in; one model for all tables
 (`--features all`, sizes 3-6, both decks) matches the specialists except at 3
-players. No default changed (`--features` is still `base`); making `hidden`
-the default waits for a confirmation run with fresh seeds (open work, "Open work").
-The casino repo's TypeScript NEAT bot only implements feature set v1, so `hidden`
-and `all` genomes need its feature port extended first (also open work).
+players. Confirmed afterwards on 10 fresh seeds (`docs/baselines/phase-13b`: battery +0.019, t = 4.4;
+head to head +0.047, t = 3.3), so **`--features hidden` is now the default of `cli train`** (`--features base` still
+works and old genomes, configs and checkpoints load as before) and the shipped champion is the retrained
+`docs/baselines/neat-v3` (see open work item 5). The casino repo's TypeScript NEAT bot only implements feature set v1,
+so `hidden` and `all` genomes, **including the shipped neat-v3 champion**, cannot play there until its feature port is
+extended (open work).
 
 From `docs/Notes.md`. These change what the evolved players are rewarded for
 and what they can see, so every item needs the Phase 10 discipline: a spec
@@ -657,12 +659,25 @@ runs in another process (`--when-flat` only watches the run it is part of), and 
 
 ## 5. Settle the `hidden` input set, and the casino bot (Phase 13)
 
-Phase 13 found `--features hidden` significantly better than `base` head to head (+0.048, t = 3.68, 10 seeds) but kept
-`base` as the default until a **confirmation with fresh seeds** (11 to 20, `docs/baselines/phase-13/run.sh all A2`) and
-**longer runs** (300 generations, more matches per genome; the advisor of item 4 sizes them). If it holds, make `hidden`
-the default and retrain the committed champion. The casino repo's TypeScript NEAT bot implements feature set v1 only, so
-its feature port has to learn the new inputs before a `hidden` or `all` genome can play there (outside this repository).
-Needs hours of compute; the result decides a default, so it is measured, not assumed.
+**Built and measured.** (1) `docs/baselines/phase-13b`: `--features hidden` against `base` on 10 fresh seeds (11-20) with
+the full neat-v2 recipe (it cost 3.5 minutes a run, not days): battery +0.019 (t = 4.4, 10/10 seeds), head to head against
+neat-v2 +0.047 (t = 3.3, 8/10 seeds). (2) `hidden` is now the default of `cli train` (the advisor, the desktop training
+form and the web paths follow, as they pass no `--features`); `--features base` stays available, a config without a
+`features` key is a base run and resumes as one, and the committed neat-v1/v2 champions load and play as before (tests
+pin it). The `bench.sh` training row follows the default (new checksum) and a second row pins `--features base` (the old
+checksum `85d7c401da1bb195`, unchanged). (3) Retrained: 8 short candidates (120 generations x 80 matches, seeds 31-38) and
+3 long ones (300 x 200, seeds 31-33); longer runs clearly helped (mean head to head against neat-v2 +0.124 against +0.045,
+battery +0.726 against +0.688; only three long runs). The best by head to head on the selection stream (seed 99) was
+confirmed on a fresh stream (seed 777777, 4000 matches): battery +0.745 against neat-v2's +0.677, head to head +0.164 +- 0.006
+(27 SE from even). It replaces neat-v2 as the shipped champion: `docs/baselines/neat-v3` (neat-v2 stays, also built into
+`cli play` as `model:champion-v2`).
+
+**Left open: the casino bot.** The casino repo's TypeScript NEAT bot (outside this repository) implements feature set v1
+only. A `hidden` genome, so also the shipped neat-v3 champion, cannot be loaded there; a genome for the casino must be
+trained with `--features base`, and neat-v1/neat-v2 still work. Porting the three `hidden` groups (formulas in
+`docs/TRAINING.md`, "Feature sets") to the casino is the open work. Also left: whether longer runs help every table size,
+and separating the effect of the inputs from the effect of the longer run for neat-v3 (3, 5 and 6 players were not
+measured for it).
 
 ## 6. Simplification left over from Phase 19 (mostly done)
 

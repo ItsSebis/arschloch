@@ -12,7 +12,7 @@ How the binaries on a GitHub release are produced.
     --target x86_64-pc-windows-msvc -p cli -p gui`. The window is a Windows GUI program (no console behind it).
   - Each archive holds the `cli` binary, `arschloch-gui` (`arschloch-gui.exe`; it must stay next to `cli`, which it
     runs), `README.md`, `docs/TRAINING.md`, `docs/RULES.md`, `docs/PLAYING.md`, `docs/GUI.md` and the baseline
-    champion (`champion.json`, from `docs/baselines/neat-v2`), plus a `.sha256` file. Layout (the same on every system,
+    champion (`champion.json`, from `docs/baselines/neat-v3`; a `hidden` genome that the casino bot cannot load), plus a `.sha256` file. Layout (the same on every system,
     `.exe` on Windows):
 
     ```
@@ -31,3 +31,16 @@ How the binaries on a GitHub release are produced.
   macOS. It builds `cli` and `arschloch-gui` (`-p cli -p gui`) and packs both.
 - **CI** (`.github/workflows/ci.yml`) runs formatting, clippy and the whole test
   suite on Linux, Windows and macOS for every push.
+
+## Release notes draft (next release)
+
+- **`cli train` now trains the `hidden` feature set by default** (28 inputs: the 20 original ones, the trick group and
+  the hidden-hand group). `--features base` gives the old behaviour and reproduces old runs byte for byte; saved genomes,
+  configs and checkpoints load and play as before (a config without a `features` key is a `base` run).
+- **New shipped champion `neat-v3`** (`champion.json` in the archives, `Neat(champion-v3)` in `cli play`): trained 300
+  generations x 200 matches, selected among 11 candidates on one seed stream and confirmed on another: battery +0.745
+  against +0.677 for neat-v2, head to head +0.164 against three copies of neat-v2. neat-v2 stays available
+  (`Neat(champion-v2)`, `docs/baselines/neat-v2`).
+- **The casino bot cannot play `neat-v3`, nor any genome trained with the new default.** Its TypeScript port (outside
+  this repository) knows feature set v1 (`base`) only. Genomes for the casino must be trained with `--features base`;
+  neat-v1 and neat-v2 still work there. Porting the `hidden` inputs to the casino is open work (ROADMAP item 5).

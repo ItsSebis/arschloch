@@ -1,0 +1,26 @@
+4 players, Single deck, FirstDealtWins, pass rule final, exchange rule forced, 4000 matches x 10 rounds per cell, seed 777777
+score: +1 always President .. -1 always last; 0 is even
+
+opponent                                               best        champion
+LowestLegal                                   +0.735 ±0.003   +0.620 ±0.004
+EndgameDenial                                 +0.768 ±0.003   +0.677 ±0.003
+Adaptive(reading,tempo,bully)                 +0.699 ±0.003   +0.605 ±0.004
+Adaptive(counting,reading)                    +0.767 ±0.003   +0.678 ±0.003
+Adaptive(reading,deception=0.2,tempo,bully)   +0.671 ±0.003   +0.573 ±0.004
+HoldBackPairs                                 +0.946 ±0.001   +0.939 ±0.001
+GreedyHighest                                 +0.956 ±0.001   +0.939 ±0.001
+RandomLegal                                   +0.973 ±0.001   +0.954 ±0.001
+mixed (all opponents)                         +0.745 ±0.003   +0.677 ±0.003
+
+average place: 1 = best .. 4 = last, ± standard error
+
+opponent                                               best        champion
+LowestLegal                                      1.40 ±0.00      1.57 ±0.01
+EndgameDenial                                    1.35 ±0.00      1.48 ±0.00
+Adaptive(reading,tempo,bully)                    1.45 ±0.00      1.59 ±0.01
+Adaptive(counting,reading)                       1.35 ±0.00      1.48 ±0.00
+Adaptive(reading,deception=0.2,tempo,bully)      1.49 ±0.00      1.64 ±0.01
+HoldBackPairs                                    1.08 ±0.00      1.09 ±0.00
+GreedyHighest                                    1.07 ±0.00      1.09 ±0.00
+RandomLegal                                      1.04 ±0.00      1.07 ±0.00
+mixed (all opponents)                            1.38 ±0.00      1.48 ±0.01

@@ -1,0 +1,26 @@
+4 players, Single deck, FirstDealtWins, pass rule final, exchange rule forced, 2000 matches x 10 rounds per cell, seed 99
+score: +1 always President .. -1 always last; 0 is even
+
+opponent                                               best
+LowestLegal                                   +0.724 ±0.004
+EndgameDenial                                 +0.716 ±0.004
+Adaptive(reading,tempo,bully)                 +0.658 ±0.005
+Adaptive(counting,reading)                    +0.717 ±0.004
+Adaptive(reading,deception=0.2,tempo,bully)   +0.632 ±0.005
+HoldBackPairs                                 +0.910 ±0.002
+GreedyHighest                                 +0.934 ±0.002
+RandomLegal                                   +0.963 ±0.001
+mixed (all opponents)                         +0.707 ±0.005
+
+average place: 1 = best .. 4 = last, ± standard error
+
+opponent                                               best
+LowestLegal                                      1.41 ±0.01
+EndgameDenial                                    1.43 ±0.01
+Adaptive(reading,tempo,bully)                    1.51 ±0.01
+Adaptive(counting,reading)                       1.42 ±0.01
+Adaptive(reading,deception=0.2,tempo,bully)      1.55 ±0.01
+HoldBackPairs                                    1.14 ±0.00
+GreedyHighest                                    1.10 ±0.00
+RandomLegal                                      1.06 ±0.00
+mixed (all opponents)                            1.44 ±0.01
