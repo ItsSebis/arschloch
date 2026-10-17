@@ -63,6 +63,19 @@ fn happy_path_run_produces_valid_json_and_summary() {
     std::fs::remove_file(&output_path).ok();
 }
 
+/// `cli --version` names the release (checked on the extracted archive, see
+/// docs/RELEASING.md).
+#[test]
+fn version_prints_the_crate_version() {
+    let output = Command::new(env!("CARGO_BIN_EXE_cli"))
+        .arg("--version")
+        .output()
+        .expect("failed to run cli binary");
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(stdout.trim(), format!("cli {}", env!("CARGO_PKG_VERSION")));
+}
+
 #[test]
 fn mismatched_strategy_count_fails() {
     let output = Command::new(env!("CARGO_BIN_EXE_cli"))

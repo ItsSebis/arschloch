@@ -9,7 +9,10 @@ use clap::Parser;
 
 /// One batch-run configuration, as parsed from the command line.
 #[derive(Parser, Debug)]
-#[command(about = "Simulate Arschloch matches and report role/statistics output")]
+#[command(
+    version,
+    about = "Simulate Arschloch matches and report role/statistics output"
+)]
 pub struct Args {
     /// Table size (3-6 seats).
     #[arg(long, value_parser = clap::value_parser!(u8).range(3..=6))]
