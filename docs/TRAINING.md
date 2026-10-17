@@ -207,7 +207,7 @@ Details of every setting follow.
 | `--weight-power` | 0.2 | size of weight mutations; smaller is gentler fine-tuning |
 | `--hall-of-fame N` | 0 (off) | frozen past champions join the training opponents (`--hall-interval K`: every K generations). No measured benefit against the default pool; worth trying when the pool includes evolved opponents |
 | `--fitness-skill-weight W` | 0 (off) | experimental, 0 to 1: trains on `(1 - W) x mean role score + W x a luck-adjusted round-1 score` (see below). Fixed for the run (`--resume` cannot change it) |
-| `--features base\|trick\|hidden\|all` | base | which inputs the networks see (see "Feature sets" below). Fixed for the run (`--resume` cannot change it); a warm start (`--from`) needs the source's value |
+| `--features base\|trick\|hidden\|all` | hidden | which inputs the networks see (see "Feature sets" below). Fixed for the run (`--resume` cannot change it, and an older run resumes with the set in its own config); a warm start (`--from`) needs the source's value. **A `hidden` genome cannot play in the casino bot** (it only knows `base`): train with `--features base` for that |
 | `--fitness mean\|risk:L\|tanh:K` | mean | what evolution maximises (see "Fitness variants" below). Fixed for the run; cannot be combined with `--fitness-skill-weight` |
 | `--racing-top F --racing-matches K` | off | noise-aware selection: the top fraction F of each generation is evaluated on K extra matches before selection (see "Racing" below). Both together; fixed for the run |
 | `--player-counts 3,4,5,6`, `--decks single,double` | off | train one model on several table sizes and decks (see "One model for several tables" below). Replace `--player-count` / `--deck-variant`, which they exclude; fixed for the run |
@@ -236,10 +236,11 @@ Recipes:
 target/release/cli train --out runs/test --population 60 --generations 30 \
   --matches-per-genome 40 --reeval-matches 100 --rounds 6
 
-# the setup of the committed baseline champion (about 11 minutes)
+# the setup of the committed baseline champion neat-v1 (about 11 minutes);
+# --features base is what every run did before `hidden` became the default
 target/release/cli train --out runs/v1 --seed 1 --population 150 \
   --generations 120 --matches-per-genome 80 --reeval-matches 200 \
-  --rounds 8 --champion-candidates 5 --weight-power 0.2 --quiet
+  --rounds 8 --champion-candidates 5 --weight-power 0.2 --features base --quiet
 
 # train for 6 players against a harder pool
 target/release/cli train --out runs/six --player-count 6 \
@@ -286,7 +287,7 @@ treat the option as a way to run it, not as a recommended setting.
 
 ## Feature sets (`--features`)
 
-**Measured recommendation (Phase 13, `docs/baselines/phase-13/README.md`):** `--features hidden` beat `base` head-to-head against the neat-v2 champion (+0.048, significant over 10 seeds each); `trick` alone could not be told apart from `base`. Keep `base` when a genome must run in the casino bot (it only knows set v1). Evolution is noisy: train several seeds and pick the winner by a head-to-head on fresh seeds, not by its training score.
+**`hidden` is the default.** Phase 13 (`docs/baselines/phase-13/README.md`) found `--features hidden` better than `base` head-to-head against the neat-v2 champion (+0.048, significant over 10 seeds each); `trick` alone could not be told apart from `base`. Phase 13b (`docs/baselines/phase-13b/README.md`) repeated it on 10 fresh seeds with the full recipe: battery +0.019 (t = 4.4, 10/10 seeds), head-to-head vs neat-v2 +0.047 (t = 3.3, 8/10 seeds). So new training uses `hidden` unless told otherwise. The shipped champion `docs/baselines/neat-v3` is a `hidden` genome from a 300-generation x 200-match run (selected among 11 candidates on one seed stream, confirmed on another; the longer runs scored clearly better than 120 x 80 ones: `docs/baselines/neat-v3/README.md`). **Casino bot: a `hidden` genome cannot play there.** The casino TypeScript port (outside this repo) knows feature set v1 only; give `--features base` when a genome must run in the casino bot. Evolution is noisy: train several seeds and pick the winner by a head-to-head on fresh seeds, not by its training score.
 
 A network's inputs are the features of one candidate move. The full list
 (`FEATURE_NAMES_V2` in `sim/src/strategies/neat_player/feature_set.rs`; `FEATURE_SET_VERSION` stays 1 and a genome file's recorded feature names, which must be a prefix of that list, tell the sets apart) is the 20
@@ -296,9 +297,9 @@ ablation with an honest genome size:
 
 | `--features` | inputs | adds |
 |---|---|---|
-| `base` (default) | 20 | the v1 features |
+| `base` | 20 | the v1 features |
 | `trick` | 25 | `opponents_in_trick`, `fraction_in_trick`, `all_in_trick_close`, `min_hand_in_trick`, `last_to_act_in_trick` |
-| `hidden` | 28 | `p_win_trick`, `expected_beaters`, `my_unbeatable_fraction` |
+| `hidden` (default) | 28 | `p_win_trick`, `expected_beaters`, `my_unbeatable_fraction` |
 | `all` | 31 | `table_players`, `table_double_deck`, `table_pass_final` |
 
 *Trick.* An opponent is "in the trick" while it is active and, under pass rule
@@ -341,12 +342,15 @@ or 31) and the genome has exactly that many inputs; anything else (other names,
 other order, a prefix that stops inside a group, 20 names with 22 inputs) is
 refused with both lists named. Every older genome therefore loads and plays
 unchanged, and `--features base` runs reproduce earlier runs byte for byte
-(`config.json` only mentions `features` when it is not `base`). `NeatStrategy`
+(`config.json` only mentions `features` when it is not `base`; a config without
+the key, as every run before the `hidden` default wrote, is a `base` run and
+resumes as one). `NeatStrategy`
 builds only the inputs it was trained with and asks the match loop only for the
 context parts they read, so a `base` model costs what it always did. The casino
 TypeScript port implements feature set v1 only: models with `trick`, `hidden` or
-`all` features load in the Rust tools but not in the casino until its port is
-extended.
+`all` features load in the Rust tools but **not in the casino bot** until its port is
+extended (open work). The committed champions neat-v1 and neat-v2 are `base`
+models and still run there; train with `--features base` for a genome the casino can play.
 
 ## Fitness variants, racing and several tables (Phase 13 options)
 

@@ -857,12 +857,13 @@ fn decisions_hash(dir: &Path) -> u64 {
 }
 
 /// Runs trained before `--features` (and the Phase 13 training options)
-/// existed, captured with the build that preceded them: the default must
-/// reproduce their files byte for byte, and their events (apart from the
-/// wall-clock fields) and decision samples too.
+/// existed, captured with the build that preceded them: `--features base`
+/// (the default until the `hidden` set became it) must reproduce their files
+/// byte for byte, and their events (apart from the wall-clock fields) and
+/// decision samples too.
 #[test]
 #[allow(clippy::too_many_lines)] // the golden table is the bulk of it
-fn the_default_feature_set_trains_exactly_as_before_the_option_existed() {
+fn the_base_feature_set_trains_exactly_as_before_the_option_existed() {
     for (name, extra, hashes, decisions, events) in [
         (
             "features-golden-4p",
@@ -924,7 +925,9 @@ fn the_default_feature_set_trains_exactly_as_before_the_option_existed() {
         ),
     ] {
         let out = run_dir(name);
-        let result = small_run(&out, "2", &extra);
+        let mut base = extra.clone();
+        base.extend(["--features", "base"]);
+        let result = small_run(&out, "2", &base);
         assert!(result.status.success(), "stderr: {}", text(&result.stderr));
         for (file, expected) in hashes {
             assert_eq!(fnv(&out.join(file)), expected, "{name}/{file}");
@@ -946,10 +949,10 @@ fn the_default_feature_set_trains_exactly_as_before_the_option_existed() {
         for option in ["features", "fitness", "racing", "player_counts", "decks"] {
             assert!(!config.contains(option), "{option}: {config}");
         }
-        // Naming the default explicitly changes nothing either.
+        // Naming the default fitness explicitly changes nothing either.
         let explicit = run_dir(&format!("{name}-explicit"));
-        let mut again = extra.clone();
-        again.extend(["--features", "base", "--fitness", "mean"]);
+        let mut again = base.clone();
+        again.extend(["--fitness", "mean"]);
         assert!(small_run(&explicit, "1", &again).status.success());
         for (file, expected) in hashes {
             assert_eq!(
@@ -1405,4 +1408,46 @@ fn auto_checks_the_cheap_things_before_the_probe() {
         text(&result.stderr)
     );
     assert!(!text(&result.stdout).contains("Probe:"));
+}
+
+#[test]
+fn a_run_without_features_trains_hidden_and_an_older_base_run_resumes_as_base() {
+    // The default is the `hidden` set, and the run says so in its files.
+    let fresh = run_dir("default-hidden");
+    assert!(
+        small_run(&fresh, "2", &["--generations", "2", "--seed", "5"])
+            .status
+            .success()
+    );
+    assert_eq!(names_of(&fresh.join("best.json")).len(), 28);
+    let config = std::fs::read_to_string(fresh.join("config.json")).unwrap();
+    assert!(config.contains("\"features\": \"hidden\""), "{config}");
+    std::fs::remove_dir_all(&fresh).unwrap();
+
+    // A base run (as every run was before the default changed) carries no
+    // `features` in its config; resuming it without naming a set stays base.
+    let old = run_dir("default-hidden-old-base");
+    assert!(small_run(
+        &old,
+        "2",
+        &["--generations", "2", "--seed", "5", "--features", "base"]
+    )
+    .status
+    .success());
+    let config = std::fs::read_to_string(old.join("config.json")).unwrap();
+    assert!(!config.contains("features"), "{config}");
+    let resumed = cli(&[
+        "train",
+        "--out",
+        old.to_str().unwrap(),
+        "--resume",
+        "--generations",
+        "3",
+        "--threads",
+        "2",
+        "--quiet",
+    ]);
+    assert!(resumed.status.success(), "{}", text(&resumed.stderr));
+    assert_eq!(names_of(&old.join("best.json")), sim::FEATURE_NAMES);
+    std::fs::remove_dir_all(&old).unwrap();
 }

@@ -137,8 +137,8 @@ fn the_skill_weight_defaults_to_zero_is_a_unit_interval_and_cannot_change_on_res
 }
 
 #[test]
-fn the_feature_set_defaults_to_base_is_validated_and_cannot_change_on_resume() {
-    assert_eq!(parse(&["--out", "d"]).unwrap().features, FeatureSet::Base);
+fn the_feature_set_defaults_to_hidden_is_validated_and_cannot_change_on_resume() {
+    assert_eq!(parse(&["--out", "d"]).unwrap().features, FeatureSet::Hidden);
     for (text, set) in [
         ("base", FeatureSet::Base),
         ("trick", FeatureSet::Trick),

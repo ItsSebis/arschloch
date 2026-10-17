@@ -250,14 +250,14 @@ pub struct TrainArgs {
     pub racing_matches: Option<usize>,
 
     /// Which features the evolved networks see: `base` (the 20 of feature set
-    /// v1, loadable by the casino port), `trick` (+ who is still in the
-    /// trick), `hidden` (+ a probabilistic reading of the unseen cards) or
-    /// `all` (+ player count, deck and pass rule). Each is a prefix of the
-    /// next, and the genome files record the names they were trained with.
-    /// See docs/TRAINING.md.
+    /// v1, the only set the casino port loads), `trick` (+ who is still in the
+    /// trick), `hidden` (+ a probabilistic reading of the unseen cards; the
+    /// default) or `all` (+ player count, deck and pass rule). Each is a
+    /// prefix of the next, and the genome files record the names they were
+    /// trained with. See docs/TRAINING.md.
     #[arg(
         long,
-        default_value = "base",
+        default_value = "hidden",
         value_parser = clap::builder::PossibleValuesParser::new(["base", "trick", "hidden", "all"])
             .map(|name| FeatureSet::ALL_SETS
                 .into_iter()

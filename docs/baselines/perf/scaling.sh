@@ -36,7 +36,7 @@ for threads in $THREADS_LIST; do
   run="$TMP/t$threads"
   start=$(date +%s.%N)
   "$CLI" train --out "$run" --player-count 4 --population "$POPULATION" --generations "$GENERATIONS" \
-    --matches-per-genome 100 --rounds 8 --seed "$SEED" --threads "$threads" --quiet > /dev/null
+    --matches-per-genome 100 --rounds 8 --seed "$SEED" --features base --threads "$threads" --quiet > /dev/null
   end=$(date +%s.%N)
   wall=$(echo "$end - $start" | bc -l)
   sum=$(sha256sum < "$run/best.json" | cut -c1-16)

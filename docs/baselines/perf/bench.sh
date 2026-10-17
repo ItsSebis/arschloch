@@ -65,11 +65,22 @@ timed "4x card-counter" table 1 card-counter card-counter card-counter card-coun
 timed "4x endgame-denial" table 1 endgame-denial endgame-denial endgame-denial endgame-denial
 timed "4x adaptive:reading,tempo,bully" table 1 adaptive:reading,tempo,bully adaptive:reading,tempo,bully adaptive:reading,tempo,bully adaptive:reading,tempo,bully
 
+# The training rows. `cli train` trains the `hidden` feature set by default (since
+# Phase 13b); the first row follows the default (checksum ba1bbb61873ad49b when it became the
+# default; the default changed, so the old checksum no longer applies to this row), the second pins `--features base`, which is what this
+# row was before and must still print 85d7c401da1bb195.
 echo "== training (pop 60, 4 generations, 40 matches, 6 rounds, seed 7)"
-rm -rf "$TMP/run"
-start=$(date +%s.%N)
-"$CLI" train --out "$TMP/run" --population 60 --generations 4 --matches-per-genome 40 \
-  --reeval-matches 60 --rounds 6 --seed 7 --pass-rule "${PASS_RULE:-free}" --exchange-rule "${EXCHANGE_RULE:-free}" --threads "$THREADS" --quiet > /dev/null
-end=$(date +%s.%N)
-printf '%-28s %7.2fs  %s\n' "train (best.json)" "$(echo "$end - $start" | bc -l)" \
-  "$(sha256sum < "$TMP/run/best.json" | cut -c1-16)"
+train_row() { # label, extra flags...
+  local label=$1
+  shift
+  rm -rf "$TMP/run"
+  local start end
+  start=$(date +%s.%N)
+  "$CLI" train --out "$TMP/run" --population 60 --generations 4 --matches-per-genome 40 \
+    --reeval-matches 60 --rounds 6 --seed 7 --pass-rule "${PASS_RULE:-free}" --exchange-rule "${EXCHANGE_RULE:-free}" --threads "$THREADS" --quiet "$@" > /dev/null
+  end=$(date +%s.%N)
+  printf '%-28s %7.2fs  %s\n' "$label" "$(echo "$end - $start" | bc -l)" \
+    "$(sha256sum < "$TMP/run/best.json" | cut -c1-16)"
+}
+train_row "train (best.json)"
+train_row "train base (best.json)" --features base
