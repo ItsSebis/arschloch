@@ -258,12 +258,11 @@ mod tests {
         picker.up();
         assert_eq!(picker.listing.dir, start);
         let mut root = Picker::open((), Kind::Folder, &[], "/");
+        // "/" is the drive root on Windows (`\\?\D:\`), so compare with what it resolves to.
+        let top = std::fs::canonicalize("/").unwrap();
+        assert_eq!(root.listing.dir, top);
         root.up();
-        assert_eq!(
-            root.listing.dir,
-            Path::new("/").to_path_buf(),
-            "the root has no parent"
-        );
+        assert_eq!(root.listing.dir, top, "the root has no parent");
     }
 
     #[test]
