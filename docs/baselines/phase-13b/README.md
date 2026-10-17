@@ -1,6 +1,6 @@
 # Phase 13b: confirming `--features hidden` with fresh seeds
 
-Open work item 5 (ROADMAP). Question: is the Phase 13 result "hidden beats base" a lucky draw?
+Former open work item 5 of the ROADMAP (now part of Phase 13). Question: is the Phase 13 result "hidden beats base" a lucky draw?
 
 ## Design (no scale-down)
 

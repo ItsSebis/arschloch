@@ -256,7 +256,7 @@ arguments the form builds. It is left out of the workspace's `default-members` (
 ### Module layout of the larger files
 
 A file that grew past about 400 lines is a directory with the root file as its entry; each child holds one concern, and
-`tests.rs` holds the unit tests. (Open-work item 6 of the roadmap.)
+`tests.rs` holds the unit tests. (Phase 19, simplification; built in v0.7.)
 
 - `sim::session` (the interactive game): `types` (config, errors, card ids, `GameEvent`, the views), `flow` (dealing,
   the exchange, the AI seats playing until the human must act, the end of a round), `view` (legal moves, model advice,
