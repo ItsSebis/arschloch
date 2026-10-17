@@ -1,0 +1,2103 @@
+{
+  "deck_variant": "Single",
+  "duplicate_rule": "FirstDealtWins",
+  "exchange_rule": "forced",
+  "matches": 2000,
+  "pass_rule": "final",
+  "player_count": 4,
+  "results": [
+    {
+      "cells": [
+        {
+          "avg_rank": 1.4639500000000076,
+          "avg_rank_std_error": 0.00714445381818511,
+          "matches": 2000,
+          "mean": 0.690699999999995,
+          "opponent": "LowestLegal",
+          "placements": [
+            12512,
+            5957,
+            1271,
+            260
+          ],
+          "spread": 0.4490980578398902,
+          "std_error": 0.004762969212123407
+        },
+        {
+          "avg_rank": 1.4104500000000104,
+          "avg_rank_std_error": 0.0058855941806609064,
+          "matches": 2000,
+          "mean": 0.7263666666666597,
+          "opponent": "EndgameDenial",
+          "placements": [
+            13105,
+            5765,
+            946,
+            184
+          ],
+          "spread": 0.4172826366971183,
+          "std_error": 0.003923729453773938
+        },
+        {
+          "avg_rank": 1.5387500000000043,
+          "avg_rank_std_error": 0.0069936524318247656,
+          "matches": 2000,
+          "mean": 0.6408333333333305,
+          "opponent": "Adaptive(reading,tempo,bully)",
+          "placements": [
+            11439,
+            6697,
+            1514,
+            350
+          ],
+          "spread": 0.47370803830583197,
+          "std_error": 0.004662434954549844
+        },
+        {
+          "avg_rank": 1.4085000000000099,
+          "avg_rank_std_error": 0.0058233006461291155,
+          "matches": 2000,
+          "mean": 0.7276666666666601,
+          "opponent": "Adaptive(counting,reading)",
+          "placements": [
+            13124,
+            5754,
+            950,
+            172
+          ],
+          "spread": 0.4153861657141188,
+          "std_error": 0.0038822004307527435
+        },
+        {
+          "avg_rank": 1.5732000000000044,
+          "avg_rank_std_error": 0.007399544352749922,
+          "matches": 2000,
+          "mean": 0.6178666666666637,
+          "opponent": "Adaptive(reading,deception=0.2,tempo,bully)",
+          "placements": [
+            11059,
+            6800,
+            1759,
+            382
+          ],
+          "spread": 0.48768922709264717,
+          "std_error": 0.004933029568499948
+        },
+        {
+          "avg_rank": 1.109500000000005,
+          "avg_rank_std_error": 0.002856388362467284,
+          "matches": 2000,
+          "mean": 0.9269999999999967,
+          "opponent": "HoldBackPairs",
+          "placements": [
+            18020,
+            1793,
+            164,
+            23
+          ],
+          "spread": 0.23171797992867502,
+          "std_error": 0.0019042589083115226
+        },
+        {
+          "avg_rank": 1.1031000000000069,
+          "avg_rank_std_error": 0.0025910522526355773,
+          "matches": 2000,
+          "mean": 0.9312666666666621,
+          "opponent": "GreedyHighest",
+          "placements": [
+            18146,
+            1658,
+            184,
+            12
+          ],
+          "spread": 0.22555648713546858,
+          "std_error": 0.0017273681684237183
+        },
+        {
+          "avg_rank": 1.0563999999999998,
+          "avg_rank_std_error": 0.0019277910128161256,
+          "matches": 2000,
+          "mean": 0.9624000000000001,
+          "opponent": "RandomLegal",
+          "placements": [
+            18964,
+            952,
+            76,
+            8
+          ],
+          "spread": 0.16762264498303822,
+          "std_error": 0.0012851940085440838
+        },
+        {
+          "avg_rank": 1.441250000000006,
+          "avg_rank_std_error": 0.007115619071267341,
+          "matches": 2000,
+          "mean": 0.7058333333333293,
+          "opponent": "mixed (all opponents)",
+          "placements": [
+            12604,
+            6159,
+            1045,
+            192
+          ],
+          "spread": 0.4261707730215452,
+          "std_error": 0.004743746047511561
+        }
+      ],
+      "genome": "/tmp/claude-1000/-home-sebi-Documents-Code-arschloch/d4dabbea-31e7-4303-a456-53cbaba01a2e/scratchpad/e5/p13/A2/seed11/best.json"
+    },
+    {
+      "cells": [
+        {
+          "avg_rank": 1.5142000000000087,
+          "avg_rank_std_error": 0.0068889700938875335,
+          "matches": 2000,
+          "mean": 0.6571999999999942,
+          "opponent": "LowestLegal",
+          "placements": [
+            11413,
+            7111,
+            1255,
+            221
+          ],
+          "spread": 0.44301911671820693,
+          "std_error": 0.004592646729258356
+        },
+        {
+          "avg_rank": 1.4486500000000087,
+          "avg_rank_std_error": 0.005932679587972618,
+          "matches": 2000,
+          "mean": 0.7008999999999943,
+          "opponent": "EndgameDenial",
+          "placements": [
+            12205,
+            6748,
+            916,
+            131
+          ],
+          "spread": 0.4100206918897899,
+          "std_error": 0.003955119725315079
+        },
+        {
+          "avg_rank": 1.5636000000000048,
+          "avg_rank_std_error": 0.006790476808563893,
+          "matches": 2000,
+          "mean": 0.6242666666666635,
+          "opponent": "Adaptive(reading,tempo,bully)",
+          "placements": [
+            10897,
+            7220,
+            1597,
+            286
+          ],
+          "spread": 0.46735902925077105,
+          "std_error": 0.004526984539042596
+        },
+        {
+          "avg_rank": 1.445500000000008,
+          "avg_rank_std_error": 0.005928528377629852,
+          "matches": 2000,
+          "mean": 0.7029999999999946,
+          "opponent": "Adaptive(counting,reading)",
+          "placements": [
+            12249,
+            6717,
+            909,
+            125
+          ],
+          "spread": 0.4084821497528023,
+          "std_error": 0.003952352251753235
+        },
+        {
+          "avg_rank": 1.6141000000000036,
+          "avg_rank_std_error": 0.007406282570274772,
+          "matches": 2000,
+          "mean": 0.5905999999999976,
+          "opponent": "Adaptive(reading,deception=0.2,tempo,bully)",
+          "placements": [
+            10360,
+            7407,
+            1824,
+            409
+          ],
+          "spread": 0.4908410876580468,
+          "std_error": 0.004937521713516514
+        },
+        {
+          "avg_rank": 1.094400000000005,
+          "avg_rank_std_error": 0.002621594243621434,
+          "matches": 2000,
+          "mean": 0.9370666666666634,
+          "opponent": "HoldBackPairs",
+          "placements": [
+            18302,
+            1524,
+            158,
+            16
+          ],
+          "spread": 0.2171416741822546,
+          "std_error": 0.0017477294957476226
+        },
+        {
+          "avg_rank": 1.0929500000000045,
+          "avg_rank_std_error": 0.0024587947425095758,
+          "matches": 2000,
+          "mean": 0.9380333333333304,
+          "opponent": "GreedyHighest",
+          "placements": [
+            18320,
+            1509,
+            163,
+            8
+          ],
+          "spread": 0.21396811548556666,
+          "std_error": 0.0016391964950063839
+        },
+        {
+          "avg_rank": 1.0625000000000036,
+          "avg_rank_std_error": 0.002129352500417836,
+          "matches": 2000,
+          "mean": 0.958333333333331,
+          "opponent": "RandomLegal",
+          "placements": [
+            18859,
+            1041,
+            91,
+            9
+          ],
+          "spread": 0.17687880345341053,
+          "std_error": 0.0014195683336118907
+        },
+        {
+          "avg_rank": 1.4709000000000068,
+          "avg_rank_std_error": 0.007011146346107991,
+          "matches": 2000,
+          "mean": 0.6860666666666622,
+          "opponent": "mixed (all opponents)",
+          "placements": [
+            11976,
+            6791,
+            1072,
+            161
+          ],
+          "spread": 0.42408237669375537,
+          "std_error": 0.004674097564071993
+        }
+      ],
+      "genome": "/tmp/claude-1000/-home-sebi-Documents-Code-arschloch/d4dabbea-31e7-4303-a456-53cbaba01a2e/scratchpad/e5/p13/A2/seed12/best.json"
+    },
+    {
+      "cells": [
+        {
+          "avg_rank": 1.4819500000000068,
+          "avg_rank_std_error": 0.007054039870120158,
+          "matches": 2000,
+          "mean": 0.6786999999999955,
+          "opponent": "LowestLegal",
+          "placements": [
+            12134,
+            6334,
+            1291,
+            241
+          ],
+          "spread": 0.4477470503656233,
+          "std_error": 0.004702693246746772
+        },
+        {
+          "avg_rank": 1.4585000000000101,
+          "avg_rank_std_error": 0.006283599033070473,
+          "matches": 2000,
+          "mean": 0.6943333333333266,
+          "opponent": "EndgameDenial",
+          "placements": [
+            12419,
+            6203,
+            1167,
+            211
+          ],
+          "spread": 0.4362862210369177,
+          "std_error": 0.004189066022046982
+        },
+        {
+          "avg_rank": 1.5978500000000055,
+          "avg_rank_std_error": 0.007547096665873739,
+          "matches": 2000,
+          "mean": 0.6014333333333297,
+          "opponent": "Adaptive(reading,tempo,bully)",
+          "placements": [
+            10824,
+            6822,
+            1927,
+            427
+          ],
+          "spread": 0.499433179826002,
+          "std_error": 0.005031397777249159
+        },
+        {
+          "avg_rank": 1.4569000000000099,
+          "avg_rank_std_error": 0.006390353144126974,
+          "matches": 2000,
+          "mean": 0.6953999999999934,
+          "opponent": "Adaptive(counting,reading)",
+          "placements": [
+            12410,
+            6235,
+            1162,
+            193
+          ],
+          "spread": 0.4332012054974586,
+          "std_error": 0.004260235429417982
+        },
+        {
+          "avg_rank": 1.6357000000000037,
+          "avg_rank_std_error": 0.00787710475934492,
+          "matches": 2000,
+          "mean": 0.5761999999999975,
+          "opponent": "Adaptive(reading,deception=0.2,tempo,bully)",
+          "placements": [
+            10433,
+            6967,
+            2053,
+            547
+          ],
+          "spread": 0.5168217014707411,
+          "std_error": 0.005251403172896613
+        },
+        {
+          "avg_rank": 1.0886000000000045,
+          "avg_rank_std_error": 0.002483566800395334,
+          "matches": 2000,
+          "mean": 0.9409333333333303,
+          "opponent": "HoldBackPairs",
+          "placements": [
+            18382,
+            1474,
+            134,
+            10
+          ],
+          "spread": 0.20779267445114535,
+          "std_error": 0.0016557112002635562
+        },
+        {
+          "avg_rank": 1.1064500000000066,
+          "avg_rank_std_error": 0.002716687126717465,
+          "matches": 2000,
+          "mean": 0.9290333333333289,
+          "opponent": "GreedyHighest",
+          "placements": [
+            18095,
+            1694,
+            198,
+            13
+          ],
+          "spread": 0.22980029735983984,
+          "std_error": 0.0018111247511449766
+        },
+        {
+          "avg_rank": 1.0731000000000042,
+          "avg_rank_std_error": 0.002339002023349403,
+          "matches": 2000,
+          "mean": 0.9512666666666638,
+          "opponent": "RandomLegal",
+          "placements": [
+            18709,
+            1137,
+            137,
+            17
+          ],
+          "spread": 0.1961364491028292,
+          "std_error": 0.0015593346822329354
+        },
+        {
+          "avg_rank": 1.4733000000000056,
+          "avg_rank_std_error": 0.007435132520527079,
+          "matches": 2000,
+          "mean": 0.6844666666666629,
+          "opponent": "mixed (all opponents)",
+          "placements": [
+            12240,
+            6282,
+            1250,
+            228
+          ],
+          "spread": 0.4435649069377226,
+          "std_error": 0.004956755013684719
+        }
+      ],
+      "genome": "/tmp/claude-1000/-home-sebi-Documents-Code-arschloch/d4dabbea-31e7-4303-a456-53cbaba01a2e/scratchpad/e5/p13/A2/seed13/best.json"
+    },
+    {
+      "cells": [
+        {
+          "avg_rank": 1.5173000000000068,
+          "avg_rank_std_error": 0.0072867622063387035,
+          "matches": 2000,
+          "mean": 0.6551333333333288,
+          "opponent": "LowestLegal",
+          "placements": [
+            11618,
+            6703,
+            1394,
+            285
+          ],
+          "spread": 0.4592751341939708,
+          "std_error": 0.004857841470892469
+        },
+        {
+          "avg_rank": 1.451700000000009,
+          "avg_rank_std_error": 0.006013454566046799,
+          "matches": 2000,
+          "mean": 0.6988666666666605,
+          "opponent": "EndgameDenial",
+          "placements": [
+            12358,
+            6428,
+            1036,
+            178
+          ],
+          "spread": 0.42408967081136933,
+          "std_error": 0.004008969710697866
+        },
+        {
+          "avg_rank": 1.5752500000000034,
+          "avg_rank_std_error": 0.006935075081294409,
+          "matches": 2000,
+          "mean": 0.6164999999999977,
+          "opponent": "Adaptive(reading,tempo,bully)",
+          "placements": [
+            10898,
+            7062,
+            1677,
+            363
+          ],
+          "spread": 0.48117330557710725,
+          "std_error": 0.0046233833875296065
+        },
+        {
+          "avg_rank": 1.4498500000000083,
+          "avg_rank_std_error": 0.005991906225910887,
+          "matches": 2000,
+          "mean": 0.7000999999999945,
+          "opponent": "Adaptive(counting,reading)",
+          "placements": [
+            12350,
+            6470,
+            1013,
+            167
+          ],
+          "spread": 0.4210489427872104,
+          "std_error": 0.003994604150607258
+        },
+        {
+          "avg_rank": 1.6169500000000014,
+          "avg_rank_std_error": 0.0075817273787061445,
+          "matches": 2000,
+          "mean": 0.588699999999999,
+          "opponent": "Adaptive(reading,deception=0.2,tempo,bully)",
+          "placements": [
+            10505,
+            7126,
+            1894,
+            475
+          ],
+          "spread": 0.5025369848191388,
+          "std_error": 0.00505448491913743
+        },
+        {
+          "avg_rank": 1.1188500000000063,
+          "avg_rank_std_error": 0.0030057205339092796,
+          "matches": 2000,
+          "mean": 0.9207666666666624,
+          "opponent": "HoldBackPairs",
+          "placements": [
+            17874,
+            1905,
+            191,
+            30
+          ],
+          "spread": 0.24296746695803365,
+          "std_error": 0.002003813689272853
+        },
+        {
+          "avg_rank": 1.1060500000000095,
+          "avg_rank_std_error": 0.0025985717303008272,
+          "matches": 2000,
+          "mean": 0.9292999999999937,
+          "opponent": "GreedyHighest",
+          "placements": [
+            18085,
+            1719,
+            186,
+            10
+          ],
+          "spread": 0.22745294751516898,
+          "std_error": 0.001732381153533885
+        },
+        {
+          "avg_rank": 1.061250000000002,
+          "avg_rank_std_error": 0.0021340093129773017,
+          "matches": 2000,
+          "mean": 0.9591666666666654,
+          "opponent": "RandomLegal",
+          "placements": [
+            18903,
+            980,
+            106,
+            11
+          ],
+          "spread": 0.1781365736980668,
+          "std_error": 0.0014226728753182012
+        },
+        {
+          "avg_rank": 1.4791000000000016,
+          "avg_rank_std_error": 0.007303647488297621,
+          "matches": 2000,
+          "mean": 0.680599999999999,
+          "opponent": "mixed (all opponents)",
+          "placements": [
+            12055,
+            6520,
+            1213,
+            212
+          ],
+          "spread": 0.43942547845011365,
+          "std_error": 0.004869098325531747
+        }
+      ],
+      "genome": "/tmp/claude-1000/-home-sebi-Documents-Code-arschloch/d4dabbea-31e7-4303-a456-53cbaba01a2e/scratchpad/e5/p13/A2/seed14/best.json"
+    },
+    {
+      "cells": [
+        {
+          "avg_rank": 1.4951500000000082,
+          "avg_rank_std_error": 0.00694152945434816,
+          "matches": 2000,
+          "mean": 0.6698999999999946,
+          "opponent": "LowestLegal",
+          "placements": [
+            11795,
+            6755,
+            1202,
+            248
+          ],
+          "spread": 0.4445104560700009,
+          "std_error": 0.0046276863028987736
+        },
+        {
+          "avg_rank": 1.4396500000000092,
+          "avg_rank_std_error": 0.00580286785888616,
+          "matches": 2000,
+          "mean": 0.7068999999999939,
+          "opponent": "EndgameDenial",
+          "placements": [
+            12458,
+            6448,
+            937,
+            157
+          ],
+          "spread": 0.4148134132086178,
+          "std_error": 0.0038685785725907735
+        },
+        {
+          "avg_rank": 1.538150000000006,
+          "avg_rank_std_error": 0.006893732699000029,
+          "matches": 2000,
+          "mean": 0.6412333333333294,
+          "opponent": "Adaptive(reading,tempo,bully)",
+          "placements": [
+            11454,
+            6651,
+            1573,
+            322
+          ],
+          "spread": 0.47255550056169476,
+          "std_error": 0.004595821799333353
+        },
+        {
+          "avg_rank": 1.4416500000000092,
+          "avg_rank_std_error": 0.0058670563253613245,
+          "matches": 2000,
+          "mean": 0.7055666666666606,
+          "opponent": "Adaptive(counting,reading)",
+          "placements": [
+            12405,
+            6499,
+            954,
+            142
+          ],
+          "spread": 0.4134383079063296,
+          "std_error": 0.003911370883574216
+        },
+        {
+          "avg_rank": 1.5634500000000058,
+          "avg_rank_std_error": 0.007213914958919165,
+          "matches": 2000,
+          "mean": 0.6243666666666629,
+          "opponent": "Adaptive(reading,deception=0.2,tempo,bully)",
+          "placements": [
+            11119,
+            6864,
+            1646,
+            371
+          ],
+          "spread": 0.4816056927958166,
+          "std_error": 0.004809276639279443
+        },
+        {
+          "avg_rank": 1.179050000000013,
+          "avg_rank_std_error": 0.003928837822221316,
+          "matches": 2000,
+          "mean": 0.8806333333333246,
+          "opponent": "HoldBackPairs",
+          "placements": [
+            16897,
+            2669,
+            390,
+            44
+          ],
+          "spread": 0.29753886580861916,
+          "std_error": 0.002619225214814211
+        },
+        {
+          "avg_rank": 1.0906000000000047,
+          "avg_rank_std_error": 0.002452310525495662,
+          "matches": 2000,
+          "mean": 0.9395999999999969,
+          "opponent": "GreedyHighest",
+          "placements": [
+            18371,
+            1451,
+            173,
+            5
+          ],
+          "spread": 0.21207088961529846,
+          "std_error": 0.0016348736836637747
+        },
+        {
+          "avg_rank": 1.056350000000002,
+          "avg_rank_std_error": 0.0019816160453214582,
+          "matches": 2000,
+          "mean": 0.9624333333333321,
+          "opponent": "RandomLegal",
+          "placements": [
+            18960,
+            962,
+            69,
+            9
+          ],
+          "spread": 0.16703250182723506,
+          "std_error": 0.0013210773635476388
+        },
+        {
+          "avg_rank": 1.4833500000000068,
+          "avg_rank_std_error": 0.0072825412084811525,
+          "matches": 2000,
+          "mean": 0.6777666666666621,
+          "opponent": "mixed (all opponents)",
+          "placements": [
+            11882,
+            6791,
+            1105,
+            222
+          ],
+          "spread": 0.4355445008517773,
+          "std_error": 0.004855027472320768
+        }
+      ],
+      "genome": "/tmp/claude-1000/-home-sebi-Documents-Code-arschloch/d4dabbea-31e7-4303-a456-53cbaba01a2e/scratchpad/e5/p13/A2/seed15/best.json"
+    },
+    {
+      "cells": [
+        {
+          "avg_rank": 1.491650000000008,
+          "avg_rank_std_error": 0.006954625954074052,
+          "matches": 2000,
+          "mean": 0.6722333333333281,
+          "opponent": "LowestLegal",
+          "placements": [
+            11922,
+            6577,
+            1247,
+            254
+          ],
+          "spread": 0.44762597357864325,
+          "std_error": 0.004636417302716035
+        },
+        {
+          "avg_rank": 1.431950000000009,
+          "avg_rank_std_error": 0.006072934959268838,
+          "matches": 2000,
+          "mean": 0.7120333333333273,
+          "opponent": "EndgameDenial",
+          "placements": [
+            12656,
+            6233,
+            927,
+            184
+          ],
+          "spread": 0.4180745268489912,
+          "std_error": 0.0040486233061792255
+        },
+        {
+          "avg_rank": 1.5729500000000025,
+          "avg_rank_std_error": 0.007298855074098721,
+          "matches": 2000,
+          "mean": 0.6180333333333317,
+          "opponent": "Adaptive(reading,tempo,bully)",
+          "placements": [
+            11060,
+            6814,
+            1733,
+            393
+          ],
+          "spread": 0.4880247250111637,
+          "std_error": 0.004865903382732481
+        },
+        {
+          "avg_rank": 1.4318500000000092,
+          "avg_rank_std_error": 0.006087595433262577,
+          "matches": 2000,
+          "mean": 0.7120999999999938,
+          "opponent": "Adaptive(counting,reading)",
+          "placements": [
+            12657,
+            6229,
+            934,
+            180
+          ],
+          "spread": 0.4178014294428062,
+          "std_error": 0.004058396955508385
+        },
+        {
+          "avg_rank": 1.6110500000000032,
+          "avg_rank_std_error": 0.007663603209788429,
+          "matches": 2000,
+          "mean": 0.5926333333333312,
+          "opponent": "Adaptive(reading,deception=0.2,tempo,bully)",
+          "placements": [
+            10703,
+            6850,
+            1970,
+            477
+          ],
+          "spread": 0.5067403005704438,
+          "std_error": 0.005109068806525619
+        },
+        {
+          "avg_rank": 1.091750000000004,
+          "avg_rank_std_error": 0.0025916842330001716,
+          "matches": 2000,
+          "mean": 0.9388333333333306,
+          "opponent": "HoldBackPairs",
+          "placements": [
+            18343,
+            1493,
+            150,
+            14
+          ],
+          "spread": 0.21347072398809988,
+          "std_error": 0.001727789488666781
+        },
+        {
+          "avg_rank": 1.1040000000000068,
+          "avg_rank_std_error": 0.002627822811066826,
+          "matches": 2000,
+          "mean": 0.9306666666666622,
+          "opponent": "GreedyHighest",
+          "placements": [
+            18143,
+            1646,
+            199,
+            12
+          ],
+          "spread": 0.22772693199434735,
+          "std_error": 0.0017518818740445505
+        },
+        {
+          "avg_rank": 1.0636500000000024,
+          "avg_rank_std_error": 0.002219076587333167,
+          "matches": 2000,
+          "mean": 0.957566666666665,
+          "opponent": "RandomLegal",
+          "placements": [
+            18852,
+            1035,
+            101,
+            12
+          ],
+          "spread": 0.1804915233466665,
+          "std_error": 0.0014793843915554446
+        },
+        {
+          "avg_rank": 1.4622000000000068,
+          "avg_rank_std_error": 0.007280596372672448,
+          "matches": 2000,
+          "mean": 0.6918666666666622,
+          "opponent": "mixed (all opponents)",
+          "placements": [
+            12281,
+            6397,
+            1119,
+            203
+          ],
+          "spread": 0.43275405383556403,
+          "std_error": 0.004853730915114965
+        }
+      ],
+      "genome": "/tmp/claude-1000/-home-sebi-Documents-Code-arschloch/d4dabbea-31e7-4303-a456-53cbaba01a2e/scratchpad/e5/p13/A2/seed16/best.json"
+    },
+    {
+      "cells": [
+        {
+          "avg_rank": 1.497400000000009,
+          "avg_rank_std_error": 0.007212671579633864,
+          "matches": 2000,
+          "mean": 0.668399999999994,
+          "opponent": "LowestLegal",
+          "placements": [
+            11985,
+            6341,
+            1415,
+            259
+          ],
+          "spread": 0.4566512114173071,
+          "std_error": 0.004808447719755909
+        },
+        {
+          "avg_rank": 1.4278500000000096,
+          "avg_rank_std_error": 0.0060488001075726695,
+          "matches": 2000,
+          "mean": 0.7147666666666602,
+          "opponent": "EndgameDenial",
+          "placements": [
+            12800,
+            6022,
+            999,
+            179
+          ],
+          "spread": 0.42078993307561935,
+          "std_error": 0.004032533405048447
+        },
+        {
+          "avg_rank": 1.5708000000000049,
+          "avg_rank_std_error": 0.007191629840994692,
+          "matches": 2000,
+          "mean": 0.6194666666666634,
+          "opponent": "Adaptive(reading,tempo,bully)",
+          "placements": [
+            11043,
+            6875,
+            1705,
+            377
+          ],
+          "spread": 0.48469342429576867,
+          "std_error": 0.004794419893996461
+        },
+        {
+          "avg_rank": 1.4204000000000103,
+          "avg_rank_std_error": 0.005986638449076432,
+          "matches": 2000,
+          "mean": 0.7197333333333265,
+          "opponent": "Adaptive(counting,reading)",
+          "placements": [
+            12878,
+            6008,
+            942,
+            172
+          ],
+          "spread": 0.4160469204308653,
+          "std_error": 0.003991092299384288
+        },
+        {
+          "avg_rank": 1.6072500000000038,
+          "avg_rank_std_error": 0.007640052614476943,
+          "matches": 2000,
+          "mean": 0.5951666666666641,
+          "opponent": "Adaptive(reading,deception=0.2,tempo,bully)",
+          "placements": [
+            10722,
+            6882,
+            1925,
+            471
+          ],
+          "spread": 0.5043356190739116,
+          "std_error": 0.0050933684096512956
+        },
+        {
+          "avg_rank": 1.0880500000000037,
+          "avg_rank_std_error": 0.0024868033387106824,
+          "matches": 2000,
+          "mean": 0.9412999999999975,
+          "opponent": "HoldBackPairs",
+          "placements": [
+            18393,
+            1469,
+            122,
+            16
+          ],
+          "spread": 0.2079499913173679,
+          "std_error": 0.0016578688924737883
+        },
+        {
+          "avg_rank": 1.1101000000000083,
+          "avg_rank_std_error": 0.0027500502519397932,
+          "matches": 2000,
+          "mean": 0.9265999999999944,
+          "opponent": "GreedyHighest",
+          "placements": [
+            18033,
+            1744,
+            211,
+            12
+          ],
+          "spread": 0.23350278608855102,
+          "std_error": 0.0018333668346265288
+        },
+        {
+          "avg_rank": 1.0671500000000025,
+          "avg_rank_std_error": 0.0022881338527857504,
+          "matches": 2000,
+          "mean": 0.9552333333333316,
+          "opponent": "RandomLegal",
+          "placements": [
+            18801,
+            1066,
+            122,
+            11
+          ],
+          "spread": 0.18635793218666508,
+          "std_error": 0.0015254225685238337
+        },
+        {
+          "avg_rank": 1.4646500000000078,
+          "avg_rank_std_error": 0.007356272569927146,
+          "matches": 2000,
+          "mean": 0.6902333333333281,
+          "opponent": "mixed (all opponents)",
+          "placements": [
+            12209,
+            6485,
+            1110,
+            196
+          ],
+          "spread": 0.4313031300605218,
+          "std_error": 0.004904181713284764
+        }
+      ],
+      "genome": "/tmp/claude-1000/-home-sebi-Documents-Code-arschloch/d4dabbea-31e7-4303-a456-53cbaba01a2e/scratchpad/e5/p13/A2/seed17/best.json"
+    },
+    {
+      "cells": [
+        {
+          "avg_rank": 1.4842500000000078,
+          "avg_rank_std_error": 0.007034074768860995,
+          "matches": 2000,
+          "mean": 0.6771666666666614,
+          "opponent": "LowestLegal",
+          "placements": [
+            12059,
+            6425,
+            1288,
+            228
+          ],
+          "spread": 0.4456964275777401,
+          "std_error": 0.004689383179240663
+        },
+        {
+          "avg_rank": 1.4260000000000088,
+          "avg_rank_std_error": 0.006166929179725812,
+          "matches": 2000,
+          "mean": 0.7159999999999941,
+          "opponent": "EndgameDenial",
+          "placements": [
+            12811,
+            6058,
+            931,
+            200
+          ],
+          "spread": 0.42038289424973857,
+          "std_error": 0.004111286119817208
+        },
+        {
+          "avg_rank": 1.5612000000000046,
+          "avg_rank_std_error": 0.007038256071233988,
+          "matches": 2000,
+          "mean": 0.6258666666666636,
+          "opponent": "Adaptive(reading,tempo,bully)",
+          "placements": [
+            11039,
+            7022,
+            1615,
+            324
+          ],
+          "spread": 0.4737343653239552,
+          "std_error": 0.004692170714155992
+        },
+        {
+          "avg_rank": 1.4199000000000093,
+          "avg_rank_std_error": 0.006070454695498928,
+          "matches": 2000,
+          "mean": 0.7200666666666605,
+          "opponent": "Adaptive(counting,reading)",
+          "placements": [
+            12863,
+            6062,
+            889,
+            186
+          ],
+          "spread": 0.41541625175506974,
+          "std_error": 0.004046969796999285
+        },
+        {
+          "avg_rank": 1.589200000000005,
+          "avg_rank_std_error": 0.007417154919074206,
+          "matches": 2000,
+          "mean": 0.6071999999999966,
+          "opponent": "Adaptive(reading,deception=0.2,tempo,bully)",
+          "placements": [
+            10735,
+            7107,
+            1797,
+            361
+          ],
+          "spread": 0.4853605120595064,
+          "std_error": 0.0049447699460494704
+        },
+        {
+          "avg_rank": 1.089100000000006,
+          "avg_rank_std_error": 0.002562982528172965,
+          "matches": 2000,
+          "mean": 0.9405999999999961,
+          "opponent": "HoldBackPairs",
+          "placements": [
+            18377,
+            1481,
+            125,
+            17
+          ],
+          "spread": 0.209508620878051,
+          "std_error": 0.0017086550187819767
+        },
+        {
+          "avg_rank": 1.1050500000000094,
+          "avg_rank_std_error": 0.002556954782329857,
+          "matches": 2000,
+          "mean": 0.9299666666666604,
+          "opponent": "GreedyHighest",
+          "placements": [
+            18104,
+            1701,
+            185,
+            10
+          ],
+          "spread": 0.2265828251802663,
+          "std_error": 0.001704636521553238
+        },
+        {
+          "avg_rank": 1.0560500000000004,
+          "avg_rank_std_error": 0.0019921553884036415,
+          "matches": 2000,
+          "mean": 0.9626333333333331,
+          "opponent": "RandomLegal",
+          "placements": [
+            18981,
+            927,
+            82,
+            10
+          ],
+          "spread": 0.1687975743638264,
+          "std_error": 0.0013281035922690942
+        },
+        {
+          "avg_rank": 1.4576500000000077,
+          "avg_rank_std_error": 0.007075010009414542,
+          "matches": 2000,
+          "mean": 0.694899999999995,
+          "opponent": "mixed (all opponents)",
+          "placements": [
+            12266,
+            6499,
+            1051,
+            184
+          ],
+          "spread": 0.42609674305778117,
+          "std_error": 0.004716673339609695
+        }
+      ],
+      "genome": "/tmp/claude-1000/-home-sebi-Documents-Code-arschloch/d4dabbea-31e7-4303-a456-53cbaba01a2e/scratchpad/e5/p13/A2/seed18/best.json"
+    },
+    {
+      "cells": [
+        {
+          "avg_rank": 1.5117500000000068,
+          "avg_rank_std_error": 0.006647974618879509,
+          "matches": 2000,
+          "mean": 0.6588333333333287,
+          "opponent": "LowestLegal",
+          "placements": [
+            11320,
+            7336,
+            1133,
+            211
+          ],
+          "spread": 0.43536035521035976,
+          "std_error": 0.0044319830792530065
+        },
+        {
+          "avg_rank": 1.464950000000008,
+          "avg_rank_std_error": 0.005850672092329732,
+          "matches": 2000,
+          "mean": 0.6900333333333281,
+          "opponent": "EndgameDenial",
+          "placements": [
+            11955,
+            6956,
+            924,
+            165
+          ],
+          "spread": 0.41669146459541473,
+          "std_error": 0.0039004480615531544
+        },
+        {
+          "avg_rank": 1.5504000000000042,
+          "avg_rank_std_error": 0.0068002236375549465,
+          "matches": 2000,
+          "mean": 0.6330666666666638,
+          "opponent": "Adaptive(reading,tempo,bully)",
+          "placements": [
+            11077,
+            7144,
+            1473,
+            306
+          ],
+          "spread": 0.4650256098085118,
+          "std_error": 0.004533482425036631
+        },
+        {
+          "avg_rank": 1.4639500000000067,
+          "avg_rank_std_error": 0.005926656846881739,
+          "matches": 2000,
+          "mean": 0.6906999999999955,
+          "opponent": "Adaptive(counting,reading)",
+          "placements": [
+            11961,
+            6957,
+            924,
+            158
+          ],
+          "spread": 0.4155320003722186,
+          "std_error": 0.003951104564587826
+        },
+        {
+          "avg_rank": 1.5931000000000022,
+          "avg_rank_std_error": 0.00713839431081449,
+          "matches": 2000,
+          "mean": 0.6045999999999986,
+          "opponent": "Adaptive(reading,deception=0.2,tempo,bully)",
+          "placements": [
+            10565,
+            7404,
+            1635,
+            396
+          ],
+          "spread": 0.48241632089582764,
+          "std_error": 0.0047589295405429935
+        },
+        {
+          "avg_rank": 1.1048500000000074,
+          "avg_rank_std_error": 0.0027100573712520526,
+          "matches": 2000,
+          "mean": 0.930099999999995,
+          "opponent": "HoldBackPairs",
+          "placements": [
+            18098,
+            1722,
+            165,
+            15
+          ],
+          "spread": 0.22593654713953393,
+          "std_error": 0.001806704914168035
+        },
+        {
+          "avg_rank": 1.1024000000000078,
+          "avg_rank_std_error": 0.002578845715162397,
+          "matches": 2000,
+          "mean": 0.9317333333333281,
+          "opponent": "GreedyHighest",
+          "placements": [
+            18184,
+            1597,
+            206,
+            13
+          ],
+          "spread": 0.2274635404240115,
+          "std_error": 0.0017192304767749314
+        },
+        {
+          "avg_rank": 1.0477999999999992,
+          "avg_rank_std_error": 0.0018799859503695112,
+          "matches": 2000,
+          "mean": 0.968133333333334,
+          "opponent": "RandomLegal",
+          "placements": [
+            19127,
+            804,
+            55,
+            14
+          ],
+          "spread": 0.15665270859806701,
+          "std_error": 0.0012533239669130075
+        },
+        {
+          "avg_rank": 1.4589000000000056,
+          "avg_rank_std_error": 0.0069397027845123915,
+          "matches": 2000,
+          "mean": 0.6940666666666628,
+          "opponent": "mixed (all opponents)",
+          "placements": [
+            12148,
+            6723,
+            932,
+            197
+          ],
+          "spread": 0.4219588131559788,
+          "std_error": 0.004626468523008261
+        }
+      ],
+      "genome": "/tmp/claude-1000/-home-sebi-Documents-Code-arschloch/d4dabbea-31e7-4303-a456-53cbaba01a2e/scratchpad/e5/p13/A2/seed19/best.json"
+    },
+    {
+      "cells": [
+        {
+          "avg_rank": 1.4821500000000083,
+          "avg_rank_std_error": 0.0072594447803712575,
+          "matches": 2000,
+          "mean": 0.6785666666666612,
+          "opponent": "LowestLegal",
+          "placements": [
+            12221,
+            6223,
+            1248,
+            308
+          ],
+          "spread": 0.455524790153566,
+          "std_error": 0.004839629853580839
+        },
+        {
+          "avg_rank": 1.437550000000009,
+          "avg_rank_std_error": 0.006277117160761355,
+          "matches": 2000,
+          "mean": 0.708299999999994,
+          "opponent": "EndgameDenial",
+          "placements": [
+            12739,
+            5991,
+            1050,
+            220
+          ],
+          "spread": 0.4305551958421527,
+          "std_error": 0.0041847447738409035
+        },
+        {
+          "avg_rank": 1.556650000000002,
+          "avg_rank_std_error": 0.0075621744221483714,
+          "matches": 2000,
+          "mean": 0.6288999999999986,
+          "opponent": "Adaptive(reading,tempo,bully)",
+          "placements": [
+            11448,
+            6401,
+            1721,
+            430
+          ],
+          "spread": 0.4934642968059862,
+          "std_error": 0.005041449614765581
+        },
+        {
+          "avg_rank": 1.431600000000007,
+          "avg_rank_std_error": 0.006206043626074846,
+          "matches": 2000,
+          "mean": 0.7122666666666619,
+          "opponent": "Adaptive(counting,reading)",
+          "placements": [
+            12800,
+            5970,
+            1028,
+            202
+          ],
+          "spread": 0.4262088376997124,
+          "std_error": 0.004137362417383231
+        },
+        {
+          "avg_rank": 1.5990000000000026,
+          "avg_rank_std_error": 0.008029429361289237,
+          "matches": 2000,
+          "mean": 0.6006666666666649,
+          "opponent": "Adaptive(reading,deception=0.2,tempo,bully)",
+          "placements": [
+            10985,
+            6589,
+            1887,
+            539
+          ],
+          "spread": 0.5123362611063643,
+          "std_error": 0.005352952907526159
+        },
+        {
+          "avg_rank": 1.0934500000000051,
+          "avg_rank_std_error": 0.0026906632238710704,
+          "matches": 2000,
+          "mean": 0.9376999999999966,
+          "opponent": "HoldBackPairs",
+          "placements": [
+            18345,
+            1473,
+            150,
+            32
+          ],
+          "spread": 0.22042090796172234,
+          "std_error": 0.0017937754825807137
+        },
+        {
+          "avg_rank": 1.095400000000006,
+          "avg_rank_std_error": 0.0026688914347993546,
+          "matches": 2000,
+          "mean": 0.9363999999999961,
+          "opponent": "GreedyHighest",
+          "placements": [
+            18320,
+            1467,
+            198,
+            15
+          ],
+          "spread": 0.22170935929726016,
+          "std_error": 0.001779260956532903
+        },
+        {
+          "avg_rank": 1.0524999999999993,
+          "avg_rank_std_error": 0.0019783406976448545,
+          "matches": 2000,
+          "mean": 0.9650000000000004,
+          "opponent": "RandomLegal",
+          "placements": [
+            19062,
+            844,
+            76,
+            18
+          ],
+          "spread": 0.1669913504080664,
+          "std_error": 0.001318893798429903
+        },
+        {
+          "avg_rank": 1.4443500000000085,
+          "avg_rank_std_error": 0.007221849922849032,
+          "matches": 2000,
+          "mean": 0.703766666666661,
+          "opponent": "mixed (all opponents)",
+          "placements": [
+            12644,
+            6056,
+            1069,
+            231
+          ],
+          "spread": 0.4336424935614887,
+          "std_error": 0.004814566615232688
+        }
+      ],
+      "genome": "/tmp/claude-1000/-home-sebi-Documents-Code-arschloch/d4dabbea-31e7-4303-a456-53cbaba01a2e/scratchpad/e5/p13/A2/seed20/best.json"
+    }
+  ],
+  "rounds": 10,
+  "seed": 99,
+  "statistics_catalog": [
+    {
+      "caveats": "Raw counts depend on how many rounds were played; compare shares, not totals. Single results are noisy and carry no error bars, see avg_rank and mean_role_score for numbers with standard errors.",
+      "formula": "For every round of every match, each seat adds one to the count for its strategy's name and the role the seat finished with.",
+      "id": "role_counts_by_strategy",
+      "json_path": "statistics.role_counts_by_strategy.<strategy>.<role>",
+      "meaning": "How often each strategy ended a round in each role (President, Vize, ..., Arschloch).",
+      "name": "Role counts",
+      "range": "0..rounds",
+      "reading": "A strategy that is strong finishes in the top roles more often, so look at the share of President and Vize against the share of Arschloch. With equal strengths every role is about equally common (1/players each). Counts that are far from equal for identical strategies are suspicious and point at a seating or luck effect.",
+      "scope": "per_strategy",
+      "since_phase": 1,
+      "unit": "rounds"
+    },
+    {
+      "caveats": "Forced passes (no legal play) are excluded from the numerator, so the rate is not the same as the overall pass frequency. Depends on the pass rule in use. There is no confidence interval for this global rate; per-strategy intervals are available as voluntary_pass_rate_intervals.",
+      "formula": "sum of voluntary passes divided by sum of all passes over every match and seat; 0 if nobody ever passed.",
+      "id": "voluntary_pass_rate",
+      "json_path": "statistics.voluntary_pass_rate",
+      "meaning": "How often players passed although they could have played a card. Passing when a legal play exists is a deliberate tactical choice.",
+      "name": "Voluntary pass rate",
+      "range": "0..1",
+      "reading": "Higher means more waiting and holding back. Typical values depend on the strategies; a greedy field is near 0, a patient field is clearly above it. Exactly 0 or 1 in a mixed field would be suspicious.",
+      "scope": "global",
+      "since_phase": 2,
+      "unit": "share"
+    },
+    {
+      "caveats": "Strategies that rarely pass have few samples, so the rate is noisy. Seats using the same strategy type share one bucket.",
+      "formula": "For each strategy name: its voluntary passes divided by all its passes, over every match and seat it played.",
+      "id": "voluntary_pass_rate_by_strategy",
+      "json_path": "statistics.voluntary_pass_rate_by_strategy.<strategy>",
+      "meaning": "The voluntary pass rate separately for each strategy: how patient or aggressive each one is.",
+      "name": "Voluntary pass rate by strategy",
+      "range": "0..1",
+      "reading": "Compare strategies with each other: a high value means the strategy often keeps cards back. It describes style, not strength; a strong strategy can be patient or aggressive.",
+      "scope": "per_strategy",
+      "since_phase": 2,
+      "unit": "share"
+    },
+    {
+      "caveats": "Strategies that only played single-round matches have no entry. Counts for rare roles are small, use retention_interval for a 95% interval. Retention mixes skill and the advantage the exchange hands to the previous winner.",
+      "formula": "For each strategy and role: of the round transitions where the strategy held the role and another round followed (held), the number where it held the same role again (retained_next_round); retention = retained_next_round / held.",
+      "id": "role_retention_by_strategy",
+      "json_path": "statistics.role_retention_by_strategy.<strategy>.<role>.{held,retained_next_round}",
+      "meaning": "How often a strategy keeps the same role in the next round. The role from one round carries into the next through the card exchange, so this shows whether being on top tends to last.",
+      "name": "Role retention",
+      "range": "0..1",
+      "reading": "A high President retention means the strategy defends its lead. By chance alone retention is about 1/players. A value much higher than that for President or Arschloch shows the exchange snowballs (the winner keeps the best cards); for a weak strategy high Arschloch retention is expected.",
+      "scope": "per_strategy",
+      "since_phase": 2,
+      "unit": "share"
+    },
+    {
+      "caveats": "Needs repeated identical seatings, so small batches give null. It counts all variation, including the strategy's own random choices, so it overstates pure card luck. luck_share and skill_score_duplicate measure luck more directly.",
+      "formula": "Variance of the first-round placement (0 = the table's best role) across matches with the same seating (same strategy names per seat), computed per seat series and averaged. It is null when no seating appeared in at least 2 matches.",
+      "id": "first_round_placement_variance_by_strategy",
+      "json_path": "statistics.first_round_placement_variance_by_strategy.<strategy>",
+      "meaning": "How much a strategy's first-round result varies between matches that seated it identically. Since only the shuffle differs between those matches, this is a rough signal of how much luck the deal contributes.",
+      "name": "First-round placement variance",
+      "range": "0..unbounded",
+      "reading": "A strategy whose result barely depends on the deal has a small variance; a large variance means the result is dominated by luck. Compare with the variance of a uniformly random placement, which is the ceiling.",
+      "scope": "per_strategy",
+      "since_phase": 4,
+      "unit": "places squared"
+    },
+    {
+      "caveats": "Says nothing about the number of rounds per match; rounds are what most statistics count.",
+      "formula": "The number of MatchResult records aggregated.",
+      "id": "matches_played",
+      "json_path": "statistics.matches_played",
+      "meaning": "How many simulated matches the other numbers are based on.",
+      "name": "Matches played",
+      "range": "0..unbounded",
+      "reading": "More matches means smaller standard errors; the error shrinks with the square root of the count (four times the matches halves it).",
+      "scope": "global",
+      "since_phase": 2,
+      "unit": "matches"
+    },
+    {
+      "caveats": "Averages per match, because the rounds of one match are not independent (roles carry over). Places are not equally spaced in value; mean_role_score weights them linearly.",
+      "formula": "Mean of the finishing place over every round of every match (place = index of the role in the table's role order, plus one). std_error = sample standard deviation of the series divided by the square root of the number of series, where a series is one strategy name in one match: the mean place of that name over its rounds, averaged over the seats it occupies in the match (so a name in two seats of a table counts once per match, not twice, because the seats of one name are negatively correlated). For a single-name batch n = number of matches. The value itself is weighted by rounds (every round of every seat counts once). Per-seat rows have one series per match.",
+      "id": "avg_rank",
+      "json_path": "extended.by_strategy.<strategy>.avg_rank.{value,std_error}; extended.by_seat.[].avg_rank.{value,std_error}",
+      "meaning": "The average place a strategy finishes in, where 1 is the best (President) and the number of players is the worst (Arschloch). Reported per strategy and per seat, with a standard error.",
+      "name": "Average finishing place",
+      "range": "1..players",
+      "reading": "Lower is better. The average over a fair field is (players + 1) / 2, for example 2.5 at four players. A strategy more than about two standard errors away from that is credibly better or worse than average. Per seat values that differ from each other for equal strategies reveal a seating bias.",
+      "scope": "per_strategy",
+      "since_phase": 12,
+      "unit": "place"
+    },
+    {
+      "caveats": "A distribution over many places needs many rounds to be smooth; small batches look jagged. No error bars.",
+      "formula": "count of rounds finishing in place p divided by all rounds of the strategy, times 100. The percentages of one strategy sum to 100.",
+      "id": "rank_distribution",
+      "json_path": "extended.by_strategy.<strategy>.rank_distribution",
+      "meaning": "For each finishing place, the percentage of rounds in which a strategy finished there.",
+      "name": "Rank distribution",
+      "range": "0..100",
+      "reading": "Shows the shape behind the average: two strategies with equal average place can differ in how often they win outright versus finish last. A fair field puts 100/players percent on each place.",
+      "scope": "per_strategy",
+      "since_phase": 12,
+      "unit": "percent of rounds"
+    },
+    {
+      "caveats": "Treats the gap between places as equal, which is a modelling choice. Depends on who the opponents are; use strength_rating to adjust for that.",
+      "formula": "Each finishing role maps linearly from +1 (best) to -1 (worst) with role_score(role, n) = 1 - 2 * place_index / (n - 1). The statistic is the mean over all rounds; std_error is computed over the same per-(match, strategy name) series as avg_rank (a name that holds several seats is averaged over them within the match). This is also the fitness used in NEAT training.",
+      "id": "mean_role_score",
+      "json_path": "extended.by_strategy.<strategy>.mean_role_score.{value,std_error}; extended.by_seat.[].mean_role_score.{value,std_error}",
+      "meaning": "A single number for how well a strategy does: +1 means it is always President, -1 means it is always last, 0 is the middle. Reported per strategy and per seat, with a standard error.",
+      "name": "Mean role score",
+      "range": "-1..+1",
+      "reading": "Higher is better. A fair field averages exactly 0 (the scores of one table always sum to 0), so scores are relative to the opponents. Values near 0.1 are a small edge, above 0.3 is a clear one.",
+      "scope": "per_strategy",
+      "since_phase": 12,
+      "unit": "score"
+    },
+    {
+      "caveats": "Only meaningful relative to this field: adding a weak opponent changes the others' numbers. A strategy that beat everyone in every game would have an unbounded rating, but each strategy additionally plays one virtual average opponent (half a win, half a loss), which keeps every rating finite; nothing is clipped, and a very large value just means a very one-sided record. The bootstrap standard error is an estimate and needs many matches; with --bootstrap-resamples 0 (or 1) there is none and std_error is null, not 0.",
+      "formula": "Bradley-Terry model fitted by the MM algorithm on every pair at every table in every round (who finished above whom), pooled by strategy name; strengths are converted to Elo-like points (400 * log10 of the strength ratio, centred at 0). std_error comes from 200 bootstrap resamples of matches (null when resampling is switched off).",
+      "id": "strength_rating",
+      "json_path": "extended.by_strategy.<strategy>.strength_rating.{value,std_error}",
+      "meaning": "How strong a strategy is relative to this particular field, adjusted for the opponents: finishing above a strong opponent counts for more than finishing above a weak one. The ratings average 0 over the field.",
+      "name": "Strength rating",
+      "range": "-unbounded..+unbounded",
+      "reading": "Higher is better; 0 is the field average, a difference of 100 points means the stronger strategy finishes above the weaker one in about 64 percent of their meetings. Compare ratings within one run only.",
+      "scope": "per_strategy",
+      "since_phase": 12,
+      "unit": "Elo-like points"
+    },
+    {
+      "caveats": "Assumes independent trials; consecutive rounds of one match are correlated, so the true uncertainty is somewhat larger than shown. Unlike the plain normal interval it stays inside 0..1 even for rare events.",
+      "formula": "The Wilson score interval at 95 percent confidence: for k successes in n trials and z = 1.96, centre = (p + z^2/(2n)) / (1 + z^2/n), half-width = z * sqrt(p(1-p)/n + z^2/(4n^2)) / (1 + z^2/n), with p = k / n.",
+      "id": "retention_interval",
+      "json_path": "extended.role_retention_intervals.<strategy>.<role>.{low,high}",
+      "meaning": "A range in which the true value of a rate (such as role retention; the voluntary pass rate has its own entry, voluntary_pass_rate_intervals) very likely lies, given how few or many cases it was measured on.",
+      "name": "Wilson confidence interval",
+      "range": "0..1",
+      "reading": "Read it as the plausible range. If two intervals do not overlap, the rates probably differ. A wide interval means too few observations, run more matches.",
+      "scope": "per_strategy",
+      "since_phase": 12,
+      "unit": "share"
+    },
+    {
+      "caveats": "Assumes independent passes; passes within one match are correlated, so the true uncertainty is somewhat larger. Only given per strategy: the global voluntary_pass_rate has no interval. Strategies that never passed have no interval.",
+      "formula": "The Wilson score interval (see retention_interval) for k = the strategy's voluntary passes out of n = all its passes over every match and seat it played.",
+      "id": "voluntary_pass_rate_intervals",
+      "json_path": "extended.voluntary_pass_rate_intervals.<strategy>.{low,high}",
+      "meaning": "A 95 percent confidence interval for each strategy's voluntary pass rate (the per-strategy version of voluntary_pass_rate_by_strategy).",
+      "name": "Voluntary pass rate interval",
+      "range": "0..1",
+      "reading": "A wide interval means the strategy passed rarely, so its rate is poorly known. Two strategies whose intervals do not overlap probably differ in patience.",
+      "scope": "per_strategy",
+      "since_phase": 12,
+      "unit": "share"
+    },
+    {
+      "caveats": "Estimated by rollouts, so noisy with small K or a small sample; deterministic for a fixed seed. The rollout opponents play their normal strategies, so the verdict is relative to them. Only two alternatives (weakest and strongest legal play) are compared, not every legal play. Off by default because it costs time.",
+      "formula": "For a sample of voluntary passes the round is replayed K times from that exact state, once with the pass and once with each of the weakest and strongest legal play; a pass is useful if the average finishing place after passing is strictly better than after the best alternative. Share = useful passes / sampled voluntary passes.",
+      "id": "useful_pass_share",
+      "json_path": "extended.by_strategy.<name>.useful_pass_share",
+      "meaning": "Of the times a strategy passed on purpose, how often the pass was actually the better choice than the best card it could have played.",
+      "name": "Useful pass share",
+      "range": "0..1",
+      "reading": "Higher means the strategy passes for good reasons. A share near 0 means its passes cost it places; near 1 means passing is a real skill of this strategy. Compare with voluntary_pass_rate: many passes with a low useful share is wasteful.",
+      "scope": "per_strategy",
+      "since_phase": 12,
+      "unit": "share"
+    },
+    {
+      "caveats": "Same caveats as useful_pass_share: sampled, rollout noise, compares only the weakest and strongest legal play. Because the best alternative is chosen after the fact, a pass that is truly neutral still shows a slightly negative value.",
+      "formula": "Mean over sampled voluntary passes of (expected place after the best alternative minus expected place after passing), each estimated from K same-seed rollouts. Positive means passing was better.",
+      "id": "useful_pass_gain",
+      "json_path": "extended.by_strategy.<name>.useful_pass_gain",
+      "meaning": "On average, how many finishing places a voluntary pass gains or loses compared with the best alternative play.",
+      "name": "Useful pass gain",
+      "range": "-players..+players",
+      "reading": "Above 0 means the passes pay off on average; below 0 means the strategy would do better to just play. Gains are small, hundredths of a place are already notable.",
+      "scope": "per_strategy",
+      "since_phase": 12,
+      "unit": "places"
+    },
+    {
+      "caveats": "Only round 1 is perfectly luck-free. Later rounds are luck-reduced, not luck-free, because the carried-over roles and exchanged cards depend partly on skill in earlier rounds and the rounds diverge between seatings. Needs a number of matches that is a multiple of the number of strategies. The deal comes from a separate random stream, so results differ from ordinary runs with the same seed. In the summary the plain score column equals the duplicate skill value by construction (the mean of the group means is the mean of the matches); its standard error is the counterfactual SE of an ordinary run of the same size, not an independent estimate (see plain_mean_role_score).",
+      "formula": "Groups of k matches (k = number of strategies) share one deal seed with the strategy assignment rotated through all seats. For strategy s in group g, x(s,g) is the mean role score over its k seatings; the skill score is the mean of x(s,g) over groups and the standard error is the standard deviation of x(s,g) over groups divided by the square root of the number of groups.",
+      "id": "skill_score_duplicate",
+      "json_path": "extended.skill.duplicate.strategies.[].skill_score_duplicate.{value,std_error}; extended.skill.duplicate.strategies.[].skill_score_duplicate_round1.{value,std_error}",
+      "meaning": "A luck-free skill measure: the same deals are replayed with the strategies rotated through every seat, so every strategy plays every hand once. The score is a strategy's mean role score over all those hands, plus or minus a standard error.",
+      "name": "Skill score (duplicate deals)",
+      "range": "-1..+1",
+      "reading": "Higher is better; 0 is the field average and a fair field sums to 0. The standard error is much smaller than for ordinary games of the same size, so smaller differences are detectable. This is the reference the cheap estimator is compared with.",
+      "scope": "per_strategy",
+      "since_phase": 12,
+      "unit": "score"
+    },
+    {
+      "caveats": "It can only remove the luck its features capture: luck that comes from how hands combine during play stays in. Uses round 1 only. With a single strategy name at the table there is nothing to adjust against, so the estimate is skipped (n/a). The regression is linear and may be biased if the true hand effect is not. Costs almost nothing extra and works on ordinary runs.",
+      "formula": "Least squares regression of the round-1 role score of every seat on hand features (cards of Queen or higher, pairs, triples, quads, lowest card strength, mean card strength, and hand size, because the uneven deal at 3, 5 and 6 players gives the first seats an extra card) plus a constant per strategy. Adjusted score = actual score minus beta times (features minus their mean); the estimate is the mean adjusted score per strategy with a standard error (seats of one name in a match are averaged first). The regression coefficients are reported under estimator_features.",
+      "id": "skill_score_estimate",
+      "json_path": "extended.skill.estimate.strategies.[].skill_score_estimate.{value,std_error}",
+      "meaning": "An inexpensive luck adjustment for ordinary runs: it predicts each seat's first-round result from the quality of the dealt hand and subtracts the part explained by luck.",
+      "name": "Skill score (cheap estimate)",
+      "range": "-1..+1",
+      "reading": "Read like skill_score_duplicate: higher is better, 0 is average. It should land close to the duplicate result; estimator_agreement says how close. When both modes run, the estimate comes from a separate ordinary batch with different deals, so its standard error is honest and it differs from the duplicate value by noise. A big difference between the plain mean role score and this one means the strategy was helped or hurt by its hands.",
+      "scope": "per_strategy",
+      "since_phase": 12,
+      "unit": "score"
+    },
+    {
+      "caveats": "Computed per strategy from the same deals, so the rows are similar; it describes this field and rule set rather than one strategy's quality. It rests on variance_reduction, which needs several duplicate groups to be stable. It counts only the luck that duplicate deals remove, so luck that arises during play (who happens to get which exchange cards in later rounds) is not included and the true luck share is somewhat higher.",
+      "formula": "luck_share = 1 - 1 / variance_reduction, clamped to 0..1.",
+      "id": "luck_share",
+      "json_path": "extended.skill.duplicate.strategies.[].luck_share; extended.skill.duplicate.strategies.[].luck_share_round1; extended.skill.estimate.strategies.[].luck_share",
+      "meaning": "How much of the spread of single-game results is down to card luck rather than play: 0 means skill decides everything, 1 means pure luck.",
+      "name": "Luck share",
+      "range": "0..1",
+      "reading": "A card game with a lot of luck shows a high value. If it is large, many games are needed to separate two strategies, and duplicate deals pay off. Values near 0 would mean the deal hardly matters.",
+      "scope": "per_strategy",
+      "since_phase": 12,
+      "unit": "share"
+    },
+    {
+      "caveats": "Estimated from the same sample, so itself noisy with few groups. Values below 1 can occur by chance.",
+      "formula": "Var(single-match score) / (k * Var(group mean)), where the single-match score is a strategy's mean role score in one match, k is the number of matches per group (number of strategies) and the group mean is x(s,g) as in skill_score_duplicate. Computed for each strategy; the cheap estimator reports its own factor (the variance of the strategy's round-1 scores before and after the adjustment).",
+      "id": "variance_reduction",
+      "json_path": "extended.skill.duplicate.strategies.[].variance_reduction; extended.skill.duplicate.strategies.[].variance_reduction_round1; extended.skill.estimate.strategies.[].variance_reduction",
+      "meaning": "How many ordinary games one duplicate game is worth: a value of 5 means a duplicate group gives the accuracy of five times as many ordinary games.",
+      "name": "Variance reduction",
+      "range": "0..unbounded",
+      "reading": "Larger is better; 1 means no benefit. The factor is already per match (the k matches of a group are accounted for in the formula), so any value above 1 means a duplicate or adjusted match is worth more than an ordinary one and the format pays off.",
+      "scope": "per_strategy",
+      "since_phase": 12,
+      "unit": "factor"
+    },
+    {
+      "caveats": "With few strategies the rank correlation has few possible values and is easy to get by chance (three strategies give only a handful of orderings). Only available in the mode that runs both, which plays about twice the matches: the duplicate groups and a separate ordinary batch (different deals) for the estimator. The estimate and the duplicate value therefore differ by sampling noise; gaps within about two standard errors are expected, perfect agreement would be suspicious.",
+      "formula": "Kendall rank correlation (tau, rank_agreement, from -1 for reversed to +1 for identical order) of the strategies ordered by skill_score_estimate and by round-1 skill_score_duplicate, together with the mean share of the duplicate round-1 luck share the estimator recovers (mean_variance_removed_ratio, estimator luck share divided by duplicate luck share, which is at least 0 and can exceed 1 when the estimator's luck share is larger than the duplicate round-1 one); reported only when both modes ran.",
+      "id": "estimator_agreement",
+      "json_path": "extended.skill.comparison.{rank_agreement,mean_variance_removed_ratio,verdict}",
+      "meaning": "How closely the cheap estimator follows the duplicate result. High agreement means the cheap estimator can replace the expensive duplicate mode.",
+      "name": "Estimator agreement",
+      "range": "rank_agreement -1..+1; mean_variance_removed_ratio 0..unbounded",
+      "reading": "Rank agreement near 1 and a removed ratio near 1 mean the estimator gives the same ordering and removes a similar amount of luck, so duplicate deals can be skipped. Low values mean the estimator is not trustworthy for this game.",
+      "scope": "global",
+      "since_phase": 12,
+      "unit": "correlation / ratio"
+    },
+    {
+      "caveats": "In duplicate mode do not compare it with the duplicate skill value as if they were two independent measurements: the values are equal and only the error bars differ.",
+      "formula": "Mean role score over all rounds of the duplicate matches (plain_mean_role_score), or over round 1 only (the _round1 variants, also used by the estimator). In duplicate mode the all-rounds plain score equals the duplicate skill value by construction (the mean of the group means is the mean of the matches); its standard error is the counterfactual SE of an ordinary run of the same size (sd over matches / sqrt(matches)), not an independent estimate.",
+      "id": "plain_mean_role_score",
+      "json_path": "extended.skill.duplicate.strategies.[].plain_mean_role_score.{value,std_error}; extended.skill.duplicate.strategies.[].plain_mean_role_score_round1.{value,std_error}; extended.skill.estimate.strategies.[].plain_mean_role_score_round1.{value,std_error}",
+      "meaning": "The unadjusted mean role score next to the luck-adjusted skill scores, so you can see what the adjustment changed. It is the same number as mean_role_score, restricted to the matches and rounds the skill score covers.",
+      "name": "Plain mean role score",
+      "range": "-1..+1",
+      "reading": "Compare it with skill_score_duplicate or skill_score_estimate: the standard error shrinks while the value stays about the same, which is the point of the adjustment. A large shift in the estimator means the hands favoured or hurt that strategy.",
+      "scope": "per_strategy",
+      "since_phase": 12,
+      "unit": "score"
+    },
+    {
+      "caveats": "Only the part of luck the features capture; it is not the luck share. Rows for different strategies come from the same regression, so they differ only through each strategy's own results.",
+      "formula": "Var(beta . x) / Var(y) over the strategy's seat observations, where y is the round-1 role score, x the hand features and beta the estimator's feature coefficients; clamped to 0..1.",
+      "id": "variance_explained",
+      "json_path": "extended.skill.estimate.strategies.[].variance_explained",
+      "meaning": "How much of a strategy's round-1 seat-to-seat variation in role score the quality of the dealt hand accounts for.",
+      "name": "Variance explained by the hands",
+      "range": "0..1",
+      "reading": "High means the deal decides much of the first-round result for this strategy; low means the hand features barely matter (or the strategy dominates its field regardless of cards).",
+      "scope": "per_strategy",
+      "since_phase": 12,
+      "unit": "share"
+    },
+    {
+      "caveats": "In-sample: it is computed on the same matches the regression was fitted on, so it is slightly optimistic with few matches.",
+      "formula": "Partial R^2 = 1 - SSR(full model) / SSR(strategy fixed effects only), where SSR is the residual sum of squares of the round-1 role score; clamped to 0..1.",
+      "id": "feature_r2",
+      "json_path": "extended.skill.estimate.feature_r2",
+      "meaning": "How much extra first-round variation the hand features explain beyond knowing which strategy sat in the seat: the overall quality of the cheap estimator's regression.",
+      "name": "Feature R-squared",
+      "range": "0..1",
+      "reading": "Higher means the hands explain more of the luck, so the estimator removes more variance. Values around 0.1-0.3 are typical for this game; near 0 would mean the estimator does nothing.",
+      "scope": "global",
+      "since_phase": 12,
+      "unit": "share"
+    },
+    {
+      "caveats": "When all hands have the same size hand_size is constant and its coefficient is arbitrary (it cannot be told apart from the strategy fixed effects) but harmless, because it never changes an adjustment. Coefficients are noisy with few matches.",
+      "formula": "feature_names lists the features in order (high_cards, pairs, triples, quads, lowest_strength, mean_strength, hand_size); feature_coefficients holds one least-squares coefficient per feature, with the strategy fixed effects held separately. mean_strength is the mean (not the sum) of the card strengths of the hand; hand_size is the number of dealt cards. match_count is the number of matches with recorded hands.",
+      "id": "estimator_features",
+      "json_path": "extended.skill.estimate.{match_count,feature_names,feature_coefficients}",
+      "meaning": "The hand features the cheap estimator uses and how strongly each one moves the round-1 role score (the regression coefficients), plus how many matches the regression saw.",
+      "name": "Estimator features and coefficients",
+      "range": "-unbounded..+unbounded",
+      "reading": "A positive coefficient means a larger value of that feature helps the seat. Features are correlated, so read the coefficients together rather than one by one.",
+      "scope": "global",
+      "since_phase": 12,
+      "unit": "score per feature unit"
+    },
+    {
+      "caveats": "In the both mode the two measurements use different deals, so a gap of a fraction of a standard error is expected; exactly 0 everywhere would be suspicious. With several strategies a few gaps beyond 2 happen by chance.",
+      "formula": "(skill_score_estimate - skill_score_duplicate_round1) / sqrt(se_estimate^2 + se_duplicate^2); null (not defined) if both standard errors are 0.",
+      "id": "difference_in_se",
+      "json_path": "extended.skill.comparison.strategies.[].{difference_in_se,variance_removed_ratio,skill_score_duplicate_round1,skill_score_estimate}",
+      "meaning": "How far the cheap estimator's skill score lies from the duplicate result for one strategy, measured in combined standard errors.",
+      "name": "Estimator gap in standard errors",
+      "range": "-unbounded..+unbounded",
+      "reading": "Within about +-2 means the two agree up to noise; consistently large gaps for several strategies mean the estimator is biased for this game. The sign says whether the estimator is higher (+) or lower (-).",
+      "scope": "per_strategy",
+      "since_phase": 12,
+      "unit": "standard errors"
+    },
+    {
+      "caveats": "A resumed run counts the generations of every part that is in the file (a generation that was run twice counts once). The stall and peak generations are generation numbers, not positions in this count; stall_index and peak_index are the positions.",
+      "formula": "The number of generation events read from the run's events.jsonl (lines that are not events are not counted, see analysis_skipped_lines).",
+      "id": "analysis_generations",
+      "json_path": "analysis.generations",
+      "meaning": "How many generation events the analysis is based on.",
+      "name": "Generations analysed",
+      "range": "1..unbounded",
+      "reading": "Everything else is a statement about this many points. Under about 30 generations the intervals are wide and the verdict is a rough hint only.",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "generations"
+    },
+    {
+      "caveats": "It is the maximum of a noisy curve and therefore partly luck, see analysis_curse_reeval_minus_heldout. Not a measure of when the model was actually strongest.",
+      "formula": "Taken from the run_end event (best_generation); null when the run has no run_end event (it was stopped or is still running). The stop-early verdict then uses the generation with the best re-evaluation mean in the events instead, so a run still training is judged like the finished one (`cli train --when-flat`).",
+      "id": "analysis_best_generation",
+      "json_path": "analysis.best_generation",
+      "meaning": "The generation whose champion the trainer kept as the best, chosen on the fixed re-evaluation set and confirmed on held-out matches.",
+      "name": "Best generation",
+      "range": "0..generations",
+      "reading": "A best generation far before the end of the run means later generations added nothing the selection could see. Compare with the stall generation: the best generation is a single maximum, so it is usually later than the start of the plateau.",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "generation number"
+    },
+    {
+      "caveats": "Selected as the maximum over many generations, so it is biased upwards (winner's curse). The standard error covers only the matches of this one measurement.",
+      "formula": "mean and std_error of the best champion's mean role score over the fixed re-evaluation matches, from the run_end event (best_reeval); null without run_end.",
+      "id": "analysis_final_reeval",
+      "json_path": "analysis.final_reeval.{mean,std_error}",
+      "meaning": "The best champion's score on the fixed re-evaluation set it was selected on, with its standard error.",
+      "name": "Final re-evaluation",
+      "range": "-1..+1",
+      "reading": "Higher is better, 0 is the level of the pool. It is the score the trainer picked the champion by, so it is the optimistic one; use analysis_final_heldout for an unbiased figure.",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "score"
+    },
+    {
+      "caveats": "Only one champion is confirmed this way, with the matches of one measurement: its standard error is not small. Absent in runs from before held-out confirmation existed.",
+      "formula": "mean and std_error of the best champion's mean role score over the held-out confirmation matches, from the run_end event (best_heldout); null for runs without held-out confirmation.",
+      "id": "analysis_final_heldout",
+      "json_path": "analysis.final_heldout.{mean,std_error}",
+      "meaning": "The best champion's score on fresh matches it was not selected on, with its standard error.",
+      "name": "Final held-out score",
+      "range": "-1..+1",
+      "reading": "Higher is better. This is the honest estimate of the best model's level against the pool. A value clearly below the final re-evaluation shows the selection effect.",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "score"
+    },
+    {
+      "caveats": "The window of 10 generations is fixed. A short run is smoothed over a large part of itself.",
+      "formula": "The per-generation series is the champion's fixed-set re-evaluation score (the mean role score of the best genome of each generation against the fixed opponent pool on the same fixed matches). It is smoothed with a trailing mean over the last 10 generations (shorter at the start); peak_smoothed is the maximum of the smoothed series, peak_index the position of its first maximum and peak_generation the generation number there. final_smoothed is the smoothed value at the last generation, last_generation the number of the last generation.",
+      "id": "analysis_peak_smoothed",
+      "json_path": "analysis.peak_smoothed; analysis.peak_index; analysis.peak_generation; analysis.final_smoothed; analysis.last_generation",
+      "meaning": "The highest value of the champion re-evaluation curve after smoothing, the level the stall generation is measured against, and where it is reached.",
+      "name": "Peak of the smoothed curve",
+      "range": "-1..+1",
+      "reading": "Higher is better. The smoothed peak is lower than the best single generation because single maxima are partly luck. A peak in the last 5 percent of the run means the curve was still rising at the end (verdict still_improving); a final_smoothed more than one single-evaluation error below the peak means the run ended worse than it was (verdict declining).",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "score"
+    },
+    {
+      "caveats": "A band of one single-evaluation standard error is generous: the smoothed curve has less noise than one evaluation, so a real but slow improvement can hide inside the band and the stall is reported too early. A stall at the last generation says nothing about progress on its own (a falling curve gets it too): still_improving is decided by the position of the smoothed peak and the last-third trend, not by the stall.",
+      "formula": "Smooth the champion re-evaluation series with a trailing mean over 10 generations. stall_index is the first position i such that every smoothed value from i to the end is at least peak_smoothed - single_se, where single_se is analysis_noise_single_se (the mean standard error of one re-evaluation); stall_generation is the generation number at that position (generation numbers need not start at 0 or be gap free). If the last smoothed value itself is below that band no such position exists: stall_index is then the last position and stall_fallback is true (the fallback of docs/baselines/phase-13/analyse.py, whose index equals stall_index).",
+      "id": "analysis_stall_generation",
+      "json_path": "analysis.stall_generation; analysis.stall_index; analysis.stall_fallback",
+      "meaning": "The point from which the champion stopped getting better in a way the measurement can see: the first generation from which the smoothed re-evaluation score stays within one standard error of its peak.",
+      "name": "Stall generation",
+      "range": "first..last generation number",
+      "reading": "The generation after which the smoothed curve never leaves one noise unit of its peak. A stall in the first 60 percent of the run (by position) without a later best generation or a rising end means a long tail added nothing (verdict stop_early). stall_fallback true means the run ended below its peak, not that it was still improving: see the verdict declining.",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "generation number"
+    },
+    {
+      "caveats": "It covers the dealing luck of the evaluation matches only, not the luck of which genome the evolution happened to produce.",
+      "formula": "Mean over generations of the standard error of the champion's re-evaluation mean (std_error of champion.reeval).",
+      "id": "analysis_noise_single_se",
+      "json_path": "analysis.noise.single_se",
+      "meaning": "How accurately one champion re-evaluation measures the score: the typical standard error of a single generation's number.",
+      "name": "Noise: one evaluation",
+      "range": "0..1",
+      "reading": "Compare with the changes between generations and with the trend over the run: improvements smaller than this per generation cannot be seen in single evaluations. More --reeval-matches or duplicate-deal scoring make it smaller.",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "score"
+    },
+    {
+      "caveats": "Differences of a rising curve include the rise, so a fast steady climb also raises it; read it together with the trend.",
+      "formula": "Sample standard deviation (n - 1 divisor) of the differences re-evaluation mean(g+1) - re-evaluation mean(g) over consecutive generations; null below two differences (three generations).",
+      "id": "analysis_noise_change_sd",
+      "json_path": "analysis.noise.change_sd",
+      "meaning": "How much the champion's re-evaluation score jumps from one generation to the next.",
+      "name": "Noise: generation-to-generation change",
+      "range": "0..unbounded",
+      "reading": "If it is more than twice the single-evaluation standard error, the curve moves by more than the measurement noise explains, which is the sign of selection noise (a different champion each generation) rather than steady progress. The noise_limited verdict uses this comparison (strictly greater, and only with a single-evaluation standard error above 0).",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "score"
+    },
+    {
+      "caveats": "Generations are not independent (the champion of one generation is related to the next). The interval is corrected for lag-1 autocorrelation of the residuals (the correction of an AR(1) process, estimated from the data; approximate, and noisy for few points), which widens it but may still be too narrow for strongly structured curves. A straight line is a rough description of a curve that rises fast and then flattens.",
+      "formula": "Ordinary least-squares slope of the champion's fixed-set re-evaluation score (the mean role score of the best genome of each generation against the fixed opponent pool on the same fixed matches) on the generation number, times 100. The 95 percent interval is slope +- t * standard error of the slope, with the t quantile for n - 2 degrees of freedom (table up to 30, then interpolated linearly in 1/df between 30, 40, 60, 120 and the normal 1.96 at infinity), and the standard error is corrected for lag-1 autocorrelation: with r the lag-1 autocorrelation of the residuals of the fit, when r > 0 it is multiplied by sqrt((1 + r) / (1 - r)), at most 5. Null below three generations.",
+      "id": "analysis_trend_overall",
+      "json_path": "analysis.trend.overall.{value,low,high}",
+      "meaning": "How fast the champion's re-evaluation score changed on average over the whole run, with a 95 percent interval.",
+      "name": "Trend over the whole run",
+      "range": "-unbounded..+unbounded",
+      "reading": "Positive is improving. If the interval contains 0 the run shows no trend it can tell from luck. Early progress usually makes the whole-run trend positive even when the end is flat, so look at the last third as well.",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "score per 100 generations"
+    },
+    {
+      "caveats": "Fewer points than the whole run, so a wide interval; the interval is corrected for autocorrelation, approximately. Flat is not the same as proven zero.",
+      "formula": "As analysis_trend_overall (including the interval corrected for lag-1 autocorrelation), over the last third of the generations (the last max(1, n div 3) of them). A trend counts as rising when the whole interval is above 0, falling when it is below 0 and flat when it contains 0. Null with fewer than three generations in the third, so runs shorter than nine generations have none.",
+      "id": "analysis_trend_last_third",
+      "json_path": "analysis.trend.last_third.{value,low,high}",
+      "meaning": "The same trend, fitted only to the last third of the run: is the champion still getting better at the end?",
+      "name": "Trend over the last third",
+      "range": "-unbounded..+unbounded",
+      "reading": "The key number of the verdicts: flat means the run has reached its plateau, rising means it should be continued, falling means it got worse (verdict declining). A flat interval that is very wide says only that the data cannot tell.",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "score per 100 generations"
+    },
+    {
+      "caveats": "A selection effect, not a defect of the model: it exists whenever a maximum is selected from a noisy series, and it is expected to be positive on average. A single run's gap is itself noisy; look at the gaps of several seeds.",
+      "formula": "best_reeval.mean - best_heldout.mean from the run_end event (value); in_heldout_se is the same divided by the held-out standard error, in_combined_se divided by sqrt(se_reeval^2 + se_heldout^2), the standard error of the difference of the two measurements (each null when that error is 0). Null without run_end or without a held-out score.",
+      "id": "analysis_curse_reeval_minus_heldout",
+      "json_path": "analysis.curse.reeval_minus_heldout.{value,in_heldout_se,in_combined_se}",
+      "meaning": "How much better the best champion looked on the matches it was selected on than on fresh matches. A positive gap is the selection effect: picking the maximum of many noisy numbers picks some luck with it.",
+      "name": "Winner's curse: re-evaluation minus held-out",
+      "range": "-unbounded..+unbounded",
+      "reading": "Around 0 means the best generation is as good as it looked. A gap of two combined standard errors or more means a large part of the best generation's lead is luck, so it is not evidence of progress. The noise_limited verdict uses in_combined_se >= 2 (the held-out standard error alone is not used: with a maximum selected from many generations a gap of one is almost always there).",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "score"
+    },
+    {
+      "caveats": "Depends on the fitness variant and the training opponents: with racing, the fitness-sharing or skill-weighted variants the two numbers do not measure the same thing exactly.",
+      "formula": "Mean over generations of champion.train_fitness - champion.reeval.mean. The training fitness comes from the few matches the genome played in training, the re-evaluation from the fixed set.",
+      "id": "analysis_curse_train_minus_reeval",
+      "json_path": "analysis.curse.train_minus_reeval",
+      "meaning": "How much higher the champion's training fitness is than its re-evaluation score, on average: how optimistic the numbers the evolution selects on are.",
+      "name": "Training fitness minus re-evaluation",
+      "range": "-unbounded..+unbounded",
+      "reading": "Close to 0 means training fitness is a fair guide. A large positive value means the champion of each generation is picked on luck, which is the reason for the fixed re-evaluation set and for more matches per genome.",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "score"
+    },
+    {
+      "caveats": "Averages of noisy numbers; use the trend and its class for statements about direction. The pool of an old run may change between parts, so only generations that report the opponent count.",
+      "formula": "For each opponent name, the mean of champion.opponents[name].score.mean over the generations of the first third and of the last third of the run (the last max(1, n div 3) generations, like analysis_trend_last_third) that carry that opponent. Null when no generation of the window carries it.",
+      "id": "analysis_opponent_means",
+      "json_path": "analysis.opponents.[].{name,first_third_mean,last_third_mean}",
+      "meaning": "The champion's score against one fixed opponent alone, averaged over the first and over the last third of the run: the same windows as the champion's own last-third trend.",
+      "name": "Per opponent: first and last third",
+      "range": "-1..+1",
+      "reading": "A last-third mean far above the first third means the champion learned to beat that opponent. The difference between opponents shows where the remaining headroom is (a score near +1 leaves little).",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "score"
+    },
+    {
+      "caveats": "Flat means not distinguishable from 0, not that the champion cannot improve. A score already near +1 cannot rise: such an opponent is flat because it is beaten, which says it has nothing left to teach.",
+      "formula": "last_third_slope: the slope with its 95 percent interval (value, low, high), computed as analysis_trend_last_third (interval corrected for lag-1 autocorrelation) over the generations of the last third of the run that report this opponent; null below three points. overall_slope: the same over every generation that reports it. class is taken from last_third_slope: rising if its interval is above 0, falling if below 0, flat if it contains 0; null if there is no slope.",
+      "id": "analysis_opponent_trend",
+      "json_path": "analysis.opponents.[].last_third_slope.{value,low,high}; analysis.opponents.[].overall_slope.{value,low,high}; analysis.opponents.[].class",
+      "meaning": "How the champion's score against one opponent changed over the run, and whether that change is rising, flat or falling.",
+      "name": "Per opponent: trends and class",
+      "range": "-unbounded..+unbounded",
+      "reading": "The class describes the same window as the champion's last-third trend, so the verdict pool_limited (rising against some opponents and flat against others while the champion is flat) says what the last third measured. overall_slope is the whole-run slope for comparison: an opponent that rose early and is flat now is flat here.",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "score per 100 generations"
+    },
+    {
+      "caveats": "Counts the champion of each generation, not the whole population. Means over up to three generations make a node gained or lost in a single generation count less; a short run (third under six generations) uses fewer generations per mean.",
+      "formula": "first/last_hidden_nodes and first/last_connections: the hidden nodes and enabled connections of the champion in the first and last generation. third_start_nodes and third_end_nodes: the mean hidden-node count of the first and of the last third_window generations of the last third (third_window = the third's length div 2, between 1 and 3). without_gain is true if third_end_nodes > third_start_nodes and the last-third trend interval contains 0.",
+      "id": "analysis_growth",
+      "json_path": "analysis.growth.{first_hidden_nodes,last_hidden_nodes,first_connections,last_connections,third_start_nodes,third_end_nodes,third_window,without_gain}",
+      "meaning": "How large the champion's network was in the first and the last generation, and whether it kept growing without getting better.",
+      "name": "Network growth",
+      "range": "0..unbounded",
+      "reading": "Growth together with a rising score is the normal case. without_gain means complexity is added that does not pay; see the verdict growth_without_gain.",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "nodes, connections"
+    },
+    {
+      "caveats": "Depends on the binning of the fitness histogram, which spans the generation's own fitness range, so a single outlier genome also shifts the shares. Equal fitness is also a sign of fitness saturating at a ceiling.",
+      "formula": "For each generation of the last third: genomes in the top bin of the fitness histogram divided by all genomes in the histogram; the mean of that share over those generations. Null without histograms.",
+      "id": "analysis_population_top_bin_share",
+      "json_path": "analysis.population.top_bin_share",
+      "meaning": "How much of the population sits in the best fitness bin: a high value means nearly all genomes are equally good and the evolution has little variety left.",
+      "name": "Population convergence",
+      "range": "0..1",
+      "reading": "Low values (about 10 percent) mean a spread population. 50 percent or more triggers the converged verdict.",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "share"
+    },
+    {
+      "caveats": "Descriptive only: no verdict rule uses these numbers. They say little when the threshold is not adapted.",
+      "formula": "species_first / species_last: the number of species in the first and last generation. threshold_first / threshold_last: the compatibility distance below which two genomes count as one species, as adjusted by the trainer to reach its target species count.",
+      "id": "analysis_population_species",
+      "json_path": "analysis.population.{species_first,species_last,threshold_first,threshold_last}",
+      "meaning": "The number of species and the compatibility threshold in the first and the last generation.",
+      "name": "Species and compatibility threshold",
+      "range": "species 1..population",
+      "reading": "A threshold that fell a long way (for example 0.5 to 0.1) means the population became very similar and the trainer had to make the species finer to keep the target count; one that rose means genomes diverged.",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "species, distance"
+    },
+    {
+      "caveats": "The share counts matches, not time, and uses the configured population and matches per genome of the start event, so it is off for runs whose settings changed on resume.",
+      "formula": "generations: generations with racing data. extra_matches: sum over those generations of raced_final (or raced if larger) times the extra matches per raced genome. extra_share: extra_matches / (extra_matches + generations * population_size * matches_per_genome); null without the run's start event. mean_shift: mean over generations of the mean fitness change of the raced genomes between before and after pooling.",
+      "id": "analysis_racing",
+      "json_path": "analysis.racing.{generations,extra_matches,extra_share,mean_shift}",
+      "meaning": "What racing (extra matches for the leading genomes) cost and how much it shifted the fitness values, summed over the run. Present only for runs with racing.",
+      "name": "Racing totals",
+      "range": "0..unbounded",
+      "reading": "extra_share is the price of racing in simulation work. A clearly negative mean_shift means the leaders' first numbers were too high, which is the selection effect racing exists to cancel.",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "matches, share, score"
+    },
+    {
+      "caveats": "The event line and the checkpoint are written after the stage timers stop, so a small part of the wall-clock time is in no stage.",
+      "formula": "Sum over generations of each field of the generation's stage timings (training_evaluation, champion_selection, speciation_and_reproduction, reevaluation_mixed, reevaluation_per_opponent, hall_of_fame, confirmation, decision_sample, checkpoint_and_files). Null for runs from before timings were recorded.",
+      "id": "analysis_timings",
+      "json_path": "analysis.timings.{training_evaluation,champion_selection,speciation_and_reproduction,reevaluation_mixed,reevaluation_per_opponent,hall_of_fame,confirmation,decision_sample,checkpoint_and_files}",
+      "meaning": "Where the run spent its time, summed over the run: training evaluation, champion selection, reproduction, the re-evaluations, hall of fame, confirmation, decision sample and files.",
+      "name": "Seconds per stage",
+      "range": "0..unbounded",
+      "reading": "Shows which stage to shrink to speed a run up; with threads the stage times are wall-clock seconds, so they add up to about the run time.",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "seconds"
+    },
+    {
+      "caveats": "Skipped lines are not analysed, so a damaged file makes the analysis a statement about the part that could be read.",
+      "formula": "The number of non-empty lines of the file that did not parse as a start, generation or run_end event.",
+      "id": "analysis_skipped_lines",
+      "json_path": "analysis.skipped_lines",
+      "meaning": "How many lines of the events file could not be read as events (an unfinished last line, other record types, damage).",
+      "name": "Skipped lines",
+      "range": "0..unbounded",
+      "reading": "0 for a clean file. One skipped line at the end of a file of a stopped run is normal (the line was being written). Many mean the file is damaged or from an incompatible version.",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "lines"
+    },
+    {
+      "caveats": "A rising last third over a short run can be a recovery from a bad stretch; the intervals of short runs are wide, a fired rule is a hint. A verdict is a heuristic with fixed thresholds, not a statistical test.",
+      "formula": "Fires when the peak of the smoothed curve is in the last 5 percent of the run (peak_index >= 0.95 * the last index, more than one generation) or the last-third trend interval lies entirely above 0, and in both cases only if the run did not end below its peak (analysis_verdict_declining does not apply: the last-third interval is not strictly below 0 and stall_fallback is false). While it fires, noise_limited, pool_limited, model_limited, growth_without_gain and stop_early do not. The rules are independent except as described here; several can fire and they are listed in the order of importance. Each message quotes the numbers that made the rule fire.",
+      "id": "analysis_verdict_still_improving",
+      "json_path": "analysis.verdict.[].{code,message}",
+      "meaning": "The run was still getting better when it ended.",
+      "name": "Verdict: still improving",
+      "range": "present or absent",
+      "reading": "Train longer (--resume or --from): the plateau has not been reached. A run that stalls at its last generation only because its curve fell is not called still improving.",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "verdict"
+    },
+    {
+      "caveats": "The final smoothed value covers the last 10 generations, so a recent dip of a few generations does not trigger it. A decline of one noise unit is within what a single evaluation can show: the band is the generous one of the stall rule. A verdict is a heuristic with fixed thresholds, not a statistical test.",
+      "formula": "Fires when the last-third trend interval lies entirely below 0, or the final smoothed value is below peak_smoothed - single_se (stall_fallback is true). The message names the peak generation, the peak and the final smoothed value. The rules are independent except as described here; several can fire and they are listed in the order of importance. Each message quotes the numbers that made the rule fire.",
+      "id": "analysis_verdict_declining",
+      "json_path": "analysis.verdict.[].{code,message}",
+      "meaning": "The run ended worse than its smoothed peak: the final champion is not the best one.",
+      "name": "Verdict: declining",
+      "range": "present or absent",
+      "reading": "Use the genome of the best generation (the trainer keeps it as best.json) or stop earlier; training longer from this population is unlikely to help. The best generation of a falling run is usually well before its end.",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "verdict"
+    },
+    {
+      "caveats": "Both thresholds are fixed heuristics, not a test; a run can be both noisy and limited in other ways. The message says the trend is not distinguishable from zero, not that there is none. A verdict is a heuristic with fixed thresholds, not a statistical test.",
+      "formula": "Fires when still_improving did not fire, the last-third trend interval contains 0, single_se is above 0 and either the change standard deviation is more than 2 times the single-evaluation standard error (analysis_noise_change_sd > 2 * analysis_noise_single_se) or the winner's-curse gap is at least 2 combined standard errors (analysis_curse_reeval_minus_heldout.in_combined_se >= 2). The rules are independent except as described here; several can fire and they are listed in the order of importance. Each message quotes the numbers that made the rule fire.",
+      "id": "analysis_verdict_noise_limited",
+      "json_path": "analysis.verdict.[].{code,message}",
+      "meaning": "The last-third trend cannot be told from zero given the noise: what progress remains is not distinguishable from noise.",
+      "name": "Verdict: noise limited",
+      "range": "present or absent",
+      "reading": "More --matches-per-genome, the duplicate-deal skill fitness, several seeds and a winner chosen on fresh matches (the Phase 13 recommendation). Without noise_limited a flat curve is attributed to the model (model_limited) or to the pool.",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "verdict"
+    },
+    {
+      "caveats": "With few generations most opponent intervals contain 0 and the rule rarely fires; a rising class needs a whole interval above 0. A verdict is a heuristic with fixed thresholds, not a statistical test.",
+      "formula": "Fires when still_improving did not fire, the last-third trend interval contains 0 and at least one opponent's last-third trend is rising and at least one other opponent's is flat (analysis_opponent_trend classes, which are computed on the last third). The rules are independent except as described here; several can fire and they are listed in the order of importance. Each message quotes the numbers that made the rule fire.",
+      "id": "analysis_verdict_pool_limited",
+      "json_path": "analysis.verdict.[].{code,message}",
+      "meaning": "The opponents no longer teach against some of the pool.",
+      "name": "Verdict: pool limited",
+      "range": "present or absent",
+      "reading": "Harder or additional opponents. Flat opponents that are already beaten by a wide margin have nothing left to teach, which is the case this rule is for.",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "verdict"
+    },
+    {
+      "caveats": "It is the residual explanation: flat, not noisy and no opponent rising. A poorly measured run lands here too when its noise happens to be just below the noise_limited thresholds. A verdict is a heuristic with fixed thresholds, not a statistical test.",
+      "formula": "Fires when still_improving did not fire, the last-third trend interval contains 0, no opponent's last-third trend is rising and noise_limited did not fire. The rules are independent except as described here; several can fire and they are listed in the order of importance. Each message quotes the numbers that made the rule fire.",
+      "id": "analysis_verdict_model_limited",
+      "json_path": "analysis.verdict.[].{code,message}",
+      "meaning": "Flat everywhere, above the noise: the model's inputs or the fitness cap what it can learn.",
+      "name": "Verdict: model limited",
+      "range": "present or absent",
+      "reading": "New inputs (--features hidden) or a different fitness. The Phase 13 measurement found that hidden-information inputs beat the base set.",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "verdict"
+    },
+    {
+      "caveats": "Compares two means of up to three champions' node counts; a steady one-node gain is enough. A verdict is a heuristic with fixed thresholds, not a statistical test.",
+      "formula": "Fires when still_improving did not fire and analysis_growth.without_gain is true: the mean hidden-node count over the last generations of the last third is above that over its first generations (third_end_nodes > third_start_nodes) and the last-third trend interval contains 0. The rules are independent except as described here; several can fire and they are listed in the order of importance. Each message quotes the numbers that made the rule fire.",
+      "id": "analysis_verdict_growth_without_gain",
+      "json_path": "analysis.verdict.[].{code,message}",
+      "meaning": "The network keeps growing while the score no longer rises.",
+      "name": "Verdict: growth without gain",
+      "range": "present or absent",
+      "reading": "A stagnation limit or complexity penalty so the structure stops growing, or a shorter run.",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "verdict"
+    },
+    {
+      "caveats": "Depends on the fitness histogram binning; a fitness that saturates at a ceiling also shows it. A verdict is a heuristic with fixed thresholds, not a statistical test.",
+      "formula": "Fires when analysis_population_top_bin_share (mean over the last third) is at least 0.5. The rules are independent, several can fire; they are listed in the order of importance. Each message quotes the numbers that made the rule fire.",
+      "id": "analysis_verdict_converged",
+      "json_path": "analysis.verdict.[].{code,message}",
+      "meaning": "The population is nearly uniform: half or more of the genomes sit in the top fitness bin.",
+      "name": "Verdict: converged",
+      "range": "present or absent",
+      "reading": "Raise the mutation rates or the species target to restore variety.",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "verdict"
+    },
+    {
+      "caveats": "The stall rule uses a generous band (one single-evaluation standard error), see analysis_stall_generation; it can name a stall that is too early on a slow climb, which is why a later best generation or a rising point estimate suppresses it. A verdict is a heuristic with fixed thresholds, not a statistical test.",
+      "formula": "Fires when still_improving did not fire, the run has more than one generation, the stall position is at most 0.6 times the last position (stall_index <= 0.6 * (generations - 1)), the last-third trend point estimate is not above 0 and the best generation (from run_end) is not later than the stall generation. The rules are independent except as described here; several can fire and they are listed in the order of importance. Each message quotes the numbers that made the rule fire.",
+      "id": "analysis_verdict_stop_early",
+      "json_path": "analysis.verdict.[].{code,message}",
+      "meaning": "A long tail of generations added nothing.",
+      "name": "Verdict: stop early",
+      "range": "present or absent",
+      "reading": "Stop earlier next time; after the stall generation the smoothed score stayed within one noise unit of its peak. The message names the stall generation and how many generations followed.",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "verdict"
+    },
+    {
+      "caveats": "Every rule has its thresholds; a run just inside all of them gets this verdict. A verdict is a heuristic with fixed thresholds, not a statistical test.",
+      "formula": "Appears alone when none of the other eight rules fires. The rules are independent except as described here; several can fire and they are listed in the order of importance. Each message quotes the numbers that made the rule fire.",
+      "id": "analysis_verdict_no_clear_limit",
+      "json_path": "analysis.verdict.[].{code,message}",
+      "meaning": "No rule fired.",
+      "name": "Verdict: no clear limit",
+      "range": "present or absent",
+      "reading": "Read the numbers and charts yourself; the absence of a finding is not a finding of health.",
+      "scope": "run_analysis",
+      "since_phase": 17,
+      "unit": "verdict"
+    }
+  ]
+}
